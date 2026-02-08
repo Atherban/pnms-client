@@ -32,44 +32,16 @@ const QUICK_LINKS = [
     description: "Revenue analysis",
   },
   {
-    title: "Analytics",
-    icon: "analytics",
-    path: "/(admin)/analytics",
-    color: "#6366F1",
-    description: "Business insights",
-  },
-  {
     title: "Reports",
     icon: "summarize",
-    path: "/(admin)/reports",
+    path: "/(admin)/more/reports",
     color: "#EC4899",
     description: "Generate reports",
   },
   {
-    title: "Settings",
-    icon: "settings",
-    path: "/(admin)/settings",
-    color: "#6B7280",
-    description: "App configuration",
-  },
-  {
-    title: "Support",
-    icon: "help",
-    path: "/(admin)/support",
-    color: "#3B82F6",
-    description: "Help & documentation",
-  },
-  {
-    title: "Users",
-    icon: "people",
-    path: "/(admin)/users",
-    color: "#8B5CF6",
-    description: "Manage team access",
-  },
-  {
     title: "Inventory",
     icon: "inventory",
-    path: "/(admin)/inventory",
+    path: "/(admin)/more/inventory",
     color: "#EF4444",
     description: "Stock management",
   },
@@ -140,28 +112,6 @@ export default function MoreScreen() {
               />
             </Pressable>
           ))}
-        </View>
-
-        {/* Support Section */}
-        <View style={styles.supportCard}>
-          <MaterialIcons
-            name="support-agent"
-            size={32}
-            color={Colors.primary}
-          />
-          <View style={styles.supportContent}>
-            <Text style={styles.supportTitle}>Need Help?</Text>
-            <Text style={styles.supportText}>Contact our support team</Text>
-          </View>
-          <Pressable
-            onPress={() => handleNavigation("/(admin)/support")}
-            style={({ pressed }) => [
-              styles.supportButton,
-              pressed && styles.supportButtonPressed,
-            ]}
-          >
-            <Text style={styles.supportButtonText}>Contact</Text>
-          </Pressable>
         </View>
 
         {/* Footer */}

@@ -1,4 +1,6 @@
+import StaffBottomNav from "@/src/components/staff/StaffBottomNav";
 import { Redirect, Stack } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth.store";
 
 export default function StaffLayout() {
@@ -12,5 +14,15 @@ export default function StaffLayout() {
     return <Redirect href="/unauthorized" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "simple_push",
+        }}
+      />
+      <StaffBottomNav />
+    </SafeAreaView>
+  );
 }

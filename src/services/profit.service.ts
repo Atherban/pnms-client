@@ -3,9 +3,7 @@ import { api } from "./api";
 
 export const ProfitService = {
   async getProfit(payload: ProfitRequest): Promise<ProfitResponse> {
-    const result = await api.get<ProfitResponse>(
-      `/profit?startDate=${payload.startDate}&endDate=${payload.endDate}`,
-    );
+    const result = await api.post<ProfitResponse>(`/profit`, payload);
 
     // NORMALIZE SHAPE
     if (typeof result.data === "number") {

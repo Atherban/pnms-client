@@ -1,4 +1,3 @@
-// src/app/(admin)/sales/index.tsx - Fix for undefined data
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { SalesService } from "../../../services/sales.service";
 import { Colors, Spacing } from "../../../theme";
 
@@ -30,45 +30,36 @@ export default function AdminSales() {
     queryFn: SalesService.getAll,
   });
 
-  // FIX: Handle undefined data properly
-  const sales = Array.isArray(data) ? data : [];
+  /* -------------------- DATA NORMALIZATION -------------------- */
+  const sales = useMemo(() => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.data)) return data.data;
+    return [];
+  }, [data]);
 
-  const filteredSales = useMemo(() => {
-    const term = search.toLowerCase();
-    return sales.filter(
-      (sale) =>
-        sale.paymentMode?.toLowerCase().includes(term) ||
-        sale.roleAtTime?.toLowerCase().includes(term) ||
-        String(sale.totalAmount).includes(term),
-    );
-  }, [sales, search]);
+  /* -------------------- HELPERS -------------------- */
+  const getSaleAmount = (sale: any) =>
+    Array.isArray(sale.items)
+      ? sale.items.reduce(
+          (sum: number, i: any) =>
+            sum + (Number(i.priceAtSale) || 0) * (Number(i.quantity) || 0),
+          0,
+        )
+      : 0;
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
-
-  const getPaymentColor = (mode: string) => {
-    switch (mode?.toUpperCase()) {
-      case "CASH":
-        return Colors.success;
-      case "CARD":
-        return Colors.info;
-      case "UPI":
-        return Colors.warning;
-      case "ONLINE":
-        return Colors.primary;
-      default:
-        return Colors.textSecondary;
-    }
-  };
+  const getSaleQuantity = (sale: any) =>
+    Array.isArray(sale.items)
+      ? sale.items.reduce(
+          (sum: number, i: any) => sum + (Number(i.quantity) || 0),
+          0,
+        )
+      : 0;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-IN", {
-      day: "2-digit",
+      day: "numeric",
       month: "short",
       year: "numeric",
     });
@@ -82,36 +73,94 @@ export default function AdminSales() {
     });
   };
 
+  const filteredSales = useMemo(() => {
+    const term = search.toLowerCase();
+    return sales.filter(
+      (sale) =>
+        sale.paymentMode?.toLowerCase().includes(term) ||
+        sale.roleAtTime?.toLowerCase().includes(term) ||
+        String(getSaleAmount(sale)).includes(term),
+    );
+  }, [sales, search]);
+
   const calculateStats = useMemo(() => {
     const totalSales = sales.length;
     const totalAmount = sales.reduce(
-      (sum, sale) => sum + (sale.totalAmount || 0),
+      (sum, sale) => sum + getSaleAmount(sale),
       0,
     );
     const cashSales = sales.filter(
       (s) => s.paymentMode?.toUpperCase() === "CASH",
     ).length;
-    const onlineSales = sales.filter(
-      (s) =>
-        s.paymentMode?.toUpperCase() === "ONLINE" ||
-        s.paymentMode?.toUpperCase() === "UPI",
+    const onlineSales = sales.filter((s) =>
+      ["UPI", "ONLINE", "CARD"].includes(s.paymentMode?.toUpperCase() || ""),
     ).length;
+    const todaySales = sales.filter((s) => {
+      const d = new Date(s.saleDate || s.createdAt);
+      const t = new Date();
+      return (
+        d.getDate() === t.getDate() &&
+        d.getMonth() === t.getMonth() &&
+        d.getFullYear() === t.getFullYear()
+      );
+    }).length;
 
-    return { totalSales, totalAmount, cashSales, onlineSales };
+    return { totalSales, totalAmount, cashSales, onlineSales, todaySales };
   }, [sales]);
 
-  // Handle error state
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
+  const getPaymentColor = (mode: string) => {
+    switch (mode?.toUpperCase()) {
+      case "CASH":
+        return Colors.success;
+      case "UPI":
+      case "ONLINE":
+        return Colors.primary;
+      case "CARD":
+        return Colors.info;
+      default:
+        return Colors.textSecondary;
+    }
+  };
+
+  const getPaymentIcon = (mode: string) => {
+    switch (mode?.toUpperCase()) {
+      case "CASH":
+        return "payments";
+      case "UPI":
+        return "payment";
+      case "ONLINE":
+        return "online-prediction";
+      case "CARD":
+        return "credit-card";
+      default:
+        return "receipt";
+    }
+  };
+
+  /* -------------------- ERROR -------------------- */
   if (error) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.fixedHeader}>
-          <Text style={styles.title}>Sales</Text>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Sales History</Text>
+              <Text style={styles.subtitle}>Unable to load data</Text>
+            </View>
+          </View>
         </View>
         <View style={styles.errorContainer}>
           <MaterialIcons name="error-outline" size={64} color={Colors.error} />
-          <Text style={styles.errorTitle}>Failed to load sales</Text>
+          <Text style={styles.errorTitle}>Failed to Load Sales</Text>
           <Text style={styles.errorMessage}>
-            {error.message || "Unable to fetch sales data"}
+            Unable to fetch sales data. Please check your connection.
           </Text>
           <Pressable
             onPress={() => refetch()}
@@ -123,40 +172,48 @@ export default function AdminSales() {
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
+  /* -------------------- LOADING -------------------- */
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.fixedHeader}>
-          <Text style={styles.title}>Sales</Text>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>Sales History</Text>
+              <Text style={styles.subtitle}>Loading sales data...</Text>
+            </View>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading sales...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
-  // Rest of your component remains the same...
-
+  /* -------------------- UI -------------------- */
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Fixed Header */}
       <View style={styles.fixedHeader}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Sales</Text>
+          <View style={styles.headerText}>
+            <Text style={styles.title}>Sales History</Text>
             <Text style={styles.subtitle}>
-              {calculateStats.totalSales} sales • ₹
+              {calculateStats.totalSales} transactions • ₹
               {calculateStats.totalAmount.toLocaleString()}
             </Text>
           </View>
           <Pressable
-            onPress={() => router.push("/(admin)/sales/create")}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/(admin)/sales/create");
+            }}
             style={({ pressed }) => [
               styles.addButton,
               pressed && styles.addButtonPressed,
@@ -167,32 +224,40 @@ export default function AdminSales() {
           </Pressable>
         </View>
 
-        {/* Stats Summary */}
-        <View style={styles.statsSummary}>
-          <View style={styles.statItem}>
-            <MaterialIcons name="payments" size={16} color={Colors.success} />
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: Colors.success + "10" },
+            ]}
+          >
+            <MaterialIcons name="today" size={24} color={Colors.success} />
+            <Text style={styles.statValue}>{calculateStats.todaySales}</Text>
+            <Text style={styles.statLabel}>Today</Text>
+          </View>
+
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: Colors.primary + "10" },
+            ]}
+          >
+            <MaterialIcons name="payments" size={24} color={Colors.primary} />
             <Text style={styles.statValue}>{calculateStats.cashSales}</Text>
             <Text style={styles.statLabel}>Cash</Text>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <MaterialIcons name="credit-card" size={16} color={Colors.info} />
+
+          <View
+            style={[styles.statCard, { backgroundColor: Colors.info + "10" }]}
+          >
+            <MaterialIcons name="credit-card" size={24} color={Colors.info} />
             <Text style={styles.statValue}>{calculateStats.onlineSales}</Text>
             <Text style={styles.statLabel}>Online</Text>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <MaterialIcons
-              name="trending-up"
-              size={16}
-              color={Colors.primary}
-            />
-            <Text style={styles.statValue}>{sales.length}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
         </View>
 
-        {/* Search */}
+        {/* Search Bar */}
         <View style={styles.searchContainer}>
           <MaterialIcons
             name="search"
@@ -201,19 +266,24 @@ export default function AdminSales() {
             style={styles.searchIcon}
           />
           <TextInput
-            placeholder="Search by payment mode or amount..."
+            placeholder="Search sales by payment mode, amount..."
             placeholderTextColor={Colors.textTertiary}
             value={search}
             onChangeText={setSearch}
             style={styles.searchInput}
-            clearButtonMode="while-editing"
           />
           {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} style={styles.clearButton}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSearch("");
+              }}
+              style={styles.clearButton}
+            >
               <MaterialIcons
                 name="close"
-                size={16}
-                color={Colors.textSecondary}
+                size={18}
+                color={Colors.textTertiary}
               />
             </Pressable>
           )}
@@ -223,22 +293,30 @@ export default function AdminSales() {
       {/* Sales List */}
       {filteredSales.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="receipt-long" size={64} color={Colors.border} />
+          <MaterialIcons
+            name="receipt-long"
+            size={64}
+            color={Colors.textSecondary}
+          />
           <Text style={styles.emptyTitle}>
-            {search.length > 0 ? "No sales found" : "No sales yet"}
+            {search.length > 0 ? "No Sales Found" : "No Sales Recorded"}
           </Text>
           <Text style={styles.emptyMessage}>
             {search.length > 0
-              ? "Try adjusting your search"
-              : "Record your first sale to get started"}
+              ? "Try searching with different terms"
+              : "Start recording sales to track your revenue"}
           </Text>
           <Pressable
-            onPress={() => router.push("/(admin)/sales/create")}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push("/(admin)/sales/create");
+            }}
             style={({ pressed }) => [
               styles.emptyButton,
               pressed && styles.emptyButtonPressed,
             ]}
           >
+            <MaterialIcons name="add" size={20} color={Colors.white} />
             <Text style={styles.emptyButtonText}>Record First Sale</Text>
           </Pressable>
         </View>
@@ -256,65 +334,54 @@ export default function AdminSales() {
             />
           }
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={<View style={styles.listHeader} />}
+          ListHeaderComponent={
+            <View style={styles.listHeader}>
+              <Text style={styles.resultsCount}>
+                {filteredSales.length} sale
+                {filteredSales.length !== 1 ? "s" : ""}
+                {search && ` for "${search}"`}
+              </Text>
+            </View>
+          }
           renderItem={({ item }) => {
-            const paymentColor = getPaymentColor(item.paymentMode);
+            const amount = getSaleAmount(item);
+            const qty = getSaleQuantity(item);
+            const color = getPaymentColor(item.paymentMode);
+            const icon = getPaymentIcon(item.paymentMode);
+            const date = item.saleDate || item.createdAt;
 
             return (
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push(`/(admin)/sales/${item._id}`);
+                  // Navigate to sale details when implemented
                 }}
                 style={({ pressed }) => [
                   styles.saleCard,
                   pressed && styles.saleCardPressed,
                 ]}
               >
-                <View style={styles.saleHeader}>
-                  <View style={styles.saleInfo}>
+                {/* Card Header */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.titleContainer}>
                     <MaterialIcons
                       name="receipt"
                       size={20}
                       color={Colors.primary}
                     />
-                    <View style={styles.saleDetails}>
-                      <Text style={styles.saleAmount}>
-                        ₹{item.totalAmount?.toLocaleString() || "0"}
+                    <Text style={styles.saleAmount} numberOfLines={1}>
+                      ₹{amount.toLocaleString()}
+                    </Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: color + "15" },
+                      ]}
+                    >
+                      <MaterialIcons name={icon} size={12} color={color} />
+                      <Text style={[styles.statusText, { color }]}>
+                        {item.paymentMode || "Unknown"}
                       </Text>
-                      <View style={styles.saleMeta}>
-                        <View
-                          style={[
-                            styles.paymentBadge,
-                            { backgroundColor: paymentColor + "15" },
-                          ]}
-                        >
-                          <MaterialIcons
-                            name={
-                              item.paymentMode?.toUpperCase() === "CASH"
-                                ? "payments"
-                                : item.paymentMode?.toUpperCase() === "CARD"
-                                  ? "credit-card"
-                                  : item.paymentMode?.toUpperCase() === "UPI"
-                                    ? "payment"
-                                    : "receipt"
-                            }
-                            size={12}
-                            color={paymentColor}
-                          />
-                          <Text
-                            style={[
-                              styles.paymentText,
-                              { color: paymentColor },
-                            ]}
-                          >
-                            {item.paymentMode || "Unknown"}
-                          </Text>
-                        </View>
-                        <Text style={styles.roleText}>
-                          {item.roleAtTime || "Staff"}
-                        </Text>
-                      </View>
                     </View>
                   </View>
                   <MaterialIcons
@@ -324,12 +391,30 @@ export default function AdminSales() {
                   />
                 </View>
 
+                {/* Info Grid */}
+                <View style={styles.infoGrid}>
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Items</Text>
+                    <Text style={styles.infoValue}>{qty}</Text>
+                  </View>
+
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Role</Text>
+                    <Text style={styles.infoValue}>
+                      {item.roleAtTime || "Staff"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoItem}>
+                    <Text style={styles.infoLabel}>Date</Text>
+                    <Text style={styles.infoValue}>{formatDate(date)}</Text>
+                  </View>
+                </View>
+
+                {/* Footer */}
                 <View style={styles.saleFooter}>
                   <Text style={styles.dateText}>
-                    {formatDate(item.createdAt)} • {formatTime(item.createdAt)}
-                  </Text>
-                  <Text style={styles.itemsText}>
-                    {item.items?.length || 0} items
+                    {formatDate(date)} • {formatTime(date)}
                   </Text>
                 </View>
               </Pressable>
@@ -337,10 +422,11 @@ export default function AdminSales() {
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
+/* -------------------- ENHANCED STYLES -------------------- */
 const styles = {
   container: {
     flex: 1,
@@ -350,13 +436,15 @@ const styles = {
     backgroundColor: Colors.background,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
   },
   header: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
     marginBottom: Spacing.md,
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
     fontSize: 24,
@@ -386,42 +474,39 @@ const styles = {
     fontSize: 13,
     fontWeight: "600" as const,
   },
-  statsSummary: {
+  statsGrid: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: Spacing.md,
     marginBottom: Spacing.md,
+  },
+  statCard: {
+    width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2) / 3,
+    padding: Spacing.sm,
+    borderRadius: 12,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-  },
-  statItem: {
-    alignItems: "center" as const,
-    flex: 1,
-    gap: 4,
   },
   statValue: {
     fontSize: 18,
     fontWeight: "700" as const,
     color: Colors.text,
+    marginTop: Spacing.xs,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textSecondary,
     fontWeight: "500" as const,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: Colors.border,
+    marginTop: Spacing.xs,
+    textAlign: "center" as const,
   },
   searchContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     backgroundColor: Colors.surface,
     paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.sm,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -443,6 +528,7 @@ const styles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+    padding: Spacing.xl,
     paddingBottom: BOTTOM_NAV_HEIGHT,
   },
   loadingText: {
@@ -456,7 +542,7 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     padding: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.xl,
   },
   emptyTitle: {
     fontSize: 20,
@@ -473,10 +559,13 @@ const styles = {
     lineHeight: 20,
   },
   emptyButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
     backgroundColor: Colors.primary,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: 12,
+    gap: Spacing.sm,
   },
   emptyButtonPressed: {
     backgroundColor: Colors.primaryDark,
@@ -490,10 +579,15 @@ const styles = {
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.lg,
   },
   listHeader: {
-    height: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  resultsCount: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: "500" as const,
   },
   saleCard: {
     backgroundColor: Colors.surface,
@@ -502,53 +596,68 @@ const styles = {
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   saleCardPressed: {
     backgroundColor: Colors.surfaceDark,
     transform: [{ scale: 0.98 }],
   },
-  saleHeader: {
+  cardHeader: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-  },
-  saleInfo: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    flex: 1,
-    gap: Spacing.md,
-  },
-  saleDetails: {
-    flex: 1,
-  },
-  saleAmount: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.text,
+    alignItems: "flex-start" as const,
     marginBottom: Spacing.xs,
   },
-  saleMeta: {
+  titleContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
+    flex: 1,
     gap: Spacing.sm,
   },
-  paymentBadge: {
+  saleAmount: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: Colors.text,
+    flex: 1,
+  },
+  statusBadge: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
     paddingVertical: 2,
     borderRadius: 6,
     gap: 4,
   },
-  paymentText: {
+  statusText: {
     fontSize: 11,
     fontWeight: "600" as const,
   },
-  roleText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
+  infoGrid: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    marginBottom: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  infoItem: {
+    alignItems: "center" as const,
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.xs,
     fontWeight: "500" as const,
+  },
+  infoValue: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: Colors.text,
   },
   saleFooter: {
     flexDirection: "row" as const,
@@ -563,22 +672,17 @@ const styles = {
     color: Colors.textTertiary,
     fontWeight: "500" as const,
   },
-  itemsText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "600" as const,
-  },
   errorContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     padding: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.xl,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: Colors.error,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
   },

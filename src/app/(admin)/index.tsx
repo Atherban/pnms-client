@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,37 +21,55 @@ import { AuthService } from "../../services/auth.service";
 import { DashboardService } from "../../services/dashboard.service";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
+import { getUser } from "../../utils/storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BOTTOM_NAV_HEIGHT = 90; // Adjust based on your bottom nav height
+const BOTTOM_NAV_HEIGHT = 90;
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, clearAuth } = useAuthStore();
-  
+
+  // Get user from auth store
+  const storeUser = useAuthStore((state) => state.user);
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+
+  // Also get user directly from storage as fallback
+  const [storageUser, setStorageUser] = useState<any>(null);
+
+  useEffect(() => {
+    const loadUserFromStorage = async () => {
+      const user = await getUser();
+      setStorageUser(user);
+    };
+
+    loadUserFromStorage();
+  }, []);
+
+  // Use store user first, fallback to storage user
+  const user = storeUser || storageUser;
+  const userName = user?.name || "Admin User";
+  const userRole = user?.role || "ADMIN";
+  const userInitials = userName?.charAt(0).toUpperCase() || "A";
+
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["dashboard"],
     queryFn: DashboardService.getStats,
   });
 
   const handleLogout = async () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            await AuthService.logout();
-            clearAuth();
-            router.replace("/(auth)/login");
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await AuthService.logout();
+          clearAuth();
+          router.replace("/(auth)/login");
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleCardPress = (type: string) => {
@@ -87,11 +106,15 @@ export default function AdminDashboard() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.fixedHeader}>
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight]}
+          style={styles.fixedHeader}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Loading insights...</Text>
             </View>
             <Pressable
               onPress={handleLogout}
@@ -103,7 +126,7 @@ export default function AdminDashboard() {
               <MaterialIcons name="logout" size={20} color={Colors.white} />
             </Pressable>
           </View>
-        </View>
+        </LinearGradient>
         <View style={styles.contentArea}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -118,11 +141,18 @@ export default function AdminDashboard() {
   if (error || !data) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.fixedHeader}>
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight]}
+          style={styles.fixedHeader}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Error loading data</Text>
+              <Text style={styles.subtitle}>
+                {userName ? `Hi, ${userName}` : "Error loading data"}
+              </Text>
             </View>
             <Pressable
               onPress={handleLogout}
@@ -134,7 +164,7 @@ export default function AdminDashboard() {
               <MaterialIcons name="logout" size={20} color={Colors.white} />
             </Pressable>
           </View>
-        </View>
+        </LinearGradient>
         <View style={styles.contentArea}>
           <View style={styles.errorContainer}>
             <MaterialIcons
@@ -231,37 +261,9 @@ export default function AdminDashboard() {
     },
   ];
 
-  const STATS_CARDS = [
-    {
-      title: "Active Users",
-      value: data.activeUsers?.toLocaleString() || "12",
-      change: "+2",
-      icon: "people",
-      color: Colors.primary,
-    },
-    {
-      title: "Pending Orders",
-      value: data.pendingOrders?.toLocaleString() || "8",
-      change: "-1",
-      icon: "pending-actions",
-      color: Colors.warning,
-    },
-    {
-      title: "Low Stock Items",
-      value: data.lowStockItems?.toLocaleString() || "5",
-      change: "+1",
-      icon: "inventory",
-      color: Colors.error,
-    },
-  ];
-
-  // Calculate additional stats
   const totalRevenue = data.totalSalesAmount || 0;
   const todayProfit = data.todayProfit || 0;
   const totalPlants = data.totalPlants || 0;
-  const activeUsers = data.activeUsers || 12;
-  const pendingOrders = data.pendingOrders || 8;
-  const lowStockItems = data.lowStockItems || 5;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -276,9 +278,6 @@ export default function AdminDashboard() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.title}>Dashboard</Text>
-            <Text style={styles.subtitle}>
-              {user?.name ? `Welcome, ${user.name}` : 'Real-time business insights'}
-            </Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
@@ -308,37 +307,46 @@ export default function AdminDashboard() {
         </View>
 
         {/* User Profile Display */}
-        {user && (
-          <View style={styles.userWelcome}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>
-                {user.name?.charAt(0).toUpperCase() || "A"}
-              </Text>
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{user.name || "Admin"}</Text>
-              {user.role && (
-                <View style={styles.roleBadge}>
-                  <MaterialIcons 
-                    name={user.role === "ADMIN" ? "security" : user.role === "STAFF" ? "work" : "visibility"}
-                    size={12} 
-                    color={Colors.white} 
-                  />
-                  <Text style={styles.roleText}>
-                    {user.role === "ADMIN" ? "Administrator" : 
-                     user.role === "STAFF" ? "Staff Member" : "Viewer"}
-                  </Text>
-                </View>
-              )}
+        <View style={styles.userWelcome}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>{userInitials}</Text>
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.welcomeText}>Welcome back,</Text>
+            <Text style={styles.userName}>{userName}</Text>
+            <View style={styles.userDetails}>
+              <View style={styles.roleBadge}>
+                <MaterialIcons
+                  name={
+                    userRole === "ADMIN"
+                      ? "security"
+                      : userRole === "STAFF"
+                        ? "work"
+                        : "visibility"
+                  }
+                  size={12}
+                  color={Colors.white}
+                />
+                <Text style={styles.roleText}>
+                  {userRole === "ADMIN"
+                    ? "Administrator"
+                    : userRole === "STAFF"
+                      ? "Staff Member"
+                      : "Viewer"}
+                </Text>
+              </View>
             </View>
           </View>
-        )}
+        </View>
 
         {/* Stats Summary */}
         <View style={styles.statsSummary}>
           <View style={styles.statItem}>
-            <MaterialIcons name="trending-up" size={16} color="rgba(255, 255, 255, 0.8)" />
+            <MaterialIcons
+              name="trending-up"
+              size={16}
+              color="rgba(255, 255, 255, 0.8)"
+            />
             <Text style={styles.statLabel}>Total Revenue</Text>
             <Text style={styles.statValue}>
               ₹{totalRevenue?.toLocaleString() || "0"}
@@ -346,7 +354,11 @@ export default function AdminDashboard() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <MaterialIcons name="spa" size={16} color="rgba(255, 255, 255, 0.8)" />
+            <MaterialIcons
+              name="spa"
+              size={16}
+              color="rgba(255, 255, 255, 0.8)"
+            />
             <Text style={styles.statLabel}>Active Plants</Text>
             <Text style={styles.statValue}>
               {totalPlants?.toLocaleString() || "0"}
@@ -354,10 +366,10 @@ export default function AdminDashboard() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <MaterialIcons 
-              name={todayProfit >= 0 ? "trending-up" : "trending-down"} 
-              size={16} 
-              color={todayProfit >= 0 ? "#BBF7D0" : "#FECACA"} 
+            <MaterialIcons
+              name={todayProfit >= 0 ? "trending-up" : "trending-down"}
+              size={16}
+              color={todayProfit >= 0 ? "#BBF7D0" : "#FECACA"}
             />
             <Text style={styles.statLabel}>Today's Profit</Text>
             <Text
@@ -385,7 +397,7 @@ export default function AdminDashboard() {
         }
         contentContainerStyle={styles.scrollContent}
       >
-        {/* KPI Cards - Pressable */}
+        {/* KPI Cards */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="dashboard" size={24} color={Colors.text} />
@@ -458,142 +470,6 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        {/* Performance Insights */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="trending-up" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Performance Insights</Text>
-          </View>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <View
-                  style={[
-                    styles.statIcon,
-                    { backgroundColor: Colors.primary + "15" },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="people"
-                    size={20}
-                    color={Colors.primary}
-                  />
-                </View>
-                <View style={styles.statChange}>
-                  <MaterialIcons
-                    name="arrow-upward"
-                    size={12}
-                    color={Colors.success}
-                  />
-                  <Text style={[styles.statChangeText, { color: Colors.success }]}>
-                    +2
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.statCardValue}>{activeUsers}</Text>
-              <Text style={styles.statCardTitle}>Active Users</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <View
-                  style={[
-                    styles.statIcon,
-                    { backgroundColor: Colors.warning + "15" },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="pending-actions"
-                    size={20}
-                    color={Colors.warning}
-                  />
-                </View>
-                <View style={styles.statChange}>
-                  <MaterialIcons
-                    name="arrow-downward"
-                    size={12}
-                    color={Colors.success}
-                  />
-                  <Text style={[styles.statChangeText, { color: Colors.success }]}>
-                    -1
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.statCardValue}>{pendingOrders}</Text>
-              <Text style={styles.statCardTitle}>Pending Orders</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={styles.statCardHeader}>
-                <View
-                  style={[
-                    styles.statIcon,
-                    { backgroundColor: Colors.error + "15" },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="inventory"
-                    size={20}
-                    color={Colors.error}
-                  />
-                </View>
-                <View style={styles.statChange}>
-                  <MaterialIcons
-                    name="arrow-upward"
-                    size={12}
-                    color={Colors.error}
-                  />
-                  <Text style={[styles.statChangeText, { color: Colors.error }]}>
-                    +1
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.statCardValue}>{lowStockItems}</Text>
-              <Text style={styles.statCardTitle}>Low Stock Items</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="history" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <Pressable style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </Pressable>
-          </View>
-          <View style={styles.activityList}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons name="local-florist" size={18} color={Colors.success} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>New plant added: Monstera Deliciosa</Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons name="receipt" size={18} color={Colors.warning} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>Sale recorded: ₹4,500</Text>
-                <Text style={styles.activityTime}>4 hours ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons name="people" size={18} color={Colors.primary} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>New user registered: John Doe</Text>
-                <Text style={styles.activityTime}>1 day ago</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.lastUpdated}>
@@ -603,7 +479,9 @@ export default function AdminDashboard() {
               minute: "2-digit",
             })}
           </Text>
-          <Text style={styles.version}>PNMS v1.0.0 • Plant Nursery Management System</Text>
+          <Text style={styles.version}>
+            PNMS v1.0.0 • Plant Nursery Management System
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -627,7 +505,7 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "flex-start",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   headerActions: {
     flexDirection: "row" as const,
@@ -675,13 +553,13 @@ const styles = {
   userWelcome: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     gap: Spacing.md,
   },
   userAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
@@ -689,7 +567,7 @@ const styles = {
     borderColor: "rgba(255, 255, 255, 0.3)",
   },
   userAvatarText: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "700" as const,
     color: Colors.white,
   },
@@ -703,10 +581,21 @@ const styles = {
     marginBottom: 2,
   },
   userName: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600" as const,
     color: Colors.white,
     marginBottom: 4,
+  },
+  userDetails: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing.md,
+    flexWrap: "wrap" as const,
+  },
+  userEmail: {
+    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.7)",
+    fontWeight: "500" as const,
   },
   roleBadge: {
     flexDirection: "row" as const,
@@ -716,7 +605,6 @@ const styles = {
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
-    alignSelf: "flex-start",
   },
   roleText: {
     fontSize: 12,

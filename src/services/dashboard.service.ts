@@ -6,31 +6,58 @@ import { SeedService } from "./seed.service";
 
 export const DashboardService = {
   async getStats(): Promise<DashboardStats> {
-    const today = new Date().toISOString().split("T")[0];
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
 
     try {
-      const [plants, seeds, sales, profit] = await Promise.all([
+      const [plantsRes, seedsRes, salesRes, profitRes] = await Promise.all([
         PlantService.getAll().catch(() => []),
         SeedService.getAll().catch(() => []),
         SalesService.getAll().catch(() => []),
         ProfitService.getProfit({
-          startDate: today,
-          endDate: today,
-        }).catch(() => ({ profit: 0 })),
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+        }).catch(() => null),
       ]);
 
-      const plantList = Array.isArray(plants) ? plants : (plants?.data ?? []);
-      const seedList = Array.isArray(seeds) ? seeds : (seeds?.data ?? []);
-      const salesList = Array.isArray(sales) ? sales : (sales?.data ?? []);
+      /* ---------------- Normalize API responses ---------------- */
+
+      const plants = Array.isArray(plantsRes)
+        ? plantsRes
+        : (plantsRes?.data ?? []);
+
+      const seeds = Array.isArray(seedsRes) ? seedsRes : (seedsRes?.data ?? []);
+
+      const sales = Array.isArray(salesRes) ? salesRes : (salesRes?.data ?? []);
+
+      /* ---------------- Calculate total sales amount ---------------- */
+
+      const totalSalesAmount = sales.reduce((sum: number, sale: any) => {
+        if (!Array.isArray(sale.items)) return sum;
+
+        return (
+          sum +
+          sale.items.reduce(
+            (itemSum: number, item: any) =>
+              itemSum +
+              (Number(item.priceAtSale) || 0) * (Number(item.quantity) || 0),
+            0,
+          )
+        );
+      }, 0);
+
+      /* ---------------- Normalize profit response ---------------- */
+
+      const profitData = profitRes?.data ?? profitRes ?? {};
 
       return {
-        totalPlants: plantList.length,
-        totalSeeds: seedList.length,
-        totalSalesAmount: salesList.reduce(
-          (sum, s) => sum + (s.totalAmount ?? 0),
-          0,
-        ),
-        todayProfit: profit?.profit ?? 0,
+        totalPlants: plants.length,
+        totalSeeds: seeds.length,
+        totalSalesAmount,
+        todayProfit: Number(profitData.netProfit) || 0,
       };
     } catch {
       return {

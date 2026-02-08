@@ -6,7 +6,7 @@ export const api = axios.create({
   baseURL: ENV.API_BASE_URL,
   timeout: 15000,
 });
-console.log("API BASE URL =", ENV.API_BASE_URL);
+
 
 api.interceptors.request.use(async (config) => {
   const token = await getToken();

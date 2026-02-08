@@ -137,7 +137,7 @@ export default function Users() {
               pressed && styles.emptyButtonPressed,
             ]}
           >
-            <Text style={styles.emptyButtonText}>Create First User</Text>
+            <Text style={styles.emptyButtonText}>Create User</Text>
           </Pressable>
         </View>
       );

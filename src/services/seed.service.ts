@@ -1,28 +1,54 @@
 import { api } from "./api";
 
+/* ================================
+   Types (AUTHORITATIVE)
+================================ */
+
+export interface Seed {
+  _id: string;
+  name: string;
+  category: string;
+  supplierName?: string;
+  totalPurchased: number;
+  quantityInStock: number; // must be returned by backend
+  purchaseDate: string;
+  expiryDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ================================
+   Service
+================================ */
+
 export const SeedService = {
-  async getAll() {
-    const res = await api.get("/seeds");
-    return res.data;
+  getAll(): Promise<Seed[]> {
+    return api.get("/seeds");
   },
 
-  async getById(id: string) {
-    const res = await api.get(`/seeds/${id}`);
-    return res.data;
+  getById(id: string): Promise<Seed> {
+    return api.get(`/seeds/${id}`);
   },
 
-  async create(payload: any) {
-    const res = await api.post("/seeds", payload);
-    return res.data;
+  create(payload: {
+    name: string;
+    category: string;
+    supplierName?: string;
+    totalPurchased: number;
+    purchaseDate: string;
+    expiryDate: string;
+  }): Promise<Seed> {
+    return api.post("/seeds", payload);
   },
 
-  async update(id: string, payload: any) {
-    const res = await api.patch(`/seeds/${id}`, payload);
-    return res.data;
+  update(
+    id: string,
+    payload: Partial<Omit<Seed, "_id" | "createdAt" | "updatedAt">>,
+  ): Promise<Seed> {
+    return api.patch(`/seeds/${id}`, payload);
   },
 
-  async delete(id: string) {
-    const res = await api.delete(`/seeds/${id}`);
-    return res.data;
+  delete(id: string): Promise<void> {
+    return api.delete(`/seeds/${id}`);
   },
 };

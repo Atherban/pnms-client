@@ -54,8 +54,6 @@ export default function Login() {
         throw new Error("Invalid login response");
       }
 
-      console.log("Login response user:", res.user); // Debug log
-
       // IMPORTANT: Save user to SecureStore
       await saveUser(res.user);
       await saveLastEmail(email);
@@ -74,12 +72,12 @@ export default function Login() {
       if (res.user.role === "ADMIN") {
         router.replace("/(admin)");
       } else if (res.user.role === "STAFF") {
-        router.replace("/(staff)/sales");
+        router.replace("/(staff)");
       } else {
-        router.replace("/(viewer)/plants");
+        router.replace("/(viewer)");
       }
     } catch (err: any) {
-      console.error("Login error:", err);
+      // console.error("Login error:", err);
       setError(
         err?.response?.data?.message || err?.message || "Invalid credentials",
       );
