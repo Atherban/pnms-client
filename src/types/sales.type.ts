@@ -1,7 +1,13 @@
 export interface SaleItem {
-  plantId: string;
+  inventoryId?: string;
+  inventory?: {
+    _id: string;
+    plantType?: { _id: string; name: string };
+  };
   quantity: number;
-  priceAtSale: number;
+  priceAtSale?: number;
+  unitPrice?: number;
+  price?: number;
 }
 
 export interface Sale {
@@ -9,7 +15,7 @@ export interface Sale {
   items: SaleItem[];
   totalAmount: number;
   paymentMode: string;
-  performedBy: string;
+  performedBy?: string;
   roleAtTime: "ADMIN" | "STAFF";
   createdAt: string;
 }

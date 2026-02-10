@@ -15,11 +15,22 @@ export default function SaleDetail() {
 
   if (!data) return null;
 
+  const totalAmount =
+    data.totalAmount ??
+    data.items?.reduce(
+      (sum: number, item: any) =>
+        sum +
+        (Number(item.priceAtSale ?? item.unitPrice ?? item.price ?? 0) || 0) *
+          (Number(item.quantity) || 0),
+      0,
+    ) ??
+    0;
+
   return (
     <View style={{ padding: Spacing.lg }}>
       <Text style={{ fontSize: 16, fontWeight: "600" }}>Sale Details</Text>
 
-      <Text>Total Amount: ₹ {data.totalAmount}</Text>
+      <Text>Total Amount: ₹ {totalAmount}</Text>
       <Text>Payment Mode: {data.paymentMode}</Text>
       <Text>Performed By: {data.roleAtTime}</Text>
       <Text>Date: {new Date(data.createdAt).toDateString()}</Text>
@@ -28,9 +39,14 @@ export default function SaleDetail() {
 
       {data.items.map((item, index) => (
         <View key={index} style={{ marginTop: Spacing.sm }}>
-          <Text>Plant ID: {item.plantId}</Text>
+          <Text>
+            Inventory:{" "}
+            {item.inventory?.plantType?.name || item.inventoryId || "Unknown"}
+          </Text>
           <Text>Quantity: {item.quantity}</Text>
-          <Text>Price: ₹ {item.priceAtSale}</Text>
+          <Text>
+            Price: ₹ {item.priceAtSale ?? item.unitPrice ?? item.price ?? 0}
+          </Text>
         </View>
       ))}
     </View>

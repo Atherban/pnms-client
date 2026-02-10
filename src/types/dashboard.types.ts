@@ -1,5 +1,5 @@
 export interface DashboardStats {
-  totalPlants: number;
+  totalInventory: number;
   totalSeeds: number;
   totalSalesAmount: number;
   todayProfit: number;

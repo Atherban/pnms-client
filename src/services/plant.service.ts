@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, apiPath, unwrap } from "./api";
 
 export interface Plant {
   _id: string;
@@ -10,13 +10,13 @@ export interface Plant {
 
 export const PlantService = {
   async getAll() {
-    const res = await api.get("/plants");
-    return res.data;
+    const res = await api.get(apiPath("/plants"));
+    return unwrap(res);
   },
 
   async getById(id: string) {
-    const res = await api.get(`/plants/${id}`);
-    return res.data;
+    const res = await api.get(apiPath(`/plants/${id}`));
+    return unwrap(res);
   },
 
   async create(payload: {
@@ -25,8 +25,8 @@ export const PlantService = {
     price: number;
     quantityAvailable: number;
   }) {
-    const res = await api.post("/plants", payload);
-    return res.data;
+    const res = await api.post(apiPath("/plants"), payload);
+    return unwrap(res);
   },
 
   async update(
@@ -37,16 +37,18 @@ export const PlantService = {
       price: number;
     },
   ) {
-    const res = await api.patch(`/plants/${id}`, payload);
-    return res.data;
+    const res = await api.patch(apiPath(`/plants/${id}`), payload);
+    return unwrap(res);
   },
   async updateQuantity(id: string, quantityChange: number) {
-    const res = await api.patch(`/plants/${id}/quantity`, { quantityChange });
-    return res.data;
+    const res = await api.patch(apiPath(`/plants/${id}/quantity`), {
+      quantityChange,
+    });
+    return unwrap(res);
   },
 
   async delete(id: string) {
-    const res = await api.delete(`/plants/${id}`);
-    return res.data;
+    const res = await api.delete(apiPath(`/plants/${id}`));
+    return unwrap(res);
   },
 };

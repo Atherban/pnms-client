@@ -19,7 +19,7 @@ const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 
 /* Icons */
 const DashboardIcon = Home;
-const PlantsIcon = Leaf;
+const InventoryIcon = Leaf;
 const SeedsIcon = Sprout;
 const SowingIcon = Sprout;
 const MoreIcon = Menu;
@@ -33,9 +33,9 @@ const NAV_ITEMS = [
     color: "#6366F1",
   },
   {
-    label: "Plants",
-    icon: PlantsIcon,
-    path: "/(staff)/plants",
+    label: "Inventory",
+    icon: InventoryIcon,
+    path: "/(staff)/inventory",
     color: "#10B981",
   },
   {
@@ -47,11 +47,11 @@ const NAV_ITEMS = [
   {
     label: "Sow",
     icon: SowingIcon,
-    path: "/(staff)/sowing/create",
+    path: "/(staff)/sowing",
     color: "#EC4899",
   },
   {
-    label: "germination",
+    label: "Germination",
     icon: MoreIcon,
     path: "/(staff)/germination/create",
     color: "#8B5CF6",

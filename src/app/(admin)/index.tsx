@@ -75,8 +75,8 @@ export default function AdminDashboard() {
   const handleCardPress = (type: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (type) {
-      case "plants":
-        router.push("/(admin)/plants");
+      case "inventory":
+        router.push("/(admin)/inventory");
         break;
       case "seeds":
         router.push("/(admin)/seeds");
@@ -193,11 +193,11 @@ export default function AdminDashboard() {
 
   const KPIS = [
     {
-      title: "Total Plants",
-      value: data.totalPlants?.toLocaleString() || "0",
-      icon: "🌿",
+      title: "Inventory Items",
+      value: data.totalInventory?.toLocaleString() || "0",
+      icon: "📦",
       color: Colors.success,
-      type: "plants",
+      type: "inventory",
       gradient: [Colors.success, "#34D399"],
     },
     {
@@ -232,11 +232,11 @@ export default function AdminDashboard() {
 
   const QUICK_ACTIONS = [
     {
-      title: "Add New Plant",
-      subtitle: "Create plant entry",
-      icon: "local-florist",
+      title: "View Inventory",
+      subtitle: "Track available stock",
+      icon: "inventory",
       color: Colors.success,
-      action: () => router.push("/(admin)/plants/create"),
+      action: () => router.push("/(admin)/inventory"),
     },
     {
       title: "Add New Seed",
@@ -263,7 +263,7 @@ export default function AdminDashboard() {
 
   const totalRevenue = data.totalSalesAmount || 0;
   const todayProfit = data.todayProfit || 0;
-  const totalPlants = data.totalPlants || 0;
+  const totalInventory = data.totalInventory || 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -359,9 +359,9 @@ export default function AdminDashboard() {
               size={16}
               color="rgba(255, 255, 255, 0.8)"
             />
-            <Text style={styles.statLabel}>Active Plants</Text>
+            <Text style={styles.statLabel}>Inventory Items</Text>
             <Text style={styles.statValue}>
-              {totalPlants?.toLocaleString() || "0"}
+              {totalInventory?.toLocaleString() || "0"}
             </Text>
           </View>
           <View style={styles.statDivider} />

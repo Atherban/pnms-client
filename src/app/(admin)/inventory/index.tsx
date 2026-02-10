@@ -1,61 +1,111 @@
+// app/(admin)/inventory/index.tsx
 import { MaterialIcons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { Seed, SeedService } from "../../../services/seed.service";
+import { InventoryService } from "../../../services/inventory.service";
+import { PlantTypeService } from "../../../services/plant-type.service";
 import { Colors, Spacing } from "../../../theme";
 
-const BOTTOM_NAV_HEIGHT = 80; // Adjust based on your bottom nav height
+const BOTTOM_NAV_HEIGHT = 80;
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const STAT_CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2) / 4;
+const priceRegex = /^\d+(\.\d{1,2})?$/;
 
-export default function AdminSeeds() {
+export default function AdminInventory() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [priceModalOpen, setPriceModalOpen] = useState(false);
+  const [priceInput, setPriceInput] = useState("");
+  const [priceTarget, setPriceTarget] = useState<any>(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["seeds"],
-    queryFn: SeedService.getAll,
+    queryKey: ["inventory"],
+    queryFn: InventoryService.getAll,
+  });
+
+  const priceMutation = useMutation({
+    mutationFn: async () => {
+      if (!priceTarget) throw new Error("No plant type selected");
+      const value = Number(priceInput.trim());
+      if (!priceRegex.test(priceInput.trim()) || !value || value <= 0) {
+        throw new Error("Enter a valid selling price");
+      }
+      const plantTypeId = priceTarget?._id || priceTarget?.id;
+      if (!plantTypeId) throw new Error("Invalid plant type");
+      return PlantTypeService.update(plantTypeId, { sellingPrice: value });
+    },
+    onSuccess: () => {
+      setPriceModalOpen(false);
+      setPriceInput("");
+      setPriceTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["plant-types"] });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Error", err?.message || "Failed to update selling price");
+    },
   });
 
   /* Normalize API response safely */
-  const seeds = useMemo<Seed[]>(() => {
+  const inventory = useMemo(() => {
     if (!data) return [];
     return Array.isArray(data) ? data : (data.data ?? []);
   }, [data]);
 
-  const filteredSeeds = useMemo(() => {
+  const filteredInventory = useMemo(() => {
     const term = search.toLowerCase();
-    return seeds.filter(
-      (s) =>
-        s.name.toLowerCase().includes(term) ||
-        s.supplierName?.toLowerCase().includes(term) ||
-        s.category?.toLowerCase().includes(term) ||
-        s.plantType?.name?.toLowerCase().includes(term),
+    return inventory.filter(
+      (item) =>
+        item.plantType?.name?.toLowerCase().includes(term) ||
+        item.plantType?.category?.toLowerCase().includes(term) ||
+        item._id?.toLowerCase().includes(term),
     );
-  }, [seeds, search]);
+  }, [inventory, search]);
 
-  const getSeedStock = (seed: Seed) =>
-    Number(
-      seed.quantityInStock ??
-        (seed as any).availableQuantity ??
-        (seed as any).remainingQuantity ??
-        seed.totalPurchased ??
-        0,
+  const handleDelete = (item: any) => {
+    Alert.alert(
+      "Delete Inventory Item",
+      `Are you sure you want to delete "${item.plantType?.name || "this item"}"? This action cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await InventoryService.delete(item._id);
+              queryClient.invalidateQueries({ queryKey: ["inventory"] });
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
+            } catch {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert("Error", "Failed to delete item. Please try again.");
+            }
+          },
+        },
+      ],
     );
-
-  const getMinStock = (seed: Seed) => Number(seed.minStockLevel ?? 10);
-
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -67,89 +117,120 @@ export default function AdminSeeds() {
     }
   }, [refetch]);
 
-  const getExpiryStatus = (expiryDate: string) => {
-    const expiry = new Date(expiryDate);
-    if (isNaN(expiry.getTime())) {
+  const getQuantityStatus = (quantity: number) => {
+    if (quantity === 0)
       return {
-        status: "Unknown",
-        color: Colors.textSecondary,
-        icon: "help",
+        status: "Out of Stock",
+        color: Colors.error,
+        icon: "error" as const,
       };
-    }
-
-    const today = new Date();
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0)
-      return { status: "Expired", color: Colors.error, icon: "error" };
-    if (diffDays <= 30)
+    if (quantity <= 10)
       return {
-        status: "Expiring Soon",
+        status: "Low Stock",
         color: Colors.warning,
-        icon: "warning",
+        icon: "warning" as const,
       };
-    return { status: "Valid", color: Colors.success, icon: "check-circle" };
+    return {
+      status: "In Stock",
+      color: Colors.success,
+      icon: "check-circle" as const,
+    };
   };
 
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+  const getCategoryIcon = (category: string) => {
+    if (!category) return "yard";
+
+    switch (category.toUpperCase()) {
+      case "FLOWER":
+        return "local-florist";
+      case "FRUIT":
+        return "cake";
+      case "INDOOR":
+        return "house";
+      case "OUTDOOR":
+        return "park";
+      case "VEGETABLE":
+        return "grass";
+      case "MEDICINAL":
+        return "medical-services";
+      case "ORNAMENTAL":
+        return "spa";
+      default:
+        return "yard";
+    }
+  };
+
+  const formatCurrency = (amount: number | undefined) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return "₹0";
+    }
+    return `₹${amount.toLocaleString("en-IN")}`;
+  };
+
+  const openPriceModal = (plantType: any) => {
+    setPriceTarget(plantType);
+    const current = plantType?.sellingPrice;
+    setPriceInput(current ? String(current) : "");
+    setPriceModalOpen(true);
   };
 
   const stats = useMemo(() => {
-    const totalSeeds = seeds.length;
+    const totalItems = inventory.length;
 
-    const expiredSeeds = seeds.filter((s) => {
-      const d = new Date(s.expiryDate);
-      return !isNaN(d.getTime()) && d < new Date();
-    }).length;
+    const outOfStock = inventory.filter((item) => item.quantity === 0).length;
 
-    const lowStockSeeds = seeds.filter(
-      (s) => getSeedStock(s) < getMinStock(s),
+    const lowStock = inventory.filter(
+      (item) => item.quantity > 0 && item.quantity <= 10,
     ).length;
 
-    const validSeeds = totalSeeds - expiredSeeds;
+    const inStock = totalItems - outOfStock;
 
-    return { totalSeeds, expiredSeeds, lowStockSeeds, validSeeds };
-  }, [seeds]);
+    const totalValue = inventory.reduce((sum, item) => {
+      const price = item.plantType?.sellingPrice || 0;
+      const quantity = item.quantity || 0;
+      return sum + price * quantity;
+    }, 0);
+
+    return { totalItems, outOfStock, lowStock, inStock, totalValue };
+  }, [inventory]);
 
   const renderContent = () => {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading seeds...</Text>
+          <Text style={styles.loadingText}>Loading inventory...</Text>
         </View>
       );
     }
 
-    if (filteredSeeds.length === 0) {
+    if (filteredInventory.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="grass" size={64} color={Colors.border} />
-          <Text style={styles.emptyTitle}>No seeds found</Text>
+          <MaterialIcons name="inventory" size={64} color={Colors.border} />
+          <Text style={styles.emptyTitle}>No inventory items found</Text>
           <Text style={styles.emptyMessage}>
             {search.length > 0
               ? "Try adjusting your search terms"
-              : "No seeds have been added yet"}
+              : "No inventory items have been added yet"}
           </Text>
-          <Text style={styles.emptyHint}>
-            Ask an admin to add seed stock.
-          </Text>
+          <Pressable
+            onPress={() => router.push("/(admin)/inventory/create")}
+            style={({ pressed }) => [
+              styles.emptyButton,
+              pressed && styles.emptyButtonPressed,
+            ]}
+          >
+            <Text style={styles.emptyButtonText}>Add First Item</Text>
+          </Pressable>
         </View>
       );
     }
 
     return (
       <FlatList
-        data={filteredSeeds}
-        keyExtractor={(s) => s._id}
+        data={filteredInventory}
+        keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -162,23 +243,27 @@ export default function AdminSeeds() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={<View style={styles.listHeader} />}
         renderItem={({ item }) => {
-          const expiryStatus = getExpiryStatus(item.expiryDate);
-          const isLowStock = getSeedStock(item) < getMinStock(item);
+          const quantityStatus = getQuantityStatus(item.quantity || 0);
+          const hasPlantInfo = item.plantType;
+          const price = item.plantType?.sellingPrice || 0;
+          const quantity = item.quantity || 0;
+          const totalValue = price * quantity;
+          const hasPrice = price > 0;
 
           return (
-            <View style={styles.seedCard}>
+            <View style={styles.inventoryCard}>
               {/* Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.titleContainer}>
                   <MaterialIcons
-                    name="grass"
+                    name={getCategoryIcon(item.plantType?.category)}
                     size={20}
                     color={Colors.primary}
                   />
-                  <Text style={styles.seedName} numberOfLines={1}>
-                    {item.name}
+                  <Text style={styles.itemName} numberOfLines={1}>
+                    {hasPlantInfo ? item.plantType.name : "Unnamed Item"}
                   </Text>
-                  {(item.category || item.plantType?.name) && (
+                  {item.plantType?.category && (
                     <View
                       style={[
                         styles.categoryBadge,
@@ -188,7 +273,7 @@ export default function AdminSeeds() {
                       <Text
                         style={[styles.categoryText, { color: Colors.info }]}
                       >
-                        {item.category || item.plantType?.name}
+                        {item.plantType.category}
                       </Text>
                     </View>
                   )}
@@ -196,71 +281,109 @@ export default function AdminSeeds() {
                 <View
                   style={[
                     styles.statusBadge,
-                    { backgroundColor: expiryStatus.color + "15" },
+                    { backgroundColor: quantityStatus.color + "15" },
                   ]}
                 >
                   <MaterialIcons
-                    name={expiryStatus.icon as any}
+                    name={quantityStatus.icon}
                     size={12}
-                    color={expiryStatus.color}
+                    color={quantityStatus.color}
                   />
                   <Text
-                    style={[styles.statusText, { color: expiryStatus.color }]}
+                    style={[styles.statusText, { color: quantityStatus.color }]}
                   >
-                    {expiryStatus.status}
+                    {quantityStatus.status}
                   </Text>
                 </View>
               </View>
 
-              {item.supplierName && (
-                <View style={styles.supplierRow}>
+              {hasPlantInfo && hasPrice && (
+                <View style={styles.infoRow}>
                   <MaterialIcons
-                    name="business"
+                    name="attach-money"
                     size={16}
                     color={Colors.textSecondary}
                   />
-                  <Text style={styles.supplierText} numberOfLines={1}>
-                    {item.supplierName}
+                  <Text style={styles.infoText} numberOfLines={1}>
+                    Price: {formatCurrency(price)}
                   </Text>
+                </View>
+              )}
+              {hasPlantInfo && !hasPrice && (
+                <View style={styles.infoRow}>
+                  <MaterialIcons
+                    name="error-outline"
+                    size={16}
+                    color={Colors.warning}
+                  />
+                  <Text style={[styles.infoText, { color: Colors.warning }]}>
+                    Selling price not set
+                  </Text>
+                  <Pressable
+                    onPress={() => openPriceModal(item.plantType)}
+                    style={({ pressed }) => [
+                      styles.priceFixButton,
+                      pressed && styles.priceFixButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.priceFixButtonText}>Set Price</Text>
+                  </Pressable>
                 </View>
               )}
 
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Stock</Text>
+                  <Text style={styles.infoLabel}>Quantity</Text>
                   <View style={styles.infoValueRow}>
                     <Text
                       style={[
                         styles.infoValue,
-                        isLowStock && styles.lowStockValue,
+                        quantityStatus.status === "Low Stock" &&
+                          styles.lowStockValue,
+                        quantityStatus.status === "Out of Stock" &&
+                          styles.outOfStockValue,
                       ]}
                     >
-                      {getSeedStock(item)}
+                      {quantity}
                     </Text>
-                    {isLowStock && (
+                    {quantity <= 10 && quantity > 0 && (
                       <MaterialIcons
-                        name="error"
+                        name="warning"
                         size={14}
                         color={Colors.warning}
+                      />
+                    )}
+                    {quantity === 0 && (
+                      <MaterialIcons
+                        name="block"
+                        size={14}
+                        color={Colors.error}
                       />
                     )}
                   </View>
                 </View>
 
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Purchased</Text>
+                  <Text style={styles.infoLabel}>Value</Text>
                   <Text style={styles.infoValue}>
-                    {item.totalPurchased ?? 0}
+                    {formatCurrency(totalValue)}
                   </Text>
                 </View>
 
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Expiry</Text>
+                  <Text style={styles.infoLabel}>Last Updated</Text>
                   <Text style={styles.infoValue}>
-                    {formatDate(item.expiryDate)}
+                    {item.updatedAt
+                      ? new Date(item.updatedAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                        })
+                      : "—"}
                   </Text>
                 </View>
               </View>
+
+              
             </View>
           );
         }}
@@ -274,11 +397,22 @@ export default function AdminSeeds() {
       <View style={styles.fixedHeader}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Seed Inventory</Text>
+            <Text style={styles.title}>Plant Inventory</Text>
             <Text style={styles.subtitle}>
-              {stats.totalSeeds} total seeds • {filteredSeeds.length} filtered
+              {stats.totalItems} total items • {filteredInventory.length}{" "}
+              filtered
             </Text>
           </View>
+          <Pressable
+            onPress={() => router.push("/(admin)/inventory/create")}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+            ]}
+          >
+            <MaterialIcons name="add" size={20} color={Colors.white} />
+            <Text style={styles.addButtonText}>Add Item</Text>
+          </Pressable>
         </View>
 
         {/* Stats Cards - Fixed Grid */}
@@ -289,8 +423,8 @@ export default function AdminSeeds() {
               { backgroundColor: Colors.primary + "10" },
             ]}
           >
-            <MaterialIcons name="grass" size={20} color={Colors.primary} />
-            <Text style={styles.statValue}>{stats.totalSeeds}</Text>
+            <MaterialIcons name="inventory" size={20} color={Colors.primary} />
+            <Text style={styles.statValue}>{stats.totalItems}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
 
@@ -305,8 +439,8 @@ export default function AdminSeeds() {
               size={20}
               color={Colors.success}
             />
-            <Text style={styles.statValue}>{stats.validSeeds}</Text>
-            <Text style={styles.statLabel}>Valid</Text>
+            <Text style={styles.statValue}>{stats.inStock}</Text>
+            <Text style={styles.statLabel}>In Stock</Text>
           </View>
 
           <View
@@ -316,16 +450,16 @@ export default function AdminSeeds() {
             ]}
           >
             <MaterialIcons name="warning" size={20} color={Colors.warning} />
-            <Text style={styles.statValue}>{stats.lowStockSeeds}</Text>
+            <Text style={styles.statValue}>{stats.lowStock}</Text>
             <Text style={styles.statLabel}>Low Stock</Text>
           </View>
 
           <View
             style={[styles.statCard, { backgroundColor: Colors.error + "10" }]}
           >
-            <MaterialIcons name="error" size={20} color={Colors.error} />
-            <Text style={styles.statValue}>{stats.expiredSeeds}</Text>
-            <Text style={styles.statLabel}>Expired</Text>
+            <MaterialIcons name="block" size={20} color={Colors.error} />
+            <Text style={styles.statValue}>{stats.outOfStock}</Text>
+            <Text style={styles.statLabel}>Out of Stock</Text>
           </View>
         </View>
 
@@ -338,7 +472,7 @@ export default function AdminSeeds() {
             style={styles.searchIcon}
           />
           <TextInput
-            placeholder="Search seeds"
+            placeholder="Search plants, categories, or IDs..."
             placeholderTextColor={Colors.textTertiary}
             value={search}
             onChangeText={setSearch}
@@ -359,6 +493,46 @@ export default function AdminSeeds() {
 
       {/* Scrollable Content Area */}
       <View style={styles.contentArea}>{renderContent()}</View>
+
+      <Modal visible={priceModalOpen} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Set Selling Price</Text>
+            <Text style={styles.modalSubtitle}>
+              {priceTarget?.name || "Plant type"}
+            </Text>
+
+            <TextInput
+              value={priceInput}
+              onChangeText={setPriceInput}
+              keyboardType="numeric"
+              placeholder="e.g. 120"
+              placeholderTextColor={Colors.textTertiary}
+              style={styles.modalInput}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => {
+                  setPriceModalOpen(false);
+                  setPriceInput("");
+                  setPriceTarget(null);
+                }}
+              >
+                <Text style={styles.modalCancel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => priceMutation.mutate()}
+                disabled={priceMutation.isLoading}
+              >
+                <Text style={styles.modalSave}>
+                  {priceMutation.isLoading ? "Saving..." : "Save"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -437,7 +611,6 @@ const styles = {
   searchContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    justifyContent: "center" as const,
     backgroundColor: Colors.surface,
     paddingHorizontal: Spacing.md,
     borderRadius: 10,
@@ -501,11 +674,6 @@ const styles = {
     marginBottom: Spacing.lg,
     lineHeight: 20,
   },
-  emptyHint: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-    textAlign: "center" as const,
-  },
   emptyButton: {
     backgroundColor: Colors.primary,
     paddingHorizontal: Spacing.xl,
@@ -521,7 +689,7 @@ const styles = {
     fontSize: 16,
     fontWeight: "600" as const,
   },
-  seedCard: {
+  inventoryCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: Spacing.md,
@@ -546,7 +714,7 @@ const styles = {
     flex: 1,
     gap: Spacing.sm,
   },
-  seedName: {
+  itemName: {
     fontSize: 16,
     fontWeight: "600" as const,
     color: Colors.text,
@@ -573,23 +741,40 @@ const styles = {
     fontSize: 11,
     fontWeight: "600" as const,
   },
-  supplierRow: {
+  infoRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     marginBottom: Spacing.sm,
     gap: Spacing.xs,
   },
-  supplierText: {
+  infoText: {
     fontSize: 14,
     color: Colors.textSecondary,
     flex: 1,
   },
+  priceFixButton: {
+    marginLeft: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+  },
+  priceFixButtonPressed: {
+    opacity: 0.8,
+  },
+  priceFixButtonText: {
+    color: Colors.warning,
+    fontSize: 12,
+    fontWeight: "600" as const,
+  },
   infoGrid: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    marginBottom: Spacing.xs,
+    marginBottom: Spacing.sm,
     paddingVertical: Spacing.sm,
     borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderColor: Colors.borderLight,
   },
   infoItem: {
@@ -615,6 +800,9 @@ const styles = {
   lowStockValue: {
     color: Colors.warning,
   },
+  outOfStockValue: {
+    color: Colors.error,
+  },
   actionsContainer: {
     flexDirection: "row" as const,
     gap: Spacing.xs,
@@ -633,7 +821,7 @@ const styles = {
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  imageButton: {
+  transferButton: {
     backgroundColor: Colors.info + "10",
     borderWidth: 1,
     borderColor: Colors.info + "30",
@@ -650,5 +838,45 @@ const styles = {
     fontSize: 12,
     fontWeight: "600" as const,
     color: Colors.primary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: Spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+  },
+  modalSubtitle: {
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  modalActions: {
+    flexDirection: "row" as const,
+    justifyContent: "flex-end" as const,
+    gap: Spacing.md,
+  },
+  modalCancel: {
+    color: Colors.textSecondary,
+  },
+  modalSave: {
+    color: Colors.primary,
+    fontWeight: "600" as const,
   },
 };

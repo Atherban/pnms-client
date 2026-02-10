@@ -1,9 +1,9 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,17 +26,24 @@ const SOWING_CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 2) / 2;
 
 export default function StaffGerminationCreate() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [sowingId, setSowingId] = useState<string | null>(null);
   const [germinated, setGerminated] = useState("");
 
   /* Fetch sowing records */
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["staff-sowings"],
     queryFn: SowingService.getAll,
     staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
 
   const sowings: Sowing[] = Array.isArray(data) ? data : [];
 
@@ -62,10 +69,14 @@ export default function StaffGerminationCreate() {
     maxAllowed > 0 ? (numericValue / maxAllowed) * 100 : 0;
 
   const getSeedName = (s: Sowing) =>
-    typeof s.seedId === "object" ? s.seedId.name : "Seed";
+    typeof s.seedId === "object"
+      ? s.seedId.name || "Seed"
+      : "Seed";
 
   const getPlantName = (s: Sowing) =>
-    typeof s.plantId === "object" ? s.plantId.name : "Plant";
+    typeof s.seedId === "object"
+      ? s.seedId.plantType?.name || s.plantType?.name || "Plant"
+      : s.plantType?.name || "Plant";
 
   const handleSowingSelect = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -91,6 +102,7 @@ export default function StaffGerminationCreate() {
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert("Success", "Germination recorded successfully!");
+      queryClient.invalidateQueries({ queryKey: ["staff-sowings"] });
       router.back();
     },
     onError: (err: any) => {
@@ -103,12 +115,22 @@ export default function StaffGerminationCreate() {
     },
   });
 
+  const getGerminationRate = (s: Sowing) => {
+    const rate = Number((s as any).germinationRate);
+    if (!isNaN(rate) && rate > 0) return rate;
+    const germinatedSeeds = Number((s as any).germinatedSeeds ?? 0);
+    if (germinatedSeeds > 0 && s.quantity > 0) {
+      return Math.round((germinatedSeeds / s.quantity) * 100);
+    }
+    return 0;
+  };
+
   // Calculate stats
   const stats = useMemo(() => {
     const totalSowings = sowings.length;
     const totalSeeds = sowings.reduce((sum, s) => sum + s.quantity, 0);
     const completedSowings = sowings.filter(
-      (s) => s.germinationRate > 0,
+      (s) => getGerminationRate(s) > 0,
     ).length;
 
     return { totalSowings, totalSeeds, completedSowings };
@@ -141,6 +163,49 @@ export default function StaffGerminationCreate() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.info} />
           <Text style={styles.loadingText}>Loading sowing data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight]}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+          >
+            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+          </Pressable>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>Record Germination</Text>
+            <Text style={styles.subtitle}>Unable to load sowings</Text>
+          </View>
+          <View style={styles.headerSpacer} />
+        </LinearGradient>
+        <View style={styles.loadingContainer}>
+          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <Text style={styles.loadingText}>
+            Failed to load sowing records.
+          </Text>
+          <Pressable
+            onPress={() => refetch()}
+            style={({ pressed }) => [
+              styles.emptyButton,
+              pressed && styles.emptyButtonPressed,
+            ]}
+          >
+            <Text style={styles.emptyButtonText}>Try Again</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -237,12 +302,22 @@ export default function StaffGerminationCreate() {
               <Text style={styles.emptyStateSubtext}>
                 Create sowing activities first to track germination
               </Text>
+              <Pressable
+                onPress={() => router.push("/(staff)/sowing/create")}
+                style={({ pressed }) => [
+                  styles.emptyButton,
+                  pressed && styles.emptyButtonPressed,
+                ]}
+              >
+                <Text style={styles.emptyButtonText}>Record Sowing</Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.selectionGrid}>
               {sowings.map((s) => {
                 const isSelected = sowingId === s._id;
-                const hasGermination = s.germinationRate > 0;
+                const rate = getGerminationRate(s);
+                const hasGermination = rate > 0;
 
                 return (
                   <Pressable
@@ -317,7 +392,7 @@ export default function StaffGerminationCreate() {
                               color={Colors.white}
                             />
                             <Text style={styles.germinationBadgeText}>
-                              {s.germinationRate}%
+                              {rate}%
                             </Text>
                           </View>
                         )}

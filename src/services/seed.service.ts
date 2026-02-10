@@ -1,54 +1,32 @@
-import { api } from "./api";
+// services/seed.service.ts
+import type { CreateSeedPayload, Seed } from "../types/seed.types";
+import { api, apiPath, unwrap } from "./api";
 
-/* ================================
-   Types (AUTHORITATIVE)
-================================ */
-
-export interface Seed {
-  _id: string;
-  name: string;
-  category: string;
-  supplierName?: string;
-  totalPurchased: number;
-  quantityInStock: number; // must be returned by backend
-  purchaseDate: string;
-  expiryDate: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/* ================================
-   Service
-================================ */
+export type { CreateSeedPayload, Seed };
 
 export const SeedService = {
-  getAll(): Promise<Seed[]> {
-    return api.get("/seeds");
+  async getAll() {
+    const res = await api.get(apiPath("/seeds"));
+    return unwrap(res) ?? [];
   },
 
-  getById(id: string): Promise<Seed> {
-    return api.get(`/seeds/${id}`);
+  async getById(id: string) {
+    const res = await api.get(apiPath(`/seeds/${id}`));
+    return unwrap(res);
   },
 
-  create(payload: {
-    name: string;
-    category: string;
-    supplierName?: string;
-    totalPurchased: number;
-    purchaseDate: string;
-    expiryDate: string;
-  }): Promise<Seed> {
-    return api.post("/seeds", payload);
+  async create(payload: CreateSeedPayload) {
+    const res = await api.post(apiPath("/seeds"), payload);
+    return unwrap(res);
   },
 
-  update(
-    id: string,
-    payload: Partial<Omit<Seed, "_id" | "createdAt" | "updatedAt">>,
-  ): Promise<Seed> {
-    return api.patch(`/seeds/${id}`, payload);
+  async update(id: string, payload: any) {
+    const res = await api.patch(apiPath(`/seeds/${id}`), payload);
+    return unwrap(res);
   },
 
-  delete(id: string): Promise<void> {
-    return api.delete(`/seeds/${id}`);
+  async delete(id: string) {
+    const res = await api.delete(apiPath(`/seeds/${id}`));
+    return unwrap(res);
   },
 };

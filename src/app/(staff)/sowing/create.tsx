@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Plant, PlantService } from "../../../services/plant.service";
 import { Seed, SeedService } from "../../../services/seed.service";
 import { SowingService } from "../../../services/sowing.service";
 import { Colors, Spacing } from "../../../theme";
@@ -25,50 +24,74 @@ export default function StaffSowingCreate() {
   const queryClient = useQueryClient();
 
   const [seedId, setSeedId] = useState<string | null>(null);
-  const [plantId, setPlantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("");
 
-  /* Fetch seeds & plants */
-  const { data: seedsData, isLoading: loadingSeeds } = useQuery({
+  /* Fetch seeds */
+  const {
+    data: seedsData,
+    isLoading: loadingSeeds,
+    error: seedsError,
+    refetch: refetchSeeds,
+  } = useQuery({
     queryKey: ["staff-seeds"],
     queryFn: SeedService.getAll,
   });
 
-  const seeds = Array.isArray(seedsData) ? seedsData : [];
-
-  const { data: plants, isLoading: loadingPlants } = useQuery({
-    queryKey: ["staff-plants"],
-    queryFn: PlantService.getAll,
-  });
+  const seeds = useMemo<Seed[]>(() => {
+    if (!seedsData) return [];
+    return Array.isArray(seedsData) ? seedsData : (seedsData.data ?? []);
+  }, [seedsData]);
 
   const selectedSeed = useMemo(
     () => seeds?.find((s) => s._id === seedId),
     [seeds, seedId],
   );
 
-  const selectedPlant = useMemo(
-    () => plants?.find((p) => p._id === plantId),
-    [plants, plantId],
-  );
+  const getSeedStock = (seed?: Seed) =>
+    Number(
+      seed?.quantityInStock ??
+        (seed as any)?.availableQuantity ??
+        (seed as any)?.remainingQuantity ??
+        seed?.totalPurchased ??
+        0,
+    );
 
-  const maxQuantity = selectedSeed?.quantityInStock ?? 0;
+  const rawStockValue =
+    selectedSeed?.quantityInStock ??
+    (selectedSeed as any)?.availableQuantity ??
+    (selectedSeed as any)?.remainingQuantity ??
+    selectedSeed?.totalPurchased;
+  const stockKnown = typeof rawStockValue === "number";
+  const maxQuantity = getSeedStock(selectedSeed);
   const numericQuantity = Number(quantity);
 
-  const isQuantityValid = numericQuantity > 0 && numericQuantity <= maxQuantity;
+  const isQuantityValid =
+    Number.isFinite(numericQuantity) &&
+    numericQuantity > 0 &&
+    (!stockKnown || numericQuantity <= maxQuantity);
+
+  useEffect(() => {
+    setQuantity("");
+  }, [seedId]);
 
   /* Create sowing mutation */
   const mutation = useMutation({
-    mutationFn: () =>
-      SowingService.create({
-        seedId: seedId!,
-        plantId: plantId!,
+    mutationFn: async () => {
+      if (!seedId || !isQuantityValid) {
+        throw new Error("Invalid sowing data");
+      }
+      return SowingService.create({
+        seedId,
         quantity: numericQuantity,
-      }),
+      });
+    },
     onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["staff-seeds"] }),
+        queryClient.invalidateQueries({ queryKey: ["staff-sowings"] }),
         queryClient.invalidateQueries({ queryKey: ["staff-dashboard"] }),
+        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
       ]);
 
       Alert.alert("Success", "Sowing recorded successfully", [
@@ -86,19 +109,14 @@ export default function StaffSowingCreate() {
     setSeedId(seed._id);
   };
 
-  const handlePlantSelect = (plant: Plant) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPlantId(plant._id);
-  };
-
   const handleSubmit = () => {
-    if (!seedId || !plantId || !isQuantityValid || mutation.isLoading) return;
+    if (!seedId || !isQuantityValid || mutation.isLoading) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     mutation.mutate();
   };
 
-  if (loadingSeeds || loadingPlants) {
+  if (loadingSeeds) {
     return (
       <SafeAreaView style={styles.container}>
         <LinearGradient
@@ -108,16 +126,71 @@ export default function StaffSowingCreate() {
           end={{ x: 1, y: 0 }}
         >
           <View style={styles.headerContent}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && styles.backButtonPressed,
+              ]}
+            >
+              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+            </Pressable>
             <View>
               <Text style={styles.title}>Record New Sowing</Text>
               <Text style={styles.subtitle}>Loading data...</Text>
             </View>
+            <View style={styles.headerSpacer} />
           </View>
         </LinearGradient>
         <View style={styles.contentArea}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.info} />
-            <Text style={styles.loadingText}>Loading seeds and plants...</Text>
+            <Text style={styles.loadingText}>Loading seeds...</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (seedsError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight]}
+          style={styles.fixedHeader}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <View style={styles.headerContent}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [
+                styles.backButton,
+                pressed && styles.backButtonPressed,
+              ]}
+            >
+              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+            </Pressable>
+            <View>
+              <Text style={styles.title}>Record New Sowing</Text>
+              <Text style={styles.subtitle}>Unable to load seeds</Text>
+            </View>
+            <View style={styles.headerSpacer} />
+          </View>
+        </LinearGradient>
+        <View style={styles.contentArea}>
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+            <Text style={styles.loadingText}>Failed to load seeds</Text>
+            <Pressable
+              onPress={() => refetchSeeds()}
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.retryButtonPressed,
+              ]}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </Pressable>
           </View>
         </View>
       </SafeAreaView>
@@ -134,9 +207,19 @@ export default function StaffSowingCreate() {
         end={{ x: 1, y: 0 }}
       >
         <View style={styles.headerContent}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+          >
+            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+          </Pressable>
           <View>
             <Text style={styles.title}>Record New Sowing</Text>
           </View>
+          <View style={styles.headerSpacer} />
         </View>
       </LinearGradient>
 
@@ -206,19 +289,19 @@ export default function StaffSowingCreate() {
                           color={Colors.textTertiary}
                         />
                         <Text style={styles.selectionCardDetailText}>
-                          Stock: {seed.quantityInStock}
+                          Stock: {getSeedStock(seed)}
                         </Text>
                       </View>
 
-                      {seed.category && (
+                      {(seed.category || seed.plantType?.name) && (
                         <View style={styles.selectionCardDetailItem}>
                           <MaterialIcons
-                            name="category"
+                            name="spa"
                             size={14}
                             color={Colors.textTertiary}
                           />
                           <Text style={styles.selectionCardDetailText}>
-                            {seed.category}
+                            {seed.category || seed.plantType?.name}
                           </Text>
                         </View>
                       )}
@@ -226,78 +309,18 @@ export default function StaffSowingCreate() {
                   </View>
                 </Pressable>
               ))}
-            </View>
-          </View>
-
-          {/* Plant Selection */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="spa" size={24} color={Colors.success} />
-              <Text style={styles.sectionTitle}>Select Plant</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Choose the plant type for this sowing
-            </Text>
-
-            <View style={styles.selectionContainer}>
-              {plants?.map((plant: Plant) => (
-                <Pressable
-                  key={plant._id}
-                  onPress={() => handlePlantSelect(plant)}
-                  style={({ pressed }) => [
-                    styles.selectionCard,
-                    plantId === plant._id && styles.selectionCardActive,
-                    pressed && styles.selectionCardPressed,
-                  ]}
-                >
-                  <View style={styles.selectionCardContent}>
-                    <View style={styles.selectionCardHeader}>
-                      <MaterialIcons
-                        name="spa"
-                        size={20}
-                        color={
-                          plantId === plant._id
-                            ? Colors.success
-                            : Colors.textSecondary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.selectionCardTitle,
-                          plantId === plant._id &&
-                            styles.selectionCardTitleActive,
-                        ]}
-                      >
-                        {plant.name}
-                      </Text>
-                      {plantId === plant._id && (
-                        <View style={styles.selectedIndicator}>
-                          <MaterialIcons
-                            name="check-circle"
-                            size={16}
-                            color={Colors.success}
-                          />
-                        </View>
-                      )}
-                    </View>
-
-                    {plant.category && (
-                      <View style={styles.selectionCardDetails}>
-                        <View style={styles.selectionCardDetailItem}>
-                          <MaterialIcons
-                            name="category"
-                            size={14}
-                            color={Colors.textTertiary}
-                          />
-                          <Text style={styles.selectionCardDetailText}>
-                            {plant.category}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
+              {seeds.length === 0 && (
+                <View style={styles.emptySelectionCard}>
+                  <MaterialIcons
+                    name="info"
+                    size={18}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.emptySelectionText}>
+                    No seeds available. Ask an admin to add seed stock.
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -321,7 +344,9 @@ export default function StaffSowingCreate() {
               <TextInput
                 keyboardType="numeric"
                 value={quantity}
-                onChangeText={setQuantity}
+                onChangeText={(text) =>
+                  setQuantity(text.replace(/[^\d]/g, ""))
+                }
                 placeholder="e.g., 10, 25, 50"
                 placeholderTextColor={Colors.textTertiary}
                 style={styles.input}
@@ -337,7 +362,7 @@ export default function StaffSowingCreate() {
                   <Text style={styles.inputHelperText}>
                     Available stock:{" "}
                     <Text style={styles.inputHelperHighlight}>
-                      {maxQuantity}
+                      {stockKnown ? maxQuantity : "—"}
                     </Text>{" "}
                     units
                   </Text>
@@ -350,7 +375,9 @@ export default function StaffSowingCreate() {
                   <Text style={styles.errorHelperText}>
                     {numericQuantity <= 0
                       ? "Quantity must be greater than 0"
-                      : `Maximum allowed: ${maxQuantity}`}
+                      : stockKnown
+                        ? `Maximum allowed: ${maxQuantity}`
+                        : "Check quantity"}
                   </Text>
                 </View>
               )}
@@ -358,7 +385,7 @@ export default function StaffSowingCreate() {
           </View>
 
           {/* Summary Card */}
-          {(selectedSeed || selectedPlant) && (
+          {(selectedSeed || quantity) && (
             <View style={styles.summaryCard}>
               <Text style={styles.summaryTitle}>Sowing Summary</Text>
 
@@ -375,16 +402,16 @@ export default function StaffSowingCreate() {
                   </View>
                 )}
 
-                {selectedPlant && (
+                {selectedSeed?.plantType?.name && (
                   <View style={styles.summaryItem}>
                     <MaterialIcons
                       name="spa"
                       size={18}
                       color={Colors.success}
                     />
-                    <Text style={styles.summaryLabel}>Plant:</Text>
+                    <Text style={styles.summaryLabel}>Plant Type:</Text>
                     <Text style={styles.summaryValue}>
-                      {selectedPlant.name}
+                      {selectedSeed.plantType.name}
                     </Text>
                   </View>
                 )}
@@ -410,11 +437,11 @@ export default function StaffSowingCreate() {
           <Pressable
             onPress={handleSubmit}
             disabled={
-              !seedId || !plantId || !isQuantityValid || mutation.isLoading
+              !seedId || !isQuantityValid || mutation.isLoading
             }
             style={({ pressed }) => [
               styles.submitButton,
-              (!seedId || !plantId || !isQuantityValid || mutation.isLoading) &&
+              (!seedId || !isQuantityValid || mutation.isLoading) &&
                 styles.submitButtonDisabled,
               pressed && styles.submitButtonPressed,
             ]}
@@ -434,15 +461,15 @@ export default function StaffSowingCreate() {
           </Pressable>
 
           {/* Validation Status */}
-          {(!seedId || !plantId || !isQuantityValid) && (
+          {(!seedId || !isQuantityValid) && (
             <View style={styles.validationStatus}>
               <MaterialIcons
                 name={
-                  seedId && plantId && isQuantityValid ? "check-circle" : "info"
+                  seedId && isQuantityValid ? "check-circle" : "info"
                 }
                 size={16}
                 color={
-                  seedId && plantId && isQuantityValid
+                  seedId && isQuantityValid
                     ? Colors.success
                     : Colors.warning
                 }
@@ -452,7 +479,7 @@ export default function StaffSowingCreate() {
                   styles.validationText,
                   {
                     color:
-                      seedId && plantId && isQuantityValid
+                      seedId && isQuantityValid
                         ? Colors.success
                         : Colors.textSecondary,
                   },
@@ -460,13 +487,11 @@ export default function StaffSowingCreate() {
               >
                 {!seedId
                   ? "Select a seed"
-                  : !plantId
-                    ? "Select a plant"
-                    : !quantity
-                      ? "Enter quantity"
-                      : !isQuantityValid
-                        ? "Check quantity"
-                        : "Ready to submit"}
+                  : !quantity
+                    ? "Enter quantity"
+                    : !isQuantityValid
+                      ? "Check quantity"
+                      : "Ready to submit"}
               </Text>
             </View>
           )}
@@ -517,6 +542,10 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     transform: [{ scale: 0.95 }],
   },
+  headerSpacer: {
+    width: 44,
+    height: 44,
+  },
   contentArea: {
     flex: 1,
   },
@@ -531,6 +560,21 @@ const styles = {
     fontSize: 16,
     color: Colors.textSecondary,
     fontWeight: "500" as const,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: 12,
+    marginTop: Spacing.md,
+  },
+  retryButtonPressed: {
+    backgroundColor: Colors.primaryDark,
+    transform: [{ scale: 0.98 }],
+  },
+  retryButtonText: {
+    color: Colors.white,
+    fontWeight: "600" as const,
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,
@@ -621,6 +665,21 @@ const styles = {
   selectionCardDetailText: {
     fontSize: 13,
     color: Colors.textTertiary,
+  },
+  emptySelectionCard: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing.sm,
+    backgroundColor: Colors.surfaceDark,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+  },
+  emptySelectionText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    flex: 1,
   },
   inputContainer: {
     gap: Spacing.sm,
@@ -717,7 +776,7 @@ const styles = {
     backgroundColor: Colors.disabled,
   },
   submitButtonPressed: {
-    backgroundColor: Colors.successDark || "#059669",
+    backgroundColor: Colors.success,
     transform: [{ scale: 0.98 }],
   },
   submitText: {

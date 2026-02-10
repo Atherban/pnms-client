@@ -1,6 +1,13 @@
 // services/auth.service.ts
-import { saveToken, getToken, removeToken, saveUser, getUser, removeUser } from "../utils/storage";
-import { api } from "./api";
+import {
+  getToken,
+  getUser,
+  removeToken,
+  removeUser,
+  saveToken,
+  saveUser,
+} from "../utils/storage";
+import { api, apiPath, unwrap } from "./api";
 
 /* Types */
 export interface LoginPayload {
@@ -23,19 +30,20 @@ export interface LoginResponse {
 export const AuthService = {
   /* Login */
   async login(payload: LoginPayload): Promise<LoginResponse> {
-    const response = await api.post("/auth/login", payload);
+    const response = await api.post(apiPath("/auth/login"), payload);
+    const data = unwrap<LoginResponse>(response);
 
-    if (!response || !response.data.token || !response.data.user) {
+    if (!data || !data.token || !data.user) {
       throw new Error("Invalid login response");
     }
 
-    const { token, user } = response.data;
+    const { token, user } = data;
     
     // Save both token AND user to SecureStore
     await saveToken(token);
     await saveUser(user);
     
-    return response.data;
+    return data;
   },
 
   /* Logout */

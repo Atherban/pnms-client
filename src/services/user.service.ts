@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, apiPath, unwrap } from "./api";
 
 export interface User {
   _id: string;
@@ -15,15 +15,18 @@ export interface PaginatedUsers {
 
 export const UserService = {
   async getAll(page = 1, limit = 10): Promise<PaginatedUsers> {
-    const res = await api.get(`/users?page=${page}&limit=${limit}`);
+    const res = await api.get(
+      apiPath(`/users?page=${page}&limit=${limit}`),
+    );
+    const data = unwrap(res);
 
-    if (Array.isArray(res)) {
-      return { users: res, total: res.length };
+    if (Array.isArray(data)) {
+      return { users: data, total: data.length };
     }
 
     return {
-      users: res.data,
-      total: res.total,
+      users: data?.users ?? data?.data ?? [],
+      total: data?.total ?? data?.count ?? 0,
     };
   },
 
@@ -33,14 +36,14 @@ export const UserService = {
     password: string;
     role: User["role"];
   }) {
-    return api.post("/users", payload);
+    return api.post(apiPath("/users"), payload).then(unwrap);
   },
 
   updateRole(userId: string, role: User["role"]) {
-    return api.patch(`/users/${userId}`, { role });
+    return api.patch(apiPath(`/users/${userId}`), { role }).then(unwrap);
   },
 
   setActive(userId: string, isActive: boolean) {
-    return api.patch(`/users/${userId}`, { isActive });
+    return api.patch(apiPath(`/users/${userId}`), { isActive }).then(unwrap);
   },
 };

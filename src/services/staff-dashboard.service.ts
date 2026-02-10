@@ -1,10 +1,10 @@
-import { PlantService } from "./plant.service";
+import { InventoryService } from "./inventory.service";
 import { SalesService } from "./sales.service";
 import { SeedService } from "./seed.service";
 import { SowingService } from "./sowing.service";
 
 export interface StaffDashboardStats {
-  totalPlants: number;
+  totalInventory: number;
   totalSeeds: number;
   todaySalesCount: number;
   todaySowingCount: number;
@@ -15,13 +15,13 @@ export const StaffDashboardService = {
     const today = new Date().toISOString().split("T")[0];
 
     const results = await Promise.allSettled([
-      PlantService.getAll(),
+      InventoryService.getAll(),
       SeedService.getAll(),
       SalesService.getAll(),
       SowingService.getAll(),
     ]);
 
-    const plants = results[0].status === "fulfilled" ? results[0].value : [];
+    const inventory = results[0].status === "fulfilled" ? results[0].value : [];
 
     const seeds = results[1].status === "fulfilled" ? results[1].value : [];
 
@@ -32,7 +32,7 @@ export const StaffDashboardService = {
     const isToday = (date: string) => date.startsWith(today);
 
     return {
-      totalPlants: plants.length,
+      totalInventory: inventory.length,
       totalSeeds: seeds.length,
       todaySalesCount: sales.filter((s) => isToday(s.createdAt)).length,
       todaySowingCount: sowings.filter((s) => isToday(s.createdAt)).length,

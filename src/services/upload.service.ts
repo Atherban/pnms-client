@@ -11,59 +11,51 @@ interface UploadFile {
 const normalizeUri = (uri: string) =>
   Platform.OS === "ios" ? uri.replace("file://", "") : uri;
 
+const baseUrl = () => (ENV.API_BASE_URL || "").replace(/\/+$/, "");
+const apiBase = () =>
+  baseUrl().endsWith("/api") ? baseUrl() : `${baseUrl()}/api`;
 
+const uploadImage = async (path: string, file: UploadFile) => {
+  const token = await getToken();
+
+  const formData = new FormData();
+  formData.append("image", {
+    uri: normalizeUri(file.uri),
+    name: file.name || "image.jpg",
+    type: file.type || "image/jpeg",
+  } as any);
+
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Upload failed");
+  }
+
+  return true;
+};
 
 export const UploadService = {
-  async uploadPlantImage(plantId: string, file: UploadFile) {
-    const token = await getToken();
+  async uploadPlantTypeImage(plantTypeId: string, file: UploadFile) {
+    return uploadImage(`/plant-types/${plantTypeId}/image`, file);
+  },
 
-    const formData = new FormData();
-    formData.append("image", {
-      uri: normalizeUri(file.uri),
-      name: file.name || "image.jpg",
-      type: file.type || "image/jpeg",
-    } as any);
-
-    const res = await fetch(`${ENV.API_BASE_URL}/plants/${plantId}/image`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // ❗ DO NOT set Content-Type manually
-      },
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Upload failed");
-    }
-
-    return true;
+  async uploadInventoryImage(inventoryId: string, file: UploadFile) {
+    return uploadImage(`/inventory/${inventoryId}/image`, file);
   },
 
   async uploadSeedImage(seedId: string, file: UploadFile) {
-    const token = await getToken();
+    return uploadImage(`/seeds/${seedId}/image`, file);
+  },
 
-    const formData = new FormData();
-    formData.append("image", {
-      uri: normalizeUri(file.uri),
-      name: file.name || "image.jpg",
-      type: file.type || "image/jpeg",
-    } as any);
-
-    const res = await fetch(`${ENV.API_BASE_URL}/seeds/${seedId}/image`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Upload failed");
-    }
-
-    return true;
+  // Backward compatibility (deprecated)
+  async uploadPlantImage(plantId: string, file: UploadFile) {
+    return uploadImage(`/plant-types/${plantId}/image`, file);
   },
 };

@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,50 +13,57 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Seed, SeedService } from "../../../services/seed.service";
+import { Sowing, SowingService } from "../../../services/sowing.service";
 import { Colors, Spacing } from "../../../theme";
 
 const BOTTOM_NAV_HEIGHT = 80; // Adjust based on your bottom nav height
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const STAT_CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2) / 4;
 
-export default function AdminSeeds() {
+export default function StaffSowingIndex() {
+  const router = useRouter();
+
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["seeds"],
-    queryFn: SeedService.getAll,
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["staff-sowings"],
+    queryFn: SowingService.getAll,
   });
 
+  /* Refresh when screen gains focus */
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch]),
+  );
+
   /* Normalize API response safely */
-  const seeds = useMemo<Seed[]>(() => {
-    if (!data) return [];
-    return Array.isArray(data) ? data : (data.data ?? []);
-  }, [data]);
+  const sowings = useMemo<Sowing[]>(
+    () => (Array.isArray(data) ? data : []),
+    [data],
+  );
 
-  const filteredSeeds = useMemo(() => {
+  const filteredSowings = useMemo(() => {
     const term = search.toLowerCase();
-    return seeds.filter(
-      (s) =>
-        s.name.toLowerCase().includes(term) ||
-        s.supplierName?.toLowerCase().includes(term) ||
-        s.category?.toLowerCase().includes(term) ||
-        s.plantType?.name?.toLowerCase().includes(term),
-    );
-  }, [seeds, search]);
-
-  const getSeedStock = (seed: Seed) =>
-    Number(
-      seed.quantityInStock ??
-        (seed as any).availableQuantity ??
-        (seed as any).remainingQuantity ??
-        seed.totalPurchased ??
-        0,
-    );
-
-  const getMinStock = (seed: Seed) => Number(seed.minStockLevel ?? 10);
-
+    return sowings.filter((s) => {
+      const seedName =
+        typeof s.seedId === "object"
+          ? s.seedId?.name?.toLowerCase() ?? ""
+          : "";
+      const plantName =
+        (typeof s.seedId === "object"
+          ? s.seedId?.plantType?.name
+          : s.plantType?.name) ?? "";
+      const plantNameLc = plantName.toLowerCase();
+      const performer = s.performedBy?.name?.toLowerCase() ?? "";
+      return (
+        seedName.includes(term) ||
+        plantNameLc.includes(term) ||
+        performer.includes(term)
+      );
+    });
+  }, [sowings, search]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -67,29 +75,15 @@ export default function AdminSeeds() {
     }
   }, [refetch]);
 
-  const getExpiryStatus = (expiryDate: string) => {
-    const expiry = new Date(expiryDate);
-    if (isNaN(expiry.getTime())) {
-      return {
-        status: "Unknown",
-        color: Colors.textSecondary,
-        icon: "help",
-      };
-    }
-
-    const today = new Date();
-    const diffTime = expiry.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0)
-      return { status: "Expired", color: Colors.error, icon: "error" };
-    if (diffDays <= 30)
-      return {
-        status: "Expiring Soon",
-        color: Colors.warning,
-        icon: "warning",
-      };
-    return { status: "Valid", color: Colors.success, icon: "check-circle" };
+  const isToday = (date: string) => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    );
   };
 
   const formatDate = (date: string) => {
@@ -102,53 +96,96 @@ export default function AdminSeeds() {
     });
   };
 
+  const getRoleBadge = (role?: "ADMIN" | "STAFF") => {
+    if (role === "ADMIN") {
+      return {
+        label: "Admin",
+        color: Colors.info,
+        icon: "verified-user",
+      };
+    }
+    return {
+      label: "Staff",
+      color: Colors.primary,
+      icon: "person",
+    };
+  };
+
   const stats = useMemo(() => {
-    const totalSeeds = seeds.length;
+    const totalSowings = sowings.length;
+    const totalQuantity = sowings.reduce(
+      (sum, s) => sum + (s.quantity ?? 0),
+      0,
+    );
+    const uniqueSeeds = new Set(
+      sowings
+        .map((s) =>
+          typeof s.seedId === "object" ? s.seedId?._id : s.seedId,
+        )
+        .filter(Boolean),
+    ).size;
+    const todaySowings = sowings.filter((s) => isToday(s.createdAt)).length;
 
-    const expiredSeeds = seeds.filter((s) => {
-      const d = new Date(s.expiryDate);
-      return !isNaN(d.getTime()) && d < new Date();
-    }).length;
-
-    const lowStockSeeds = seeds.filter(
-      (s) => getSeedStock(s) < getMinStock(s),
-    ).length;
-
-    const validSeeds = totalSeeds - expiredSeeds;
-
-    return { totalSeeds, expiredSeeds, lowStockSeeds, validSeeds };
-  }, [seeds]);
+    return { totalSowings, totalQuantity, uniqueSeeds, todaySowings };
+  }, [sowings]);
 
   const renderContent = () => {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading seeds...</Text>
+          <Text style={styles.loadingText}>Loading sowing records...</Text>
         </View>
       );
     }
 
-    if (filteredSeeds.length === 0) {
+    if (error) {
       return (
         <View style={styles.emptyContainer}>
-          <MaterialIcons name="grass" size={64} color={Colors.border} />
-          <Text style={styles.emptyTitle}>No seeds found</Text>
+          <MaterialIcons name="error-outline" size={64} color={Colors.error} />
+          <Text style={styles.emptyTitle}>Failed to load sowings</Text>
+          <Text style={styles.emptyMessage}>
+            Please check your connection or permissions.
+          </Text>
+          <Pressable
+            onPress={() => refetch()}
+            style={({ pressed }) => [
+              styles.emptyButton,
+              pressed && styles.emptyButtonPressed,
+            ]}
+          >
+            <Text style={styles.emptyButtonText}>Try Again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (filteredSowings.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="eco" size={64} color={Colors.border} />
+          <Text style={styles.emptyTitle}>No sowing records found</Text>
           <Text style={styles.emptyMessage}>
             {search.length > 0
               ? "Try adjusting your search terms"
-              : "No seeds have been added yet"}
+              : "No sowing activities have been recorded yet"}
           </Text>
-          <Text style={styles.emptyHint}>
-            Ask an admin to add seed stock.
-          </Text>
+          <Pressable
+            onPress={() => router.push("/(staff)/sowing/create")}
+            style={({ pressed }) => [
+              styles.emptyButton,
+              pressed && styles.emptyButtonPressed,
+            ]}
+          >
+            <Text style={styles.emptyButtonText}>Record First Sowing</Text>
+          </Pressable>
         </View>
       );
     }
 
     return (
       <FlatList
-        data={filteredSeeds}
+        data={filteredSowings}
         keyExtractor={(s) => s._id}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -162,11 +199,9 @@ export default function AdminSeeds() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={<View style={styles.listHeader} />}
         renderItem={({ item }) => {
-          const expiryStatus = getExpiryStatus(item.expiryDate);
-          const isLowStock = getSeedStock(item) < getMinStock(item);
-
+          const roleBadge = getRoleBadge(item.roleAtTime);
           return (
-            <View style={styles.seedCard}>
+            <View style={styles.sowingCard}>
               {/* Header */}
               <View style={styles.cardHeader}>
                 <View style={styles.titleContainer}>
@@ -176,88 +211,57 @@ export default function AdminSeeds() {
                     color={Colors.primary}
                   />
                   <Text style={styles.seedName} numberOfLines={1}>
-                    {item.name}
+                    {typeof item.seedId === "object"
+                      ? item.seedId?.name || "Unknown Seed"
+                      : "Unknown Seed"}
                   </Text>
-                  {(item.category || item.plantType?.name) && (
-                    <View
-                      style={[
-                        styles.categoryBadge,
-                        { backgroundColor: Colors.info + "15" },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.categoryText, { color: Colors.info }]}
-                      >
-                        {item.category || item.plantType?.name}
-                      </Text>
-                    </View>
-                  )}
+                  <MaterialIcons
+                    name="trending-flat"
+                    size={16}
+                    color={Colors.textTertiary}
+                  />
+                  <Text style={styles.plantName} numberOfLines={1}>
+                    {typeof item.seedId === "object"
+                      ? item.seedId?.plantType?.name ||
+                        item.plantType?.name ||
+                        "Unknown Plant"
+                      : item.plantType?.name || "Unknown Plant"}
+                  </Text>
                 </View>
                 <View
                   style={[
-                    styles.statusBadge,
-                    { backgroundColor: expiryStatus.color + "15" },
+                    styles.roleBadge,
+                    { backgroundColor: roleBadge.color + "15" },
                   ]}
                 >
                   <MaterialIcons
-                    name={expiryStatus.icon as any}
+                    name={roleBadge.icon as any}
                     size={12}
-                    color={expiryStatus.color}
+                    color={roleBadge.color}
                   />
                   <Text
-                    style={[styles.statusText, { color: expiryStatus.color }]}
+                    style={[styles.roleText, { color: roleBadge.color }]}
                   >
-                    {expiryStatus.status}
+                    {roleBadge.label}
                   </Text>
                 </View>
               </View>
 
-              {item.supplierName && (
-                <View style={styles.supplierRow}>
-                  <MaterialIcons
-                    name="business"
-                    size={16}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.supplierText} numberOfLines={1}>
-                    {item.supplierName}
-                  </Text>
-                </View>
-              )}
-
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Stock</Text>
-                  <View style={styles.infoValueRow}>
-                    <Text
-                      style={[
-                        styles.infoValue,
-                        isLowStock && styles.lowStockValue,
-                      ]}
-                    >
-                      {getSeedStock(item)}
-                    </Text>
-                    {isLowStock && (
-                      <MaterialIcons
-                        name="error"
-                        size={14}
-                        color={Colors.warning}
-                      />
-                    )}
-                  </View>
+                  <Text style={styles.infoLabel}>Quantity</Text>
+                  <Text style={styles.infoValue}>{item.quantity ?? 0}</Text>
                 </View>
-
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Purchased</Text>
-                  <Text style={styles.infoValue}>
-                    {item.totalPurchased ?? 0}
+                  <Text style={styles.infoLabel}>Performed By</Text>
+                  <Text style={styles.infoValue} numberOfLines={1}>
+                    {item.performedBy?.name || "Unknown"}
                   </Text>
                 </View>
-
                 <View style={styles.infoItem}>
-                  <Text style={styles.infoLabel}>Expiry</Text>
+                  <Text style={styles.infoLabel}>Date</Text>
                   <Text style={styles.infoValue}>
-                    {formatDate(item.expiryDate)}
+                    {formatDate(item.createdAt)}
                   </Text>
                 </View>
               </View>
@@ -274,11 +278,22 @@ export default function AdminSeeds() {
       <View style={styles.fixedHeader}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.title}>Seed Inventory</Text>
+            <Text style={styles.title}>Sowing Records</Text>
             <Text style={styles.subtitle}>
-              {stats.totalSeeds} total seeds • {filteredSeeds.length} filtered
+              {stats.totalSowings} total sowings • {filteredSowings.length}{" "}
+              filtered
             </Text>
           </View>
+          <Pressable
+            onPress={() => router.push("/(staff)/sowing/create")}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+            ]}
+          >
+            <MaterialIcons name="add" size={16} color={Colors.white} />
+            <Text style={styles.addButtonText}>Record</Text>
+          </Pressable>
         </View>
 
         {/* Stats Cards - Fixed Grid */}
@@ -289,9 +304,9 @@ export default function AdminSeeds() {
               { backgroundColor: Colors.primary + "10" },
             ]}
           >
-            <MaterialIcons name="grass" size={20} color={Colors.primary} />
-            <Text style={styles.statValue}>{stats.totalSeeds}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <MaterialIcons name="format-list-bulleted" size={20} color={Colors.primary} />
+            <Text style={styles.statValue}>{stats.totalSowings}</Text>
+            <Text style={styles.statLabel}>Sowings</Text>
           </View>
 
           <View
@@ -300,13 +315,20 @@ export default function AdminSeeds() {
               { backgroundColor: Colors.success + "10" },
             ]}
           >
-            <MaterialIcons
-              name="check-circle"
-              size={20}
-              color={Colors.success}
-            />
-            <Text style={styles.statValue}>{stats.validSeeds}</Text>
-            <Text style={styles.statLabel}>Valid</Text>
+            <MaterialIcons name="spa" size={20} color={Colors.success} />
+            <Text style={styles.statValue}>{stats.totalQuantity}</Text>
+            <Text style={styles.statLabel}>Seeds Used</Text>
+          </View>
+
+          <View
+            style={[
+              styles.statCard,
+              { backgroundColor: Colors.info + "10" },
+            ]}
+          >
+            <MaterialIcons name="grass" size={20} color={Colors.info} />
+            <Text style={styles.statValue}>{stats.uniqueSeeds}</Text>
+            <Text style={styles.statLabel}>Seed Types</Text>
           </View>
 
           <View
@@ -315,17 +337,9 @@ export default function AdminSeeds() {
               { backgroundColor: Colors.warning + "10" },
             ]}
           >
-            <MaterialIcons name="warning" size={20} color={Colors.warning} />
-            <Text style={styles.statValue}>{stats.lowStockSeeds}</Text>
-            <Text style={styles.statLabel}>Low Stock</Text>
-          </View>
-
-          <View
-            style={[styles.statCard, { backgroundColor: Colors.error + "10" }]}
-          >
-            <MaterialIcons name="error" size={20} color={Colors.error} />
-            <Text style={styles.statValue}>{stats.expiredSeeds}</Text>
-            <Text style={styles.statLabel}>Expired</Text>
+            <MaterialIcons name="today" size={20} color={Colors.warning} />
+            <Text style={styles.statValue}>{stats.todaySowings}</Text>
+            <Text style={styles.statLabel}>Today</Text>
           </View>
         </View>
 
@@ -338,7 +352,7 @@ export default function AdminSeeds() {
             style={styles.searchIcon}
           />
           <TextInput
-            placeholder="Search seeds"
+            placeholder="Search seed or staff..."
             placeholderTextColor={Colors.textTertiary}
             value={search}
             onChangeText={setSearch}
@@ -501,11 +515,6 @@ const styles = {
     marginBottom: Spacing.lg,
     lineHeight: 20,
   },
-  emptyHint: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-    textAlign: "center" as const,
-  },
   emptyButton: {
     backgroundColor: Colors.primary,
     paddingHorizontal: Spacing.xl,
@@ -521,7 +530,7 @@ const styles = {
     fontSize: 16,
     fontWeight: "600" as const,
   },
-  seedCard: {
+  sowingCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: Spacing.md,
@@ -552,16 +561,13 @@ const styles = {
     color: Colors.text,
     flex: 1,
   },
-  categoryBadge: {
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-    borderRadius: 6,
+  plantName: {
+    fontSize: 14,
+    fontWeight: "500" as const,
+    color: Colors.textSecondary,
+    flex: 1,
   },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: "600" as const,
-  },
-  statusBadge: {
+  roleBadge: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: Spacing.xs,
@@ -569,20 +575,9 @@ const styles = {
     borderRadius: 6,
     gap: 4,
   },
-  statusText: {
+  roleText: {
     fontSize: 11,
     fontWeight: "600" as const,
-  },
-  supplierRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  supplierText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    flex: 1,
   },
   infoGrid: {
     flexDirection: "row" as const,
@@ -602,53 +597,9 @@ const styles = {
     marginBottom: Spacing.xs,
     fontWeight: "500" as const,
   },
-  infoValueRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.xs,
-  },
   infoValue: {
     fontSize: 15,
     fontWeight: "600" as const,
     color: Colors.text,
-  },
-  lowStockValue: {
-    color: Colors.warning,
-  },
-  actionsContainer: {
-    flexDirection: "row" as const,
-    gap: Spacing.xs,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: Spacing.xs,
-    borderRadius: 8,
-    gap: 4,
-  },
-  editButton: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  imageButton: {
-    backgroundColor: Colors.info + "10",
-    borderWidth: 1,
-    borderColor: Colors.info + "30",
-  },
-  deleteButton: {
-    backgroundColor: Colors.error + "10",
-    borderWidth: 1,
-    borderColor: Colors.error + "30",
-  },
-  actionButtonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.primary,
   },
 };

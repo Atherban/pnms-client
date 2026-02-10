@@ -80,7 +80,7 @@ export default function UploadPlantImage() {
           marginBottom: Spacing.lg,
         }}
       >
-        Upload Plant Image
+        Upload Seed Image
       </Text>
 
       {/* Preview */}

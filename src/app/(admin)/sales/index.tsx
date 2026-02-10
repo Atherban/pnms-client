@@ -43,7 +43,9 @@ export default function AdminSales() {
     Array.isArray(sale.items)
       ? sale.items.reduce(
           (sum: number, i: any) =>
-            sum + (Number(i.priceAtSale) || 0) * (Number(i.quantity) || 0),
+            sum +
+            (Number(i.priceAtSale ?? i.unitPrice ?? i.price ?? 0) || 0) *
+              (Number(i.quantity) || 0),
           0,
         )
       : 0;

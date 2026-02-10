@@ -1,19 +1,31 @@
-import { ProfitRequest, ProfitResponse } from "../types/profit.types";
-import { api } from "./api";
+// src/services/profit.service.ts
+import { api, apiPath, unwrap } from "./api";
+
+/* ---------------- Helpers ---------------- */
+
+const toDateOnly = (d: string) => {
+  // Ensures YYYY-MM-DD
+  if (d.includes("T")) return d.split("T")[0];
+  return d;
+};
 
 export const ProfitService = {
-  async getProfit(payload: ProfitRequest): Promise<ProfitResponse> {
-    const result = await api.post<ProfitResponse>(`/profit`, payload);
+  async getProfit(params: { startDate: string; endDate: string }) {
+    const normalizedParams = {
+      startDate: toDateOnly(params.startDate),
+      endDate: toDateOnly(params.endDate),
+    };
 
-    // NORMALIZE SHAPE
-    if (typeof result.data === "number") {
-      return {
-        totalSales: 0,
-        totalExpenses: 0,
-        profit: result.data,
-      };
-    }
+    const res = await api.get(apiPath("/profit"), {
+      params: normalizedParams,
+    });
 
-    return result.data;
+    const data = unwrap(res) ?? {};
+
+    return {
+      totalSales: Number(data.totalSales ?? 0),
+      totalExpenses: Number(data.totalExpenses ?? 0),
+      profit: Number(data.netProfit ?? data.profit ?? 0),
+    };
   },
 };

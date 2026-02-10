@@ -20,7 +20,7 @@ const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 // Define icon components
 const DashboardIcon = Home;
 const UsersIcon = Users;
-const PlantsIcon = Leaf;
+const InventoryIcon = Leaf;
 const SeedsIcon = Sprout;
 const MoreIcon = Menu;
 
@@ -40,10 +40,10 @@ const NAV_ITEMS = [
     color: "#EC4899",
   },
   {
-    label: "Plants",
-    icon: PlantsIcon,
-    activeIcon: PlantsIcon,
-    path: "/(admin)/plants",
+    label: "Inventory",
+    icon: InventoryIcon,
+    activeIcon: InventoryIcon,
+    path: "/(admin)/inventory",
     color: "#10B981",
   },
   {
@@ -75,25 +75,20 @@ export default function CoolBottomNav() {
 
   // Find active index
   useEffect(() => {
-    const index = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.path));
+    const index = NAV_ITEMS.reduce((bestIndex, item, idx) => {
+      if (!pathname.startsWith(item.path)) return bestIndex;
+      if (bestIndex === -1) return idx;
+      return item.path.length > NAV_ITEMS[bestIndex].path.length
+        ? idx
+        : bestIndex;
+    }, -1);
+
     if (index !== -1 && index !== activeIndex) {
-      handleNavigation(index, NAV_ITEMS[index].path);
+      animateToIndex(index);
     }
   }, [pathname]);
 
-  const handleNavigation = (index: number, path: string) => {
-    // Haptic feedback
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Reset pressed state
-    setPressedIndex(null);
-
-    // Navigation
-    if (pathname !== path) {
-      router.replace(path);
-    }
-
-    // Indicator animation
+  const animateToIndex = (index: number) => {
     Animated.spring(indicatorAnim, {
       toValue: index * NAV_ITEM_WIDTH,
       useNativeDriver: true,
@@ -124,6 +119,22 @@ export default function CoolBottomNav() {
     ]).start(() => {
       setActiveIndex(index);
     });
+  };
+
+  const handleNavigation = (index: number, path: string) => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Reset pressed state
+    setPressedIndex(null);
+
+    // Navigation
+    if (pathname !== path) {
+      router.replace(path);
+    }
+
+    // Indicator animation
+    animateToIndex(index);
   };
 
   const handlePressIn = (index: number) => {

@@ -1,67 +1,73 @@
+// src/services/dashboard.service.ts
 import { DashboardStats } from "../types/dashboard.types";
-import { PlantService } from "./plant.service";
+import { InventoryService } from "./inventory.service";
 import { ProfitService } from "./profit.service";
 import { SalesService } from "./sales.service";
 import { SeedService } from "./seed.service";
 
+/* ---------------- Utilities ---------------- */
+
+const normalize = (res: any) => (Array.isArray(res) ? res : (res?.data ?? []));
+
+const calcSaleAmount = (sale: any) => {
+  if (Number(sale?.totalAmount)) return Number(sale.totalAmount);
+  if (!Array.isArray(sale?.items)) return 0;
+
+  return sale.items.reduce(
+    (sum: number, i: any) =>
+      sum +
+      (Number(i.priceAtSale ?? i.unitPrice ?? i.price ?? 0) || 0) *
+        (Number(i.quantity) || 0),
+    0,
+  );
+};
+
+const startOfTodayISO = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+
+const endOfTodayISO = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+};
+
+/* ---------------- Service ---------------- */
+
 export const DashboardService = {
   async getStats(): Promise<DashboardStats> {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date();
-    end.setHours(23, 59, 59, 999);
-
     try {
-      const [plantsRes, seedsRes, salesRes, profitRes] = await Promise.all([
-        PlantService.getAll().catch(() => []),
-        SeedService.getAll().catch(() => []),
-        SalesService.getAll().catch(() => []),
+      const [inventoryRes, seedsRes, salesRes, profitRes] = await Promise.all([
+        InventoryService.getAll(),
+        SeedService.getAll(),
+        SalesService.getAll(),
         ProfitService.getProfit({
-          startDate: start.toISOString(),
-          endDate: end.toISOString(),
-        }).catch(() => null),
+          startDate: startOfTodayISO(),
+          endDate: endOfTodayISO(),
+        }),
       ]);
 
-      /* ---------------- Normalize API responses ---------------- */
+      const inventory = normalize(inventoryRes);
+      const seeds = normalize(seedsRes);
+      const sales = normalize(salesRes);
 
-      const plants = Array.isArray(plantsRes)
-        ? plantsRes
-        : (plantsRes?.data ?? []);
-
-      const seeds = Array.isArray(seedsRes) ? seedsRes : (seedsRes?.data ?? []);
-
-      const sales = Array.isArray(salesRes) ? salesRes : (salesRes?.data ?? []);
-
-      /* ---------------- Calculate total sales amount ---------------- */
-
-      const totalSalesAmount = sales.reduce((sum: number, sale: any) => {
-        if (!Array.isArray(sale.items)) return sum;
-
-        return (
-          sum +
-          sale.items.reduce(
-            (itemSum: number, item: any) =>
-              itemSum +
-              (Number(item.priceAtSale) || 0) * (Number(item.quantity) || 0),
-            0,
-          )
-        );
-      }, 0);
-
-      /* ---------------- Normalize profit response ---------------- */
-
-      const profitData = profitRes?.data ?? profitRes ?? {};
+      const totalSalesAmount = sales.reduce(
+        (sum: number, sale: any) => sum + calcSaleAmount(sale),
+        0,
+      );
 
       return {
-        totalPlants: plants.length,
+        totalInventory: inventory.length,
         totalSeeds: seeds.length,
         totalSalesAmount,
-        todayProfit: Number(profitData.netProfit) || 0,
+        todayProfit: profitRes?.profit ?? profitRes?.netProfit ?? 0,
       };
-    } catch {
+    } catch (e) {
+      console.error("Dashboard stats failed", e);
       return {
-        totalPlants: 0,
+        totalInventory: 0,
         totalSeeds: 0,
         totalSalesAmount: 0,
         todayProfit: 0,

@@ -1,23 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
-import { Text, View } from "react-native";
-import { PlantService } from "../../../services/plant.service";
+import { Redirect, useLocalSearchParams } from "expo-router";
 
 export default function PlantDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { data } = useQuery({
-    queryKey: ["plant", id],
-    queryFn: () => PlantService.getById(id),
-  });
+  if (!id) return null;
 
-  if (!data) return null;
-
-  return (
-    <View>
-      <Text>{data.name}</Text>
-      <Text>₹ {data.price}</Text>
-      <Text>Available: {data.quantityAvailable}</Text>
-    </View>
-  );
+  return <Redirect href={`/(viewer)/inventory/${id}`} />;
 }

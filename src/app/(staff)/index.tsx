@@ -66,11 +66,10 @@ export default function StaffDashboard() {
   /* ---------------- NORMALIZED STATS ---------------- */
   const stats = useMemo(() => {
     return {
-      totalPlants: Number(data?.totalPlants ?? 0),
+      totalInventory: Number(data?.totalInventory ?? 0),
       totalSeeds: Number(data?.totalSeeds ?? 0),
       todaySowingCount: Number(data?.todaySowingCount ?? 0),
       todaySalesCount: Number(data?.todaySalesCount ?? 0),
-      activePlants: Number(data?.activePlants ?? 0),
       lowStockItems: Number(data?.lowStockItems ?? 0),
       pendingTasks: Number(data?.pendingTasks ?? 0),
     };
@@ -96,8 +95,8 @@ export default function StaffDashboard() {
   const handleCardPress = (type: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     switch (type) {
-      case "plants":
-        router.push("/(staff)/plants");
+      case "inventory":
+        router.push("/(staff)/inventory");
         break;
       case "seeds":
         router.push("/(staff)/seeds");
@@ -202,11 +201,11 @@ export default function StaffDashboard() {
   /* ---------------- KPI CONFIG ---------------- */
   const KPIS = [
     {
-      title: "Total Plants",
-      value: stats.totalPlants.toLocaleString(),
-      icon: "🌿",
+      title: "Inventory Items",
+      value: stats.totalInventory.toLocaleString(),
+      icon: "📦",
       color: Colors.success,
-      type: "plants",
+      type: "inventory",
       gradient: [Colors.success, "#34D399"],
     },
     {
@@ -251,11 +250,11 @@ export default function StaffDashboard() {
       action: () => router.push("/(staff)/sowing/create"),
     },
     {
-      title: "View Plants",
-      subtitle: "Browse plant inventory",
-      icon: "local-florist",
+      title: "View Inventory",
+      subtitle: "Browse available stock",
+      icon: "inventory",
       color: Colors.info,
-      action: () => router.push("/(staff)/plants"),
+      action: () => router.push("/(staff)/inventory"),
     },
     {
       title: "View Seeds",
@@ -266,33 +265,9 @@ export default function StaffDashboard() {
     },
   ];
 
-  const STATS_CARDS = [
-    {
-      title: "Active Plants",
-      value: data.activePlants?.toLocaleString() || "0",
-      change: "+3",
-      icon: "spa",
-      color: Colors.success,
-    },
-    {
-      title: "Low Stock",
-      value: data.lowStockItems?.toLocaleString() || "0",
-      change: "+1",
-      icon: "warning",
-      color: Colors.warning,
-    },
-    {
-      title: "Pending Tasks",
-      value: data.pendingTasks?.toLocaleString() || "0",
-      change: "-2",
-      icon: "pending-actions",
-      color: Colors.error,
-    },
-  ];
-
   const todaySales = data.todaySalesCount || 0;
   const todaySowings = data.todaySowingCount || 0;
-  const totalPlants = data.totalPlants || 0;
+  const totalInventory = data.totalInventory || 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -383,9 +358,9 @@ export default function StaffDashboard() {
               size={16}
               color="rgba(255, 255, 255, 0.8)"
             />
-            <Text style={styles.statLabel}>Total Plants</Text>
+            <Text style={styles.statLabel}>Inventory Items</Text>
             <Text style={styles.statValue}>
-              {totalPlants?.toLocaleString() || "0"}
+              {totalInventory?.toLocaleString() || "0"}
             </Text>
           </View>
         </View>
@@ -473,115 +448,6 @@ export default function StaffDashboard() {
                 />
               </Pressable>
             ))}
-          </View>
-        </View>
-
-        {/* Performance Insights */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="trending-up" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Performance Insights</Text>
-          </View>
-          <View style={styles.statsGrid}>
-            {STATS_CARDS.map((stat) => (
-              <View key={stat.title} style={styles.statCard}>
-                <View style={styles.statCardHeader}>
-                  <View
-                    style={[
-                      styles.statIcon,
-                      { backgroundColor: stat.color + "15" },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={stat.icon as any}
-                      size={20}
-                      color={stat.color}
-                    />
-                  </View>
-                  <View style={styles.statChange}>
-                    <MaterialIcons
-                      name={
-                        stat.change.startsWith("+")
-                          ? "arrow-upward"
-                          : "arrow-downward"
-                      }
-                      size={12}
-                      color={
-                        stat.change.startsWith("+")
-                          ? Colors.success
-                          : Colors.error
-                      }
-                    />
-                    <Text
-                      style={[
-                        styles.statChangeText,
-                        {
-                          color: stat.change.startsWith("+")
-                            ? Colors.success
-                            : Colors.error,
-                        },
-                      ]}
-                    >
-                      {stat.change}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.statCardValue}>{stat.value}</Text>
-                <Text style={styles.statCardTitle}>{stat.title}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="history" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <Pressable style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </Pressable>
-          </View>
-          <View style={styles.activityList}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons
-                  name="local-florist"
-                  size={18}
-                  color={Colors.success}
-                />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>
-                  New plant added: Monstera Deliciosa
-                </Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons
-                  name="receipt"
-                  size={18}
-                  color={Colors.warning}
-                />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>Sale recorded: ₹4,500</Text>
-                <Text style={styles.activityTime}>4 hours ago</Text>
-              </View>
-            </View>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <MaterialIcons name="people" size={18} color={Colors.primary} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>
-                  New user registered: John Doe
-                </Text>
-                <Text style={styles.activityTime}>1 day ago</Text>
-              </View>
-            </View>
           </View>
         </View>
 

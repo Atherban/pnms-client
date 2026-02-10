@@ -1,10 +1,10 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -15,15 +15,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { PlantTypeService } from "../../../services/plant-type.service";
 import { SeedService } from "../../../services/seed.service";
 import { Colors, Spacing } from "../../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
-
-/* Backend enum values */
-const SEED_CATEGORIES = ["VEGETABLE", "FLOWER", "FRUIT", "HERB"] as const;
-type SeedCategory = (typeof SEED_CATEGORIES)[number];
 
 const formatDate = (d: Date) => d.toISOString().split("T")[0];
 const formatDisplayDate = (d: Date) =>
@@ -38,7 +35,7 @@ export default function CreateSeed() {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<SeedCategory | "">("");
+  const [category, setCategory] = useState<string>("");
   const [supplierName, setSupplierName] = useState("");
   const [totalPurchased, setTotalPurchased] = useState("");
   // Set purchase date to current date by default
@@ -48,6 +45,27 @@ export default function CreateSeed() {
   const [showExpiryPicker, setShowExpiryPicker] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    data: plantTypesData,
+    isLoading: isPlantTypesLoading,
+    error: plantTypesError,
+    refetch: refetchPlantTypes,
+  } = useQuery({
+    queryKey: ["plant-types"],
+    queryFn: PlantTypeService.getAll,
+  });
+
+  const plantTypes = useMemo(
+    () => (Array.isArray(plantTypesData) ? plantTypesData : []),
+    [plantTypesData],
+  );
+
+  const selectedPlantType = plantTypes.find((p: any) => p.id === category);
+
+  const getPlantTypeLabel = (pt: any) => {
+    return pt?.name || pt?.label || pt?.title || "Unnamed Plant Type";
+  };
 
   const mutation = useMutation({
     mutationFn: SeedService.create,
@@ -71,36 +89,6 @@ export default function CreateSeed() {
     },
   });
 
-  const getCategoryIcon = (cat: SeedCategory) => {
-    switch (cat) {
-      case "VEGETABLE":
-        return "grass";
-      case "FLOWER":
-        return "local-florist";
-      case "FRUIT":
-        return "cake";
-      case "HERB":
-        return "medical-services";
-      default:
-        return "spa";
-    }
-  };
-
-  const getCategoryDescription = (cat: SeedCategory) => {
-    switch (cat) {
-      case "VEGETABLE":
-        return "Vegetable seeds for gardening";
-      case "FLOWER":
-        return "Flowering plant seeds";
-      case "FRUIT":
-        return "Fruit-bearing plant seeds";
-      case "HERB":
-        return "Herbal and medicinal plant seeds";
-      default:
-        return "";
-    }
-  };
-
   const handleCreate = () => {
     if (!name.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -109,7 +97,7 @@ export default function CreateSeed() {
     }
     if (!category) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Validation Error", "Please select a category");
+      Alert.alert("Validation Error", "Please select a plant type");
       return;
     }
     if (!supplierName.trim()) {
@@ -148,7 +136,7 @@ export default function CreateSeed() {
 
     mutation.mutate({
       name: name.trim(),
-      category,
+      plantType: category,
       supplierName: supplierName.trim(),
       totalPurchased: totalPurchasedValue,
       purchaseDate: formatDate(purchaseDate),
@@ -250,11 +238,11 @@ export default function CreateSeed() {
               )}
             </View>
 
-            {/* Category Field */}
+            {/* Plant Type Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
-                <MaterialIcons name="category" size={18} color={Colors.text} />
-                <Text style={styles.inputLabelText}>Category *</Text>
+                <MaterialIcons name="spa" size={18} color={Colors.text} />
+                <Text style={styles.inputLabelText}>Plant Type *</Text>
               </View>
 
               <Pressable
@@ -271,21 +259,16 @@ export default function CreateSeed() {
                 <View style={styles.categorySelectorContent}>
                   {category ? (
                     <View style={styles.categorySelected}>
-                      <MaterialIcons
-                        name={getCategoryIcon(category)}
-                        size={20}
-                        color={Colors.primary}
-                      />
                       <Text
                         style={styles.categorySelectedText}
                         numberOfLines={1}
                       >
-                        {category}
+                        {getPlantTypeLabel(selectedPlantType)}
                       </Text>
                     </View>
                   ) : (
                     <Text style={styles.categoryPlaceholder}>
-                      Select a category
+                      Select a plant type
                     </Text>
                   )}
                   <MaterialIcons
@@ -304,7 +287,7 @@ export default function CreateSeed() {
                     color={Colors.warning}
                   />
                   <Text style={styles.validationText}>
-                    Please select a category
+                    Please select a plant type
                   </Text>
                 </View>
               )}
@@ -554,14 +537,16 @@ export default function CreateSeed() {
                     <Text style={styles.previewValue}>{name}</Text>
                   </View>
                   <View style={styles.previewRow}>
-                    <Text style={styles.previewLabel}>Category:</Text>
+                    <Text style={styles.previewLabel}>Plant Type:</Text>
                     <View style={styles.categoryBadge}>
                       <MaterialIcons
-                        name={getCategoryIcon(category)}
+                        name="spa"
                         size={14}
                         color={Colors.primary}
                       />
-                      <Text style={styles.categoryBadgeText}>{category}</Text>
+                      <Text style={styles.categoryBadgeText}>
+                        {selectedPlantType?.name || "Selected Plant Type"}
+                      </Text>
                     </View>
                   </View>
                   <View style={styles.previewRow}>
@@ -678,15 +663,15 @@ export default function CreateSeed() {
           <View style={styles.helpContent}>
             <Text style={styles.helpTitle}>Tips for Adding Seeds</Text>
             <Text style={styles.helpText}>
-              • Ensure category matches the seed type{"\n"}• Expiry date must be
-              after purchase date{"\n"}• Total purchased determines starting
+              • Ensure plant type matches the seed batch{"\n"}• Expiry date must
+              be after purchase date{"\n"}• Total purchased determines starting
               stock{"\n"}• Keep supplier information for reference
             </Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Category Dropdown - Outside ScrollView */}
+      {/* Plant Type Dropdown - Outside ScrollView */}
       {categoryOpen && (
         <View style={styles.dropdownOverlay}>
           <Pressable
@@ -695,7 +680,7 @@ export default function CreateSeed() {
           />
           <View style={styles.dropdownContainer}>
             <View style={styles.dropdownHeader}>
-              <Text style={styles.dropdownTitle}>Select Category</Text>
+              <Text style={styles.dropdownTitle}>Select Plant Type</Text>
               <Pressable
                 onPress={() => setCategoryOpen(false)}
                 style={styles.dropdownCloseButton}
@@ -707,57 +692,98 @@ export default function CreateSeed() {
               style={styles.dropdownScroll}
               showsVerticalScrollIndicator={false}
             >
-              {SEED_CATEGORIES.map((cat) => (
-                <Pressable
-                  key={cat}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setCategory(cat);
-                    setCategoryOpen(false);
-                  }}
-                  style={({ pressed }) => [
-                    styles.dropdownOption,
-                    category === cat && styles.dropdownOptionSelected,
-                    pressed && styles.dropdownOptionPressed,
-                  ]}
-                >
-                  <View style={styles.dropdownOptionContent}>
-                    <View
-                      style={[
-                        styles.dropdownIconContainer,
-                        category === cat &&
-                          styles.dropdownIconContainerSelected,
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={getCategoryIcon(cat)}
-                        size={20}
-                        color={category === cat ? Colors.white : Colors.text}
-                      />
-                    </View>
-                    <View style={styles.dropdownDetails}>
-                      <Text
+              {isPlantTypesLoading ? (
+                <View style={{ padding: Spacing.md }}>
+                  <Text style={{ color: Colors.textSecondary }}>
+                    Loading plant types...
+                  </Text>
+                </View>
+              ) : plantTypesError ? (
+                <View style={{ padding: Spacing.md }}>
+                  <Text
+                    style={{ color: Colors.error, marginBottom: Spacing.sm }}
+                  >
+                    Failed to load plant types.
+                  </Text>
+                  <Pressable
+                    onPress={() => refetchPlantTypes()}
+                    style={({ pressed }) => [
+                      styles.retryButton,
+                      pressed && styles.retryButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </Pressable>
+                </View>
+              ) : plantTypes.length === 0 ? (
+                <View style={{ padding: Spacing.md }}>
+                  <Text style={{ color: Colors.textSecondary }}>
+                    No plant types available. Add plant types first.
+                  </Text>
+                </View>
+              ) : (
+                plantTypes.map((pt: any) => (
+                  <Pressable
+                    key={pt.id || pt._id}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setCategory(pt.id || pt._id);
+                      setCategoryOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.dropdownOption,
+                      category === (pt.id || pt._id) &&
+                        styles.dropdownOptionSelected,
+                      pressed && styles.dropdownOptionPressed,
+                    ]}
+                  >
+                    <View style={styles.dropdownOptionContent}>
+                      <View
                         style={[
-                          styles.dropdownLabel,
-                          category === cat && styles.dropdownLabelSelected,
+                          styles.dropdownIconContainer,
+                          category === (pt.id || pt._id) &&
+                            styles.dropdownIconContainerSelected,
                         ]}
                       >
-                        {cat}
-                      </Text>
-                      <Text style={styles.dropdownDescription}>
-                        {getCategoryDescription(cat)}
-                      </Text>
+                        <MaterialIcons
+                          name="spa"
+                          size={20}
+                          color={
+                            category === (pt.id || pt._id)
+                              ? Colors.white
+                              : Colors.text
+                          }
+                        />
+                      </View>
+                      <View style={styles.dropdownDetails}>
+                        <Text
+                          style={[
+                            styles.dropdownLabel,
+                            category === (pt.id || pt._id) &&
+                              styles.dropdownLabelSelected,
+                          ]}
+                        >
+                          {getPlantTypeLabel(pt)}
+                        </Text>
+                        <Text style={styles.dropdownDescription}>
+                          {pt.category || pt.variety
+                            ? `${pt.category ?? ""}${
+                                pt.category && pt.variety ? " • " : ""
+                              }${pt.variety ?? ""}`
+                            : "Plant type"}
+                        </Text>
+                      </View>
+                      {category === (pt.id || pt._id) && (
+                        <MaterialIcons
+                          name="check-circle"
+                          size={20}
+                          color={Colors.primary}
+                        />
+                      )}
                     </View>
-                    {category === cat && (
-                      <MaterialIcons
-                        name="check-circle"
-                        size={20}
-                        color={Colors.primary}
-                      />
-                    )}
-                  </View>
-                </Pressable>
-              ))}
+                  </Pressable>
+                ))
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1240,6 +1266,7 @@ const styles = {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
+    marginBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
   },
   dropdownHeader: {
     flexDirection: "row" as const,
@@ -1259,6 +1286,21 @@ const styles = {
   },
   dropdownScroll: {
     maxHeight: 400,
+  },
+  retryButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: 10,
+    alignSelf: "flex-start" as const,
+  },
+  retryButtonPressed: {
+    backgroundColor: Colors.primaryDark,
+    transform: [{ scale: 0.98 }],
+  },
+  retryButtonText: {
+    color: Colors.white,
+    fontWeight: "600" as const,
   },
   dropdownOption: {
     borderBottomWidth: 1,

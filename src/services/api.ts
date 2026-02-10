@@ -7,6 +7,20 @@ export const api = axios.create({
   timeout: 15000,
 });
 
+const hasApiPrefix = () =>
+  /\/api\/?$/.test((ENV.API_BASE_URL || "").replace(/\/+$/, ""));
+
+export const apiPath = (path: string) => {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return hasApiPrefix() ? normalized : `/api${normalized}`;
+};
+
+export const unwrap = <T = any>(res: any): T => {
+  if (res && typeof res === "object" && "data" in res) {
+    return (res as any).data as T;
+  }
+  return res as T;
+};
 
 api.interceptors.request.use(async (config) => {
   const token = await getToken();
