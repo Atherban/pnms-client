@@ -1,9 +1,10 @@
+import { MaterialIcons as Icon } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,7 +12,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import Icon from "react-native-vector-icons/MaterialIcons";
 
 import { ConfirmModal } from "../../../components/ConfirmModal";
 import { RoleSelectModal } from "../../../components/RoleSelectModal";
@@ -21,7 +21,6 @@ import { Colors, Spacing } from "../../../theme";
 
 const PAGE_SIZE = 10;
 const BOTTOM_NAV_HEIGHT = 80; // Adjust based on your bottom nav height
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function Users() {
   const router = useRouter();
@@ -29,7 +28,7 @@ export default function Users() {
   const currentUser = useAuthStore((s) => s.user);
 
   // Pagination
-  const [page, setPage] = useState(1);
+  const [page] = useState(1);
 
   // Modals
   const [confirmUser, setConfirmUser] = useState<User | null>(null);
@@ -60,7 +59,7 @@ export default function Users() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   });
 
-  const users = data?.users ?? [];
+  const users = useMemo(() => data?.users ?? [], [data]);
   const totalUsers = data?.users?.length ?? 0;
 
   const filteredUsers = useMemo(() => {
@@ -158,6 +157,13 @@ export default function Users() {
         }
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={<View style={styles.listHeader} />}
+        ListFooterComponent={
+          <View style={styles.listFooter}>
+            <Text style={styles.listFooterText}>
+              Showing {filteredUsers.length} of {users.length} users
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => {
           const isSelf = item._id === currentUser?.id;
           const roleColor =
@@ -300,79 +306,79 @@ export default function Users() {
     <View style={styles.container}>
       {/* Fixed Header Section */}
       <View style={styles.fixedHeader}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>User Management</Text>
-            <Text style={styles.subtitle}>
-              {totalUsers} total users • {filteredUsers.length} filtered
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => router.push("/(admin)/users/create")}
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.createButtonPressed,
-            ]}
-          >
-            <Icon name="person-add" size={18} color={Colors.white} />
-            <Text style={styles.createButtonText}>User</Text>
-          </Pressable>
-        </View>
-
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <View
-            style={[
-              styles.statCard,
-              { backgroundColor: Colors.primary + "10" },
-            ]}
-          >
-            <Icon name="people" size={20} color={Colors.primary} />
-            <Text style={styles.statValue}>{stats.totalUsers}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>User Management</Text>
+              <Text style={styles.subtitle}>
+                {totalUsers} total users • {filteredUsers.length} filtered
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => router.push("/(admin)/users/create")}
+              style={({ pressed }) => [
+                styles.createButton,
+                pressed && styles.createButtonPressed,
+              ]}
+            >
+              <Icon name="person-add" size={18} color={Colors.primary} />
+              <Text style={styles.createButtonText}>User</Text>
+            </Pressable>
           </View>
 
-          <View
-            style={[
-              styles.statCard,
-              { backgroundColor: Colors.success + "10" },
-            ]}
-          >
-            <Icon name="check-circle" size={20} color={Colors.success} />
-            <Text style={styles.statValue}>{stats.activeUsers}</Text>
-            <Text style={styles.statLabel}>Active</Text>
-          </View>
+          {/* Stats Cards */}
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Icon name="people" size={18} color={Colors.white} />
+              <Text style={styles.statValue}>{stats.totalUsers}</Text>
+              <Text style={styles.statLabel}>Total</Text>
+            </View>
 
-          <View
-            style={[styles.statCard, { backgroundColor: Colors.error + "10" }]}
-          >
-            <Icon name="block" size={20} color={Colors.error} />
-            <Text style={styles.statValue}>{stats.disabledUsers}</Text>
-            <Text style={styles.statLabel}>Disabled</Text>
+            <View style={styles.statCard}>
+              <Icon name="check-circle" size={18} color={Colors.white} />
+              <Text style={styles.statValue}>{stats.activeUsers}</Text>
+              <Text style={styles.statLabel}>Active</Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Icon name="block" size={18} color={Colors.white} />
+              <Text style={styles.statValue}>{stats.disabledUsers}</Text>
+              <Text style={styles.statLabel}>Disabled</Text>
+            </View>
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Icon
-            name="search"
-            size={20}
-            color={Colors.textSecondary}
-            style={styles.searchIcon}
-          />
-          <TextInput
-            placeholder="Search by name or email..."
-            placeholderTextColor={Colors.textTertiary}
-            value={search}
-            onChangeText={setSearch}
-            style={styles.searchInput}
-            clearButtonMode="while-editing"
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} style={styles.clearButton}>
-              <Icon name="close" size={16} color={Colors.textSecondary} />
-            </Pressable>
-          )}
+        <View style={styles.searchSection}>
+          <View style={styles.searchContainer}>
+            <Icon
+              name="search"
+              size={20}
+              color={Colors.textSecondary}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              placeholder="Search by name or email..."
+              placeholderTextColor={Colors.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+              style={styles.searchInput}
+              clearButtonMode="while-editing"
+            />
+            {search.length > 0 && (
+              <Pressable
+                onPress={() => setSearch("")}
+                style={styles.clearButton}
+              >
+                <Icon name="close" size={16} color={Colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* Filter Chips - Fixed Row */}
@@ -532,9 +538,14 @@ const styles = {
   },
   fixedHeader: {
     backgroundColor: Colors.background,
+    paddingBottom: Spacing.md,
+  },
+  headerGradient: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
   header: {
     flexDirection: "row" as const,
@@ -545,68 +556,73 @@ const styles = {
   title: {
     fontSize: 24,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: Colors.white,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: "rgba(255,255,255,0.88)",
     marginTop: Spacing.xs,
   },
   createButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.white,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: 10,
     gap: Spacing.xs,
   },
   createButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
   createButtonText: {
-    color: Colors.white,
+    color: Colors.primary,
     fontSize: 13,
-    fontWeight: "600" as const,
+    fontWeight: "700" as const,
   },
   statsGrid: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   statCard: {
-    width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2) / 3,
+    flex: 1,
     padding: Spacing.sm,
     borderRadius: 12,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.16)",
   },
   statValue: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: Colors.white,
     marginTop: Spacing.xs,
   },
   statLabel: {
     fontSize: 10,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
+    color: "rgba(255,255,255,0.88)",
+    fontWeight: "600" as const,
     marginTop: Spacing.xs,
     textAlign: "center" as const,
+  },
+  searchSection: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
   searchContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    marginBottom: Spacing.sm,
+    backgroundColor: Colors.white,
+    marginBottom: Spacing.xs,
     paddingHorizontal: Spacing.md,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
-    height: 44,
+    borderColor: Colors.borderLight,
+    height: 46,
   },
   searchIcon: {
     marginRight: Spacing.sm,
@@ -621,7 +637,8 @@ const styles = {
     padding: Spacing.xs,
   },
   filterRow: {
-    marginTop: 8,
+    marginTop: 10,
+    paddingHorizontal: Spacing.lg,
     flexDirection: "row" as const,
     gap: Spacing.xs,
     flexWrap: "wrap" as const,
@@ -665,8 +682,17 @@ const styles = {
   },
   listContent: {
     paddingHorizontal: Spacing.lg,
-    // paddingTop: Spacing.md,
+    paddingTop: Spacing.sm,
     paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+  },
+  listFooter: {
+    paddingVertical: Spacing.md,
+    alignItems: "center" as const,
+  },
+  listFooterText: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    fontWeight: "500" as const,
   },
   loadingContainer: {
     flex: 1,

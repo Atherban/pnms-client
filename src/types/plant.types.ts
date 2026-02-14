@@ -8,6 +8,28 @@ export interface Plant {
   createdBy?: string;
 }
 
+export interface PlantTypeGrowthStage {
+  stage: string;
+  days?: number;
+  notes?: string;
+}
+
+export interface PlantType {
+  _id: string;
+  id?: string;
+  name: string;
+  category?: string;
+  variety?: string;
+  lifecycleDays?: number;
+  sellingPrice?: number;
+  minStockLevel?: number;
+  defaultCostPrice?: number;
+  growthStages?: string[] | PlantTypeGrowthStage[];
+  imageUrl?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CreatePlantPayload {
   name: string;
   category: string;

@@ -22,6 +22,23 @@ const calcSaleAmount = (sale: any) => {
   );
 };
 
+const calcSaleProfit = (sale: any) => {
+  const explicitProfit = Number(sale?.totalProfit ?? sale?.profit);
+  if (Number.isFinite(explicitProfit)) return explicitProfit;
+
+  const totalAmount = calcSaleAmount(sale);
+  const totalCost = Number(sale?.totalCost ?? 0);
+  return totalAmount - (Number.isFinite(totalCost) ? totalCost : 0);
+};
+
+const getSaleDate = (sale: any) => sale?.saleDate ?? sale?.createdAt ?? null;
+const toLocalDateKey = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const startOfTodayISO = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -52,17 +69,47 @@ export const DashboardService = {
       const inventory = normalize(inventoryRes);
       const seeds = normalize(seedsRes);
       const sales = normalize(salesRes);
+      const start = new Date();
+      const end = new Date();
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      const todayLocalKey = toLocalDateKey(new Date());
+      const todayUtcKey = new Date().toISOString().slice(0, 10);
 
       const totalSalesAmount = sales.reduce(
         (sum: number, sale: any) => sum + calcSaleAmount(sale),
         0,
       );
+      const todaySales = sales.filter((sale: any) => {
+        const raw = getSaleDate(sale);
+        if (!raw) return false;
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) return false;
+        const saleUtcKey = date.toISOString().slice(0, 10);
+        const saleLocalKey = toLocalDateKey(date);
+        const matchesByKey =
+          saleUtcKey === todayUtcKey || saleLocalKey === todayLocalKey;
+        const matchesByRange = date >= start && date <= end;
+        return matchesByRange || matchesByKey;
+      });
+      const derivedTodayProfit = todaySales.reduce(
+        (sum: number, sale: any) => sum + calcSaleProfit(sale),
+        0,
+      );
+      const apiTodayProfit = Number(
+        profitRes?.profit ?? profitRes?.netProfit ?? Number.NaN,
+      );
+      const todayProfit =
+        Number.isFinite(apiTodayProfit) &&
+        (apiTodayProfit !== 0 || derivedTodayProfit === 0)
+          ? apiTodayProfit
+          : derivedTodayProfit;
 
       return {
         totalInventory: inventory.length,
         totalSeeds: seeds.length,
         totalSalesAmount,
-        todayProfit: profitRes?.profit ?? profitRes?.netProfit ?? 0,
+        todayProfit,
       };
     } catch (e) {
       console.error("Dashboard stats failed", e);

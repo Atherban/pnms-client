@@ -90,14 +90,7 @@ export default function AdminDashboard() {
       case "users":
         router.push("/(admin)/users");
         break;
-      case "orders":
-        router.push("/(admin)/orders");
-        break;
-      case "inventory":
-        router.push("/(admin)/inventory");
-        break;
-      case "reports":
-        router.push("/(admin)/reports");
+      default:
         break;
     }
   };
@@ -232,32 +225,46 @@ export default function AdminDashboard() {
 
   const QUICK_ACTIONS = [
     {
-      title: "View Inventory",
-      subtitle: "Track available stock",
-      icon: "inventory",
+      title: "Plant Types",
+      subtitle: "Manage plant master data",
+      icon: "spa",
       color: Colors.success,
+      action: () => router.push("/(admin)/plants"),
+    },
+    {
+      title: "Sales History",
+      subtitle: "Review sales and profit",
+      icon: "receipt-long",
+      color: Colors.warning,
+      action: () => router.push("/(admin)/sales"),
+    },
+    {
+      title: "Inventory",
+      subtitle: "Track stock batches",
+      icon: "inventory",
+      color: Colors.info,
       action: () => router.push("/(admin)/inventory"),
     },
     {
-      title: "Add New Seed",
-      subtitle: "Create seed entry",
-      icon: "grass",
-      color: Colors.info,
-      action: () => router.push("/(admin)/seeds/create"),
-    },
-    {
-      title: "Record Sale",
-      subtitle: "Create sales entry",
-      icon: "receipt-long",
-      color: Colors.warning,
-      action: () => router.push("/(admin)/sales/create"),
-    },
-    {
       title: "Manage Users",
-      subtitle: "User management",
+      subtitle: "User and role management",
       icon: "people",
       color: Colors.primary,
       action: () => router.push("/(admin)/users"),
+    },
+    {
+      title: "Operational Records",
+      subtitle: "Customers, expenses, labours",
+      icon: "dataset",
+      color: Colors.secondary,
+      action: () => router.push("/(admin)/more"),
+    },
+    {
+      title: "View Profit",
+      subtitle: "Analytics and margins",
+      icon: "trending-up",
+      color: Colors.success,
+      action: () => router.push("/(admin)/profit"),
     },
   ];
 
@@ -371,7 +378,7 @@ export default function AdminDashboard() {
               size={16}
               color={todayProfit >= 0 ? "#BBF7D0" : "#FECACA"}
             />
-            <Text style={styles.statLabel}>Today's Profit</Text>
+            <Text style={styles.statLabel}>Today&apos;s Profit</Text>
             <Text
               style={[
                 styles.statValue,

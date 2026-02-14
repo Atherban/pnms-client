@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ENV } from "../constants/env";
-import { getToken, removeToken } from "../utils/storage";
+import { useAuthStore } from "../stores/auth.store";
+import { getToken, removeToken, removeUser } from "../utils/storage";
 
 export const api = axios.create({
   baseURL: ENV.API_BASE_URL,
@@ -34,14 +35,20 @@ api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const status = error.response?.status;
+    const payload = error.response?.data ?? {};
 
     if (status === 401) {
       await removeToken();
+      await removeUser();
+      useAuthStore.getState().clearAuth();
     }
 
     return Promise.reject({
       code: status ?? "UNKNOWN",
-      message: error.response?.data?.message || "Unexpected error",
+      status: status ?? undefined,
+      message: payload?.message || "Unexpected error",
+      details: payload?.details,
+      response: error.response,
     });
   },
 );

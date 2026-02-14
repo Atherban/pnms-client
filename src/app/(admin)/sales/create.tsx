@@ -1,126 +1,115 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import InventorySelect from "../../../components/InventorySelect";
-import { InventoryService } from "../../../services/inventory.service";
-import { SalesService } from "../../../services/sales.service";
+import { Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuthStore } from "../../../stores/auth.store";
 import { Colors, Spacing } from "../../../theme";
+import { canWriteOperational } from "../../../utils/rbac";
 
-export default function CreateSale() {
+export default function AdminSalesCreateInfo() {
   const router = useRouter();
-  const qc = useQueryClient();
+  const role = useAuthStore((s) => s.user?.role);
 
-  const { data } = useQuery({
-    queryKey: ["inventory"],
-    queryFn: InventoryService.getAll,
-  });
-
-  const inventory = Array.isArray(data) ? data : (data?.data ?? []);
-
-  const [selected, setSelected] = useState<any>(null);
-  const [qty, setQty] = useState("1");
-  const paymentMode: "CASH" | "UPI" | "ONLINE" = "CASH";
-
-  const mutation = useMutation({
-    mutationFn: SalesService.create,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["inventory"] });
-      qc.invalidateQueries({ queryKey: ["sales"] });
-      setSelected(null);
-      setQty("1");
-      Alert.alert("Success", "Sale recorded", [
-        { text: "OK", onPress: () => router.replace("/(admin)/sales") },
-      ]);
-    },
-    onError: (err: any) => {
-      Alert.alert("Error", err?.message || "Unable to record sale");
-    },
-  });
-
-  const submit = () => {
-    if (mutation.isLoading) return;
-    const quantity = Number(qty);
-
-    if (!selected) return Alert.alert("Select inventory");
-
-    if (quantity <= 0 || quantity > selected.quantity)
-      return Alert.alert("Invalid quantity");
-
-    mutation.mutate({
-      paymentMode,
-      items: [
-        {
-          inventoryId: selected._id,
-          quantity,
-        },
-      ],
-    });
-  };
-
-  return (
-    <View style={{ padding: Spacing.lg }}>
-      <Text style={{ fontWeight: "700", marginBottom: 8 }}>
-        Select Inventory
-      </Text>
-
-      <FlatList
-        data={inventory}
-        keyExtractor={(i) => i._id}
-        renderItem={({ item }) => (
-          <InventorySelect item={item} onSelect={() => setSelected(item)} />
-        )}
-      />
-
-      {selected && (
-        <>
-          <Text>Quantity</Text>
-          <TextInput
-            keyboardType="numeric"
-            value={qty}
-            onChangeText={setQty}
-            style={styles.input}
-          />
-
+  if (canWriteOperational(role)) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Use Staff Sales Create</Text>
+          <Text style={styles.text}>
+            Operational sales creation is configured for staff flow.
+          </Text>
           <Pressable
-            onPress={submit}
-            disabled={mutation.isLoading}
+            onPress={() => router.replace("/(staff)/sales/create")}
             style={styles.button}
           >
-            <Text style={styles.buttonText}>
-              {mutation.isLoading ? "Processing..." : "Complete Sale"}
+            <Text style={styles.buttonText}>Go to Staff Sales Create</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.card}>
+        <MaterialIcons name="lock-outline" size={48} color={Colors.warning} />
+        <Text style={styles.title}>Sales Creation Is Staff-Only</Text>
+        <Text style={styles.text}>
+          As admin, you can review sales, profitability, and reports from the
+          sales list and profit dashboard.
+        </Text>
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => router.replace("/(admin)/sales")}
+            style={styles.button}
+          >
+            <Text style={styles.buttonText}>Open Sales History</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.replace("/(admin)/profit")}
+            style={[styles.button, styles.secondaryButton]}
+          >
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>
+              Open Profit Report
             </Text>
           </Pressable>
-        </>
-      )}
-    </View>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = {
-  input: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: Spacing.lg,
+  },
+  card: {
+    width: "100%" as const,
     borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
+    borderColor: Colors.borderLight,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    padding: Spacing.lg,
+    alignItems: "center" as const,
+  },
+  title: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+    color: Colors.text,
+    fontSize: 20,
+    fontWeight: "700" as const,
+    textAlign: "center" as const,
+  },
+  text: {
+    color: Colors.textSecondary,
+    textAlign: "center" as const,
+    lineHeight: 20,
+  },
+  actions: {
+    width: "100%" as const,
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
   },
   button: {
     backgroundColor: Colors.primary,
-    padding: Spacing.md,
     borderRadius: 12,
-    marginTop: Spacing.lg,
+    paddingVertical: Spacing.md,
+    alignItems: "center" as const,
+  },
+  secondaryButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   buttonText: {
     color: Colors.white,
-    textAlign: "center",
-    fontWeight: "700",
+    fontWeight: "700" as const,
+  },
+  secondaryButtonText: {
+    color: Colors.text,
   },
 };

@@ -6,17 +6,15 @@ export const ReportService = {
     const salesRes = await SalesService.getAll();
     const inventoryRes = await InventoryService.getAll();
 
-    const sales = Array.isArray(salesRes) ? salesRes : (salesRes?.data ?? []);
+    const sales = Array.isArray(salesRes) ? salesRes : [];
 
-    const inventory = Array.isArray(inventoryRes)
-      ? inventoryRes
-      : (inventoryRes?.data ?? []);
+    const inventory = Array.isArray(inventoryRes) ? inventoryRes : [];
 
     /* ---------------- Sales aggregation ---------------- */
 
     const salesByDate: Record<string, number> = {};
     const salesByPlant: Record<string, number> = {};
-    const paymentSplit = {
+    const paymentSplit: Record<string, number> = {
       CASH: 0,
       UPI: 0,
       ONLINE: 0,

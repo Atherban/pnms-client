@@ -1,7 +1,8 @@
 export interface ApiError {
-  code: string;
+  code: string | number;
+  status?: number;
   message: string;
-  details?: unknown;
+  details?: string[];
 }
 
 export interface ApiResponse<T> {

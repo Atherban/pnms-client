@@ -1,3 +1,4 @@
+// app/(staff)/sowing/create.tsx
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
@@ -7,26 +8,296 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Pressable,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import { Seed, SeedService } from "../../../services/seed.service";
 import { SowingService } from "../../../services/sowing.service";
-import { Colors, Spacing } from "../../../theme";
+import { Colors } from "../../../theme";
+import { formatErrorMessage } from "../../../utils/error";
+
+const BOTTOM_NAV_HEIGHT = 80;
+
+// ==================== SEED CARD ====================
+
+interface SeedCardProps {
+  seed: Seed;
+  isSelected: boolean;
+  onSelect: (seed: Seed) => void;
+}
+
+const SeedCard = ({ seed, isSelected, onSelect }: SeedCardProps) => {
+  const getSeedStock = (seed?: Seed) => {
+    const totalPurchased = Number(seed?.totalPurchased ?? 0);
+    const seedsUsed = Number(seed?.seedsUsed ?? 0);
+    return totalPurchased - seedsUsed;
+  };
+
+  const stock = getSeedStock(seed);
+  const isLowStock = stock <= 10 && stock > 0;
+  const isOutOfStock = stock <= 0;
+
+  return (
+    <TouchableOpacity
+      onPress={() => !isOutOfStock && onSelect(seed)}
+      style={[
+        styles.seedCard,
+        isSelected && styles.seedCardSelected,
+        isOutOfStock && styles.seedCardDisabled,
+      ]}
+      activeOpacity={0.7}
+      disabled={isOutOfStock}
+    >
+      <View style={styles.seedCardContent}>
+        <View style={styles.seedCardHeader}>
+          <View style={styles.seedCardTitleContainer}>
+            <View
+              style={[
+                styles.seedIcon,
+                {
+                  backgroundColor: isSelected
+                    ? `${Colors.success}20`
+                    : `${Colors.primary}10`,
+                },
+              ]}
+            >
+              <MaterialIcons
+                name="grass"
+                size={20}
+                color={isSelected ? Colors.success : Colors.primary}
+              />
+            </View>
+            <View style={styles.seedInfo}>
+              <Text
+                style={[styles.seedName, isSelected && styles.seedNameSelected]}
+                numberOfLines={1}
+              >
+                {seed.name}
+              </Text>
+              {(seed.category || seed.plantType?.name) && (
+                <Text style={styles.seedCategory} numberOfLines={1}>
+                  {seed.category || seed.plantType?.name}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {isSelected && (
+            <View style={styles.selectedBadge}>
+              <MaterialIcons
+                name="check-circle"
+                size={20}
+                color={Colors.success}
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.seedCardDetails}>
+          <View style={styles.seedStock}>
+            <MaterialIcons
+              name="inventory"
+              size={14}
+              color={
+                isOutOfStock
+                  ? Colors.error
+                  : isLowStock
+                    ? Colors.warning
+                    : Colors.success
+              }
+            />
+            <Text
+              style={[
+                styles.seedStockText,
+                isOutOfStock && { color: Colors.error },
+                isLowStock && !isOutOfStock && { color: Colors.warning },
+              ]}
+            >
+              Stock: {stock} units
+            </Text>
+          </View>
+
+          {isLowStock && !isOutOfStock && (
+            <View
+              style={[
+                styles.stockBadge,
+                { backgroundColor: `${Colors.warning}10` },
+              ]}
+            >
+              <Text style={[styles.stockBadgeText, { color: Colors.warning }]}>
+                Low Stock
+              </Text>
+            </View>
+          )}
+
+          {isOutOfStock && (
+            <View
+              style={[
+                styles.stockBadge,
+                { backgroundColor: `${Colors.error}10` },
+              ]}
+            >
+              <Text style={[styles.stockBadgeText, { color: Colors.error }]}>
+                Out of Stock
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// ==================== FORM FIELD ====================
+
+interface FormFieldProps {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  icon?: string;
+  keyboardType?: "default" | "numeric" | "email-address" | "phone-pad";
+  required?: boolean;
+  helperText?: string;
+  error?: string;
+  max?: number;
+}
+
+const FormField = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  icon,
+  keyboardType = "default",
+  required = false,
+  helperText,
+  error,
+  max,
+}: FormFieldProps) => {
+  return (
+    <View style={styles.formField}>
+      <View style={styles.formFieldHeader}>
+        <View style={styles.formLabelContainer}>
+          {icon && (
+            <MaterialIcons
+              name={icon as any}
+              size={16}
+              color={Colors.textSecondary}
+            />
+          )}
+          <Text style={styles.formLabel}>{label}</Text>
+          {required && <Text style={styles.requiredStar}>*</Text>}
+        </View>
+        {helperText && <Text style={styles.helperText}>{helperText}</Text>}
+      </View>
+
+      <TextInput
+        style={[styles.formInput, error && styles.formInputError]}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.textTertiary}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        editable={true}
+      />
+
+      {error ? (
+        <View style={styles.errorContainer}>
+          <MaterialIcons name="error" size={14} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : max && value ? (
+        <View style={styles.hintContainer}>
+          <MaterialIcons name="info" size={14} color={Colors.textTertiary} />
+          <Text style={styles.hintText}>Maximum available: {max} units</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+};
+
+// ==================== LOADING STATE ====================
+
+const LoadingState = () => (
+  <View style={styles.centerContainer}>
+    <ActivityIndicator size="large" color={Colors.primary} />
+    <Text style={styles.loadingText}>Loading seeds...</Text>
+  </View>
+);
+
+// ==================== ERROR STATE ====================
+
+interface ErrorStateProps {
+  message: string;
+  onRetry: () => void;
+  onBack: () => void;
+}
+
+const ErrorState = ({ message, onRetry, onBack }: ErrorStateProps) => (
+  <View style={styles.container}>
+    <LinearGradient
+      colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+      style={styles.errorHeaderGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+    >
+      <SafeAreaView edges={["top"]} style={styles.errorHeaderContent}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.errorBackButton}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.errorHeaderTitle}>Record Sowing</Text>
+        <View style={styles.errorHeaderSpacer} />
+      </SafeAreaView>
+    </LinearGradient>
+
+    <View style={styles.errorContainer}>
+      <View style={styles.errorIconContainer}>
+        <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+      </View>
+      <Text style={styles.errorTitle}>Failed to Load Seeds</Text>
+      <Text style={styles.errorMessage}>{message}</Text>
+      <TouchableOpacity
+        onPress={onRetry}
+        style={styles.retryButton}
+        activeOpacity={0.7}
+      >
+        <LinearGradient
+          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+          style={styles.retryGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <MaterialIcons name="refresh" size={18} color={Colors.white} />
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+// ==================== MAIN COMPONENT ====================
 
 export default function StaffSowingCreate() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [seedId, setSeedId] = useState<string | null>(null);
+  // Form state
+  const [selectedSeedId, setSelectedSeedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  /* Fetch seeds */
+  // Fetch seeds
   const {
     data: seedsData,
     isLoading: loadingSeeds,
@@ -35,6 +306,8 @@ export default function StaffSowingCreate() {
   } = useQuery({
     queryKey: ["staff-seeds"],
     queryFn: SeedService.getAll,
+    staleTime: 60000,
+    retry: 2,
   });
 
   const seeds = useMemo<Seed[]>(() => {
@@ -43,45 +316,37 @@ export default function StaffSowingCreate() {
   }, [seedsData]);
 
   const selectedSeed = useMemo(
-    () => seeds?.find((s) => s._id === seedId),
-    [seeds, seedId],
+    () => seeds?.find((s) => s._id === selectedSeedId),
+    [seeds, selectedSeedId],
   );
 
-  const getSeedStock = (seed?: Seed) =>
-    Number(
-      seed?.quantityInStock ??
-        (seed as any)?.availableQuantity ??
-        (seed as any)?.remainingQuantity ??
-        seed?.totalPurchased ??
-        0,
-    );
+  // Get seed stock
+  const getSeedStock = (seed?: Seed) => {
+    const totalPurchased = Number(seed?.totalPurchased ?? 0);
+    const seedsUsed = Number(seed?.seedsUsed ?? 0);
+    return totalPurchased - seedsUsed;
+  };
 
-  const rawStockValue =
-    selectedSeed?.quantityInStock ??
-    (selectedSeed as any)?.availableQuantity ??
-    (selectedSeed as any)?.remainingQuantity ??
-    selectedSeed?.totalPurchased;
-  const stockKnown = typeof rawStockValue === "number";
   const maxQuantity = getSeedStock(selectedSeed);
   const numericQuantity = Number(quantity);
-
   const isQuantityValid =
-    Number.isFinite(numericQuantity) &&
+    !isNaN(numericQuantity) &&
     numericQuantity > 0 &&
-    (!stockKnown || numericQuantity <= maxQuantity);
+    numericQuantity <= maxQuantity;
 
+  // Reset quantity when seed changes
   useEffect(() => {
     setQuantity("");
-  }, [seedId]);
+  }, [selectedSeedId]);
 
-  /* Create sowing mutation */
+  // Create sowing mutation
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!seedId || !isQuantityValid) {
+      if (!selectedSeedId || !isQuantityValid) {
         throw new Error("Invalid sowing data");
       }
       return SowingService.create({
-        seedId,
+        seedId: selectedSeedId,
         quantity: numericQuantity,
       });
     },
@@ -91,708 +356,755 @@ export default function StaffSowingCreate() {
         queryClient.invalidateQueries({ queryKey: ["staff-seeds"] }),
         queryClient.invalidateQueries({ queryKey: ["staff-sowings"] }),
         queryClient.invalidateQueries({ queryKey: ["staff-dashboard"] }),
-        queryClient.invalidateQueries({ queryKey: ["inventory"] }),
       ]);
 
-      Alert.alert("Success", "Sowing recorded successfully", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      Alert.alert(
+        "Success",
+        "Sowing recorded successfully. Inventory will be created after germination.",
+        [
+          {
+            text: "OK",
+            onPress: () => router.back(),
+            style: "default",
+          },
+        ],
+      );
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", err?.message || "Failed to create sowing");
+      Alert.alert("Error", formatErrorMessage(err));
+    },
+    onSettled: () => {
+      setIsSubmitting(false);
     },
   });
 
+  // Handlers
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  };
+
   const handleSeedSelect = (seed: Seed) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSeedId(seed._id);
+    setSelectedSeedId(seed._id);
   };
 
   const handleSubmit = () => {
-    if (!seedId || !isQuantityValid || mutation.isLoading) return;
+    if (!selectedSeedId || !isQuantityValid || isSubmitting) return;
 
+    setIsSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     mutation.mutate();
   };
 
+  // Validation
+  const getQuantityError = () => {
+    if (!quantity) return null;
+    if (numericQuantity <= 0) return "Quantity must be greater than 0";
+    if (numericQuantity > maxQuantity)
+      return `Maximum available is ${maxQuantity} units`;
+    return null;
+  };
+
+  const quantityError = getQuantityError();
+  const isValid = selectedSeedId && isQuantityValid;
+  const isPending = mutation.isPending || isSubmitting;
+
+  // Loading state
   if (loadingSeeds) {
     return (
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <View style={styles.headerContent}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.backButton,
-                pressed && styles.backButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-            </Pressable>
-            <View>
-              <Text style={styles.title}>Record New Sowing</Text>
-              <Text style={styles.subtitle}>Loading data...</Text>
-            </View>
-            <View style={styles.headerSpacer} />
-          </View>
-        </LinearGradient>
-        <View style={styles.contentArea}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.info} />
-            <Text style={styles.loadingText}>Loading seeds...</Text>
-          </View>
-        </View>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+        <LoadingState />
       </SafeAreaView>
     );
   }
 
+  // Error state
   if (seedsError) {
     return (
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <View style={styles.headerContent}>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.backButton,
-                pressed && styles.backButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-            </Pressable>
-            <View>
-              <Text style={styles.title}>Record New Sowing</Text>
-              <Text style={styles.subtitle}>Unable to load seeds</Text>
-            </View>
-            <View style={styles.headerSpacer} />
-          </View>
-        </LinearGradient>
-        <View style={styles.contentArea}>
-          <View style={styles.loadingContainer}>
-            <MaterialIcons name="error-outline" size={48} color={Colors.error} />
-            <Text style={styles.loadingText}>Failed to load seeds</Text>
-            <Pressable
-              onPress={() => refetchSeeds()}
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.retryButtonPressed,
-              ]}
-            >
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </Pressable>
-          </View>
-        </View>
-      </SafeAreaView>
+      <View style={styles.container}>
+        <ErrorState
+          message={
+            (seedsError as any)?.message ||
+            "Unable to fetch seeds. Please try again."
+          }
+          onRetry={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            refetchSeeds();
+          }}
+          onBack={handleBack}
+        />
+      </View>
     );
   }
 
+  const availableSeeds = seeds.filter((s) => getSeedStock(s) > 0);
+
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Fixed Header */}
+    <View style={styles.container}>
+      {/* Fixed Blue Header */}
       <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.fixedHeader}
+        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+        style={styles.headerGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <View style={styles.headerContent}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
-          >
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <View>
-            <Text style={styles.title}>Record New Sowing</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </View>
-      </LinearGradient>
+        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
+            </TouchableOpacity>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Form Card */}
-        <View style={styles.formCard}>
-          {/* Seed Selection */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="grass" size={24} color={Colors.success} />
-              <Text style={styles.sectionTitle}>Select Seed</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Choose the seed you want to sow
-            </Text>
-
-            <View style={styles.selectionContainer}>
-              {seeds?.map((seed: Seed) => (
-                <Pressable
-                  key={seed._id}
-                  onPress={() => handleSeedSelect(seed)}
-                  style={({ pressed }) => [
-                    styles.selectionCard,
-                    seedId === seed._id && styles.selectionCardActive,
-                    pressed && styles.selectionCardPressed,
-                  ]}
-                >
-                  <View style={styles.selectionCardContent}>
-                    <View style={styles.selectionCardHeader}>
-                      <MaterialIcons
-                        name="grass"
-                        size={20}
-                        color={
-                          seedId === seed._id
-                            ? Colors.success
-                            : Colors.textSecondary
-                        }
-                      />
-                      <Text
-                        style={[
-                          styles.selectionCardTitle,
-                          seedId === seed._id &&
-                            styles.selectionCardTitleActive,
-                        ]}
-                      >
-                        {seed.name}
-                      </Text>
-                      {seedId === seed._id && (
-                        <View style={styles.selectedIndicator}>
-                          <MaterialIcons
-                            name="check-circle"
-                            size={16}
-                            color={Colors.success}
-                          />
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.selectionCardDetails}>
-                      <View style={styles.selectionCardDetailItem}>
-                        <MaterialIcons
-                          name="inventory"
-                          size={14}
-                          color={Colors.textTertiary}
-                        />
-                        <Text style={styles.selectionCardDetailText}>
-                          Stock: {getSeedStock(seed)}
-                        </Text>
-                      </View>
-
-                      {(seed.category || seed.plantType?.name) && (
-                        <View style={styles.selectionCardDetailItem}>
-                          <MaterialIcons
-                            name="spa"
-                            size={14}
-                            color={Colors.textTertiary}
-                          />
-                          <Text style={styles.selectionCardDetailText}>
-                            {seed.category || seed.plantType?.name}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-              {seeds.length === 0 && (
-                <View style={styles.emptySelectionCard}>
-                  <MaterialIcons
-                    name="info"
-                    size={18}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.emptySelectionText}>
-                    No seeds available. Ask an admin to add seed stock.
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Quantity Input */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="numbers" size={24} color={Colors.info} />
-              <Text style={styles.sectionTitle}>Quantity</Text>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <View style={styles.inputLabelContainer}>
-                <MaterialIcons
-                  name="format-list-numbered"
-                  size={20}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.inputLabel}>Enter sowing quantity</Text>
-              </View>
-
-              <TextInput
-                keyboardType="numeric"
-                value={quantity}
-                onChangeText={(text) =>
-                  setQuantity(text.replace(/[^\d]/g, ""))
-                }
-                placeholder="e.g., 10, 25, 50"
-                placeholderTextColor={Colors.textTertiary}
-                style={styles.input}
-              />
-
-              {selectedSeed && (
-                <View style={styles.inputHelper}>
-                  <MaterialIcons
-                    name="info"
-                    size={16}
-                    color={Colors.textTertiary}
-                  />
-                  <Text style={styles.inputHelperText}>
-                    Available stock:{" "}
-                    <Text style={styles.inputHelperHighlight}>
-                      {stockKnown ? maxQuantity : "—"}
-                    </Text>{" "}
-                    units
-                  </Text>
-                </View>
-              )}
-
-              {quantity && !isQuantityValid && (
-                <View style={styles.errorHelper}>
-                  <MaterialIcons name="error" size={16} color={Colors.error} />
-                  <Text style={styles.errorHelperText}>
-                    {numericQuantity <= 0
-                      ? "Quantity must be greater than 0"
-                      : stockKnown
-                        ? `Maximum allowed: ${maxQuantity}`
-                        : "Check quantity"}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Summary Card */}
-          {(selectedSeed || quantity) && (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Sowing Summary</Text>
-
-              <View style={styles.summaryContent}>
-                {selectedSeed && (
-                  <View style={styles.summaryItem}>
-                    <MaterialIcons
-                      name="grass"
-                      size={18}
-                      color={Colors.success}
-                    />
-                    <Text style={styles.summaryLabel}>Seed:</Text>
-                    <Text style={styles.summaryValue}>{selectedSeed.name}</Text>
-                  </View>
-                )}
-
-                {selectedSeed?.plantType?.name && (
-                  <View style={styles.summaryItem}>
-                    <MaterialIcons
-                      name="spa"
-                      size={18}
-                      color={Colors.success}
-                    />
-                    <Text style={styles.summaryLabel}>Plant Type:</Text>
-                    <Text style={styles.summaryValue}>
-                      {selectedSeed.plantType.name}
-                    </Text>
-                  </View>
-                )}
-
-                {quantity && isQuantityValid && (
-                  <View style={styles.summaryItem}>
-                    <MaterialIcons
-                      name="numbers"
-                      size={18}
-                      color={Colors.info}
-                    />
-                    <Text style={styles.summaryLabel}>Quantity:</Text>
-                    <Text style={styles.summaryValue}>
-                      {numericQuantity} units
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Submit Button */}
-          <Pressable
-            onPress={handleSubmit}
-            disabled={
-              !seedId || !isQuantityValid || mutation.isLoading
-            }
-            style={({ pressed }) => [
-              styles.submitButton,
-              (!seedId || !isQuantityValid || mutation.isLoading) &&
-                styles.submitButtonDisabled,
-              pressed && styles.submitButtonPressed,
-            ]}
-          >
-            {mutation.isLoading ? (
-              <ActivityIndicator size="small" color={Colors.white} />
-            ) : (
-              <>
-                <MaterialIcons
-                  name="check-circle"
-                  size={20}
-                  color={Colors.white}
-                />
-                <Text style={styles.submitText}>Record Sowing</Text>
-              </>
-            )}
-          </Pressable>
-
-          {/* Validation Status */}
-          {(!seedId || !isQuantityValid) && (
-            <View style={styles.validationStatus}>
-              <MaterialIcons
-                name={
-                  seedId && isQuantityValid ? "check-circle" : "info"
-                }
-                size={16}
-                color={
-                  seedId && isQuantityValid
-                    ? Colors.success
-                    : Colors.warning
-                }
-              />
-              <Text
-                style={[
-                  styles.validationText,
-                  {
-                    color:
-                      seedId && isQuantityValid
-                        ? Colors.success
-                        : Colors.textSecondary,
-                  },
-                ]}
-              >
-                {!seedId
-                  ? "Select a seed"
-                  : !quantity
-                    ? "Enter quantity"
-                    : !isQuantityValid
-                      ? "Check quantity"
-                      : "Ready to submit"}
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>Record Sowing</Text>
+              <Text style={styles.headerSubtitle}>
+                {availableSeeds.length}{" "}
+                {availableSeeds.length === 1 ? "seed" : "seeds"} available
               </Text>
             </View>
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+            <View style={styles.headerRight} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Form Content with Keyboard Handling */}
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 16 : 0}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+        >
+          <View style={styles.formCard}>
+            {/* Seed Selection Section */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderLeft}>
+                  <MaterialIcons
+                    name="grass"
+                    size={20}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.sectionTitle}>Select Seed</Text>
+                  <Text style={styles.requiredStar}>*</Text>
+                </View>
+                {selectedSeedId && (
+                  <View style={styles.selectedIndicator}>
+                    <Text style={styles.selectedIndicatorText}>Selected</Text>
+                    <MaterialIcons
+                      name="check-circle"
+                      size={14}
+                      color={Colors.success}
+                    />
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.seedsContainer}>
+                {availableSeeds.length > 0 ? (
+                  availableSeeds.map((seed) => (
+                    <SeedCard
+                      key={seed._id}
+                      seed={seed}
+                      isSelected={selectedSeedId === seed._id}
+                      onSelect={handleSeedSelect}
+                    />
+                  ))
+                ) : (
+                  <View style={styles.emptySeedsContainer}>
+                    <View style={styles.emptySeedsIconContainer}>
+                      <MaterialIcons
+                        name="grass"
+                        size={32}
+                        color={Colors.textTertiary}
+                      />
+                    </View>
+                    <Text style={styles.emptySeedsTitle}>
+                      No Seeds Available
+                    </Text>
+                    <Text style={styles.emptySeedsMessage}>
+                      There are no seeds in stock. Please add seeds to inventory
+                      first.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Quantity Section */}
+            {selectedSeed && (
+              <View style={styles.formSection}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderLeft}>
+                    <MaterialIcons
+                      name="numbers"
+                      size={20}
+                      color={Colors.primary}
+                    />
+                    <Text style={styles.sectionTitle}>Sowing Quantity</Text>
+                    <Text style={styles.requiredStar}>*</Text>
+                  </View>
+                </View>
+
+                <FormField
+                  label="Quantity"
+                  value={quantity}
+                  onChangeText={(text) =>
+                    setQuantity(text.replace(/[^\d]/g, ""))
+                  }
+                  placeholder={`Enter quantity (max ${maxQuantity})`}
+                  icon="inventory"
+                  keyboardType="numeric"
+                  required
+                  error={quantityError || undefined}
+                  max={maxQuantity}
+                />
+
+                {selectedSeed.plantType?.name && (
+                  <View style={styles.seedInfoCard}>
+                    <View style={styles.seedInfoRow}>
+                      <MaterialIcons
+                        name="spa"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.seedInfoLabel}>Plant Type:</Text>
+                      <Text style={styles.seedInfoValue}>
+                        {selectedSeed.plantType.name}
+                      </Text>
+                    </View>
+                    {selectedSeed.supplierName && (
+                      <View style={styles.seedInfoRow}>
+                        <MaterialIcons
+                          name="business"
+                          size={14}
+                          color={Colors.textSecondary}
+                        />
+                        <Text style={styles.seedInfoLabel}>Supplier:</Text>
+                        <Text style={styles.seedInfoValue}>
+                          {selectedSeed.supplierName}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Footer Buttons */}
+          <View style={styles.footer}>
+            <TouchableOpacity
+              onPress={handleBack}
+              style={styles.cancelButton}
+              activeOpacity={0.7}
+              disabled={isPending}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleSubmit}
+              disabled={!isValid || isPending}
+              style={[
+                styles.submitButton,
+                (!isValid || isPending) && styles.submitButtonDisabled,
+              ]}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={[Colors.success, "#059669"]}
+                style={styles.submitGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                {isPending ? (
+                  <>
+                    <ActivityIndicator size="small" color={Colors.white} />
+                    <Text style={styles.submitButtonText}>Recording...</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons
+                      name="check-circle"
+                      size={20}
+                      color={Colors.white}
+                    />
+                    <Text style={styles.submitButtonText}>Record Sowing</Text>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Bottom Spacer for Navigation */}
+          <View style={styles.bottomNavSpacer} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-/* Styles */
+// ==================== STYLES ====================
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#F9FAFB",
   },
-  fixedHeader: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.lg,
+  keyboardView: {
+    flex: 1,
+  },
+
+  // Header Styles
+  headerGradient: {
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 10,
   },
   headerContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  headerRow: {
     flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
     alignItems: "center" as const,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
+    justifyContent: "space-between" as const,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
-  backButtonPressed: {
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    transform: [{ scale: 0.95 }],
-  },
-  headerSpacer: {
-    width: 44,
-    height: 44,
-  },
-  contentArea: {
+  headerTitleContainer: {
     flex: 1,
+    alignItems: "center" as const,
   },
-  loadingContainer: {
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: Colors.white,
+    marginBottom: 2,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.9)",
+    fontWeight: "500" as const,
+  },
+  headerRight: {
+    width: 40,
+  },
+
+  // Scroll Content
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 20,
+  },
+  bottomNavSpacer: {
+    height: BOTTOM_NAV_HEIGHT,
+  },
+
+  // Center Container
+  centerContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: 24,
   },
   loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-    color: Colors.textSecondary,
+    marginTop: 12,
+    fontSize: 15,
+    color: "#6B7280",
     fontWeight: "500" as const,
   },
-  retryButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
-    marginTop: Spacing.md,
-  },
-  retryButtonPressed: {
-    backgroundColor: Colors.primaryDark,
-    transform: [{ scale: 0.98 }],
-  },
-  retryButtonText: {
-    color: Colors.white,
-    fontWeight: "600" as const,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.xl * 2,
-  },
+
+  // Form Card
   formCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: Spacing.lg,
+    backgroundColor: Colors.white,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    borderColor: "#E5E7EB",
+    overflow: "hidden" as const,
+    marginBottom: 24,
   },
-  section: {
-    marginBottom: Spacing.xl,
+
+  // Form Section
+  formSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
   sectionHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    justifyContent: "space-between" as const,
+    marginBottom: 16,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.text,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-    lineHeight: 20,
-  },
-  selectionContainer: {
-    gap: Spacing.sm,
-  },
-  selectionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden" as const,
-  },
-  selectionCardActive: {
-    borderColor: Colors.success,
-    backgroundColor: Colors.success + "08",
-    borderWidth: 2,
-  },
-  selectionCardPressed: {
-    backgroundColor: Colors.surfaceDark,
-    transform: [{ scale: 0.99 }],
-  },
-  selectionCardContent: {
-    padding: Spacing.md,
-  },
-  selectionCardHeader: {
+  sectionHeaderLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    gap: 8,
   },
-  selectionCardTitle: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
-    flex: 1,
+    color: "#111827",
   },
-  selectionCardTitleActive: {
-    color: Colors.success,
+  requiredStar: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: Colors.error,
   },
   selectedIndicator: {
-    marginLeft: "auto" as const,
-  },
-  selectionCardDetails: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-  },
-  selectionCardDetailItem: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
   },
-  selectionCardDetailText: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  emptySelectionCard: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceDark,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-  },
-  emptySelectionText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    flex: 1,
-  },
-  inputContainer: {
-    gap: Spacing.sm,
-  },
-  inputLabelContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: Spacing.md,
-    fontSize: 16,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceDark,
-  },
-  inputHelper: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.xs,
-  },
-  inputHelperText: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  inputHelperHighlight: {
-    color: Colors.info,
+  selectedIndicatorText: {
+    fontSize: 11,
+    color: Colors.success,
     fontWeight: "600" as const,
   },
-  errorHelper: {
+
+  // Form Field
+  formField: {
+    marginBottom: 16,
+  },
+  formFieldHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.error + "10",
-    padding: Spacing.sm,
-    borderRadius: 8,
-    gap: Spacing.sm,
+    justifyContent: "space-between" as const,
+    marginBottom: 6,
   },
-  errorHelperText: {
+  formLabelContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  formLabel: {
     fontSize: 13,
-    color: Colors.error,
-    flex: 1,
-  },
-  summaryCard: {
-    backgroundColor: Colors.surfaceDark,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.md,
-  },
-  summaryContent: {
-    gap: Spacing.sm,
-  },
-  summaryItem: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
     fontWeight: "500" as const,
-    width: 70,
+    color: "#374151",
   },
-  summaryValue: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.text,
+  helperText: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: "#111827",
+    backgroundColor: Colors.white,
+  },
+  formInputError: {
+    borderColor: Colors.error,
+  },
+  errorContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    marginTop: 6,
+  },
+  errorText: {
+    fontSize: 12,
+    color: Colors.error,
+  },
+  hintContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    marginTop: 6,
+  },
+  hintText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+
+  // Seeds Container
+  seedsContainer: {
+    gap: 12,
+  },
+
+  // Seed Card
+  seedCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden" as const,
+  },
+  seedCardSelected: {
+    borderColor: Colors.success,
+    borderWidth: 2,
+    backgroundColor: `${Colors.success}05`,
+  },
+  seedCardDisabled: {
+    opacity: 0.6,
+    backgroundColor: "#F9FAFB",
+  },
+  seedCardContent: {
+    padding: 16,
+  },
+  seedCardHeader: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    justifyContent: "space-between" as const,
+    marginBottom: 12,
+  },
+  seedCardTitleContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
     flex: 1,
+  },
+  seedIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  seedInfo: {
+    flex: 1,
+  },
+  seedName: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#111827",
+    marginBottom: 4,
+  },
+  seedNameSelected: {
+    color: Colors.success,
+  },
+  seedCategory: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  selectedBadge: {
+    marginLeft: 8,
+  },
+  seedCardDetails: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    paddingLeft: 56,
+  },
+  seedStock: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  seedStockText: {
+    fontSize: 13,
+    color: "#374151",
+  },
+  stockBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  stockBadgeText: {
+    fontSize: 10,
+    fontWeight: "600" as const,
+  },
+
+  // Empty Seeds
+  emptySeedsContainer: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  emptySeedsIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F3F4F6",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: 16,
+  },
+  emptySeedsTitle: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: "#111827",
+    marginBottom: 8,
+  },
+  emptySeedsMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    lineHeight: 20,
+  },
+
+  // Seed Info Card
+  seedInfoCard: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  seedInfoRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    marginBottom: 4,
+  },
+  seedInfoLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+    width: 60,
+  },
+  seedInfoValue: {
+    fontSize: 13,
+    fontWeight: "500" as const,
+    color: "#111827",
+    flex: 1,
+  },
+
+  // Footer
+  footer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    gap: 12,
+    marginTop: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: Colors.white,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#6B7280",
   },
   submitButton: {
-    backgroundColor: Colors.success,
-    padding: Spacing.lg,
-    borderRadius: 16,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: Spacing.sm,
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    overflow: "hidden" as const,
   },
   submitButtonDisabled: {
-    backgroundColor: Colors.disabled,
+    opacity: 0.5,
   },
-  submitButtonPressed: {
-    backgroundColor: Colors.success,
-    transform: [{ scale: 0.98 }],
-  },
-  submitText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: "600" as const,
-  },
-  validationStatus: {
+  submitGradient: {
+    flex: 1,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
+    gap: 8,
   },
-  validationText: {
-    fontSize: 13,
-    fontWeight: "500" as const,
+  submitButtonText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: "600" as const,
   },
-};
+
+  // Error Header Styles
+  errorHeaderGradient: {
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  errorHeaderContent: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  errorBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  errorHeaderTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "600" as const,
+    color: Colors.white,
+    textAlign: "center" as const,
+  },
+  errorHeaderSpacer: {
+    width: 40,
+  },
+
+  // Error State
+  errorContainer: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: 24,
+  },
+  errorIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "600" as const,
+    color: "#DC2626",
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginBottom: 24,
+    lineHeight: 20,
+    paddingHorizontal: 24,
+  },
+  retryButton: {
+    borderRadius: 12,
+    overflow: "hidden" as const,
+  },
+  retryGradient: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: "600" as const,
+  },
+} as const;

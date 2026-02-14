@@ -1,12 +1,28 @@
+import ViewerBottomNav from "@/src/components/viewer/ViewerBottomNav";
 import { Redirect, Stack } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth.store";
 
 export default function ViewerLayout() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  if (user?.role !== "VIEWER") {
+    return <Redirect href="/unauthorized" />;
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "simple_push",
+        }}
+      />
+      <ViewerBottomNav />
+    </SafeAreaView>
+  );
 }

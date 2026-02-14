@@ -10,7 +10,7 @@ export default function StaffLayout() {
     return <Redirect href="/(auth)/login" />;
   }
 
-  if (user?.role !== "STAFF" && user?.role !== "ADMIN") {
+  if (user?.role !== "STAFF") {
     return <Redirect href="/unauthorized" />;
   }
 

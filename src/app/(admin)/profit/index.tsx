@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ProfitService } from "../../../services/profit.service";
 import { Colors, Spacing } from "../../../theme";
+import { formatErrorMessage } from "../../../utils/error";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
@@ -29,14 +30,11 @@ export default function AdminProfit() {
 
   /* -------------------- Date Helpers -------------------- */
 
-  const formatApiDate = (date: Date, endOfDay = false) => {
-    const d = new Date(date);
-    if (endOfDay) {
-      d.setHours(23, 59, 59, 999);
-    } else {
-      d.setHours(0, 0, 0, 0);
-    }
-    return d.toISOString();
+  const formatDateOnly = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   };
 
   const formatDisplayDate = (date: Date | null) => {
@@ -83,10 +81,7 @@ export default function AdminProfit() {
     mutationFn: ProfitService.getProfit,
     onError: (error: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Error",
-        error?.message || "Failed to fetch profit data. Please try again.",
-      );
+      Alert.alert("Error", formatErrorMessage(error));
     },
   });
 
@@ -109,15 +104,14 @@ export default function AdminProfit() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     mutation.mutate({
-      startDate: formatApiDate(startDate),
-      endDate: formatApiDate(endDate, true),
+      startDate: formatDateOnly(startDate),
+      endDate: formatDateOnly(endDate),
     });
   };
 
   /* -------------------- Normalize Response -------------------- */
 
-  const result = mutation.data?.data ??
-    mutation.data ?? {
+  const result = mutation.data ?? {
       totalSales: 0,
       totalExpenses: 0,
       profit: 0,
@@ -176,7 +170,7 @@ export default function AdminProfit() {
 
           <View style={styles.quickRangeGrid}>
             {[
-              { label: "Today", days: 0 },
+              { label: "Today", days: 1 },
               { label: "Last 7 Days", days: 6 },
               { label: "Last 30 Days", days: 29 },
               { label: "Last 90 Days", days: 89 },
@@ -329,12 +323,12 @@ export default function AdminProfit() {
         <View style={styles.section}>
           <Pressable
             onPress={handleFetch}
-            disabled={!startDate || !endDate || mutation.isLoading}
+            disabled={!startDate || !endDate || mutation.isPending}
             style={({ pressed }) => [
               styles.generateButton,
               (!startDate || !endDate) && styles.generateButtonDisabled,
               pressed && styles.generateButtonPressed,
-              mutation.isLoading && styles.generateButtonLoading,
+              mutation.isPending && styles.generateButtonLoading,
             ]}
           >
             <LinearGradient
@@ -347,7 +341,7 @@ export default function AdminProfit() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              {mutation.isLoading ? (
+              {mutation.isPending ? (
                 <ActivityIndicator color={Colors.white} size="small" />
               ) : (
                 <>
@@ -373,7 +367,7 @@ export default function AdminProfit() {
         </View>
 
         {/* Loading State */}
-        {mutation.isLoading && (
+        {mutation.isPending && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.loadingText}>Generating report...</Text>

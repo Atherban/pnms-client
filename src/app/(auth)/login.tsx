@@ -17,7 +17,7 @@ import { AuthService } from "../../services/auth.service";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Radius, Spacing } from "../../theme";
 import { getLastEmail, saveLastEmail } from "../../utils/login.storage";
-import { saveUser } from "../../utils/storage"; // IMPORTANT: Import saveUser
+import { saveUser } from "../../utils/storage";
 
 export default function Login() {
   const router = useRouter();
@@ -54,16 +54,16 @@ export default function Login() {
         throw new Error("Invalid login response");
       }
 
-      // IMPORTANT: Save user to SecureStore
+      // Save user to SecureStore
       await saveUser(res.user);
       await saveLastEmail(email);
 
-      // IMPORTANT: Pass ALL user fields to setAuth including name
+      //Pass ALL user fields to setAuth including name
       setAuth(
         {
           id: res.user._id,
-          name: res.user.name, // ← THIS WAS MISSING!
-          email: res.user.email, // Also include email
+          name: res.user.name,
+          email: res.user.email,
           role: res.user.role,
         },
         res.token,
@@ -193,7 +193,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.primary,
   },
   keyboard: {
     flex: 1,
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: Radius.xl,
+    borderRadius: Spacing.xl,
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.borderLight,
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   footerText: {
     marginTop: Spacing.xl,
     textAlign: "center",
-    color: Colors.textTertiary,
+    color: Colors.surface,
     fontSize: 12,
     fontWeight: "500",
   },

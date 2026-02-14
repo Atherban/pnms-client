@@ -26,6 +26,8 @@ export const Colors = {
   surface: "#FFFFFF",
   surfaceDark: "#F0F2F5",
 
+  shadow: "#1a1919a9",
+
   // Border
   border: "#E0E0E0",
   borderLight: "#EEEEEE",

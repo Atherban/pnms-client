@@ -2,7 +2,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
-import { Home, Leaf, Menu, Sprout, Users } from "lucide-react-native";
+import { Home, Leaf, Menu, Receipt, Users } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { useKeyboardVisible } from "../../hooks/useKeyboardVisible";
 import { Colors, Spacing } from "../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -21,7 +22,7 @@ const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 const DashboardIcon = Home;
 const UsersIcon = Users;
 const InventoryIcon = Leaf;
-const SeedsIcon = Sprout;
+const SalesIcon = Receipt;
 const MoreIcon = Menu;
 
 const NAV_ITEMS = [
@@ -40,17 +41,17 @@ const NAV_ITEMS = [
     color: "#EC4899",
   },
   {
-    label: "Inventory",
+    label: "Plants",
     icon: InventoryIcon,
     activeIcon: InventoryIcon,
-    path: "/(admin)/inventory",
+    path: "/(admin)/plants",
     color: "#10B981",
   },
   {
-    label: "Seeds", // Changed from "Seed" to "Seeds" for consistency
-    icon: SeedsIcon,
-    activeIcon: SeedsIcon,
-    path: "/(admin)/seeds",
+    label: "Sales",
+    icon: SalesIcon,
+    activeIcon: SalesIcon,
+    path: "/(admin)/sales",
     color: "#F59E0B",
   },
   {
@@ -65,6 +66,7 @@ const NAV_ITEMS = [
 export default function CoolBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const isKeyboardVisible = useKeyboardVisible();
   const [activeIndex, setActiveIndex] = useState(0);
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
 
@@ -130,7 +132,7 @@ export default function CoolBottomNav() {
 
     // Navigation
     if (pathname !== path) {
-      router.replace(path);
+      router.replace(path as any);
     }
 
     // Indicator animation
@@ -158,6 +160,8 @@ export default function CoolBottomNav() {
     inputRange: [0, SCREEN_WIDTH],
     outputRange: [0, SCREEN_WIDTH],
   });
+
+  if (isKeyboardVisible) return null;
 
   return (
     <View style={styles.container}>

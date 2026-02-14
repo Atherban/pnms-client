@@ -102,7 +102,7 @@ export default function StaffDashboard() {
         router.push("/(staff)/seeds");
         break;
       case "sales":
-        router.push("/(staff)/sales/create");
+        router.push("/(staff)/sales");
         break;
       case "sowing":
         router.push("/(staff)/sowing/create");
@@ -240,7 +240,7 @@ export default function StaffDashboard() {
       subtitle: "Create sales entry",
       icon: "receipt-long",
       color: Colors.primary,
-      action: () => router.push("/(staff)/sales/create"),
+      action: () => router.push("/(staff)/sales"),
     },
     {
       title: "Record Sowing",
@@ -262,6 +262,34 @@ export default function StaffDashboard() {
       icon: "inventory",
       color: Colors.warning,
       action: () => router.push("/(staff)/seeds"),
+    },
+    {
+      title: "View Plants",
+      subtitle: "Browse plant inventory",
+      icon: "inventory",
+      color: Colors.success,
+      action: () => router.push("/(staff)/plants"),
+    },
+    {
+      title: "Customers",
+      subtitle: "Manage customer records",
+      icon: "groups",
+      color: Colors.info,
+      action: () => router.push("/(staff)/customers"),
+    },
+    {
+      title: "Expenses",
+      subtitle: "Track expense entries",
+      icon: "payments",
+      color: Colors.warning,
+      action: () => router.push("/(staff)/expenses"),
+    },
+    {
+      title: "Labours",
+      subtitle: "Record labour activity",
+      icon: "engineering",
+      color: Colors.success,
+      action: () => router.push("/(staff)/labours"),
     },
   ];
 
@@ -334,7 +362,7 @@ export default function StaffDashboard() {
               size={16}
               color="rgba(255, 255, 255, 0.8)"
             />
-            <Text style={styles.statLabel}>Today's Sales</Text>
+            <Text style={styles.statLabel}>Today&apos;s Sales</Text>
             <Text style={styles.statValue}>
               {todaySales?.toLocaleString() || "0"}
             </Text>
@@ -346,7 +374,7 @@ export default function StaffDashboard() {
               size={16}
               color="rgba(255, 255, 255, 0.8)"
             />
-            <Text style={styles.statLabel}>Today's Sowings</Text>
+            <Text style={styles.statLabel}>Today&apos;s Sowings</Text>
             <Text style={styles.statValue}>
               {todaySowings?.toLocaleString() || "0"}
             </Text>
@@ -383,7 +411,7 @@ export default function StaffDashboard() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialIcons name="dashboard" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Today's Overview</Text>
+            <Text style={styles.sectionTitle}>Today&apos;s Overview</Text>
           </View>
           <View style={styles.grid}>
             {KPIS.map((kpi) => (

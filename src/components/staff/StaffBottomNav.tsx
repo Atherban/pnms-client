@@ -2,7 +2,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
-import { Home, Leaf, Menu, Sprout } from "lucide-react-native";
+import { Bean, Home, Leaf, Receipt, Sprout } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { useKeyboardVisible } from "../../hooks/useKeyboardVisible";
 import { Colors, Spacing } from "../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -19,10 +20,10 @@ const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 
 /* Icons */
 const DashboardIcon = Home;
+const SalesIcon = Receipt;
 const InventoryIcon = Leaf;
-const SeedsIcon = Sprout;
-const SowingIcon = Sprout;
-const MoreIcon = Menu;
+const SowingIcon = Bean;
+const GerminationIcon = Sprout;
 
 /* STAFF NAV ITEMS */
 const NAV_ITEMS = [
@@ -33,27 +34,27 @@ const NAV_ITEMS = [
     color: "#6366F1",
   },
   {
+    label: "Sales",
+    icon: SalesIcon,
+    path: "/(staff)/sales",
+    color: "#EC4899",
+  },
+  {
     label: "Inventory",
     icon: InventoryIcon,
     path: "/(staff)/inventory",
     color: "#10B981",
   },
   {
-    label: "Seeds",
-    icon: SeedsIcon,
-    path: "/(staff)/seeds",
-    color: "#F59E0B",
-  },
-  {
     label: "Sow",
     icon: SowingIcon,
     path: "/(staff)/sowing",
-    color: "#EC4899",
+    color: "#F59E0B",
   },
   {
     label: "Germination",
-    icon: MoreIcon,
-    path: "/(staff)/germination/create",
+    icon: GerminationIcon,
+    path: "/(staff)/germination",
     color: "#8B5CF6",
   },
 ];
@@ -61,6 +62,7 @@ const NAV_ITEMS = [
 export default function StaffBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const isKeyboardVisible = useKeyboardVisible();
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
@@ -115,7 +117,7 @@ export default function StaffBottomNav() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPressedIndex(null);
 
-    router.replace(path);
+    router.replace(path as any);
     animateToIndex(index);
   };
 
@@ -134,6 +136,8 @@ export default function StaffBottomNav() {
       useNativeDriver: true,
     }).start();
   };
+
+  if (isKeyboardVisible) return null;
 
   return (
     <View style={styles.container}>

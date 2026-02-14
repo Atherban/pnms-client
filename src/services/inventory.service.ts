@@ -1,18 +1,38 @@
 import { api, apiPath, unwrap } from "./api";
+import type {
+  CreatePurchasedInventoryPayload,
+  Inventory,
+} from "../types/inventory.types";
+
+const normalizeList = (data: any) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
+};
 
 export const InventoryService = {
-  async getAll() {
+  async getAll(): Promise<Inventory[]> {
     const res = await api.get(apiPath("/inventory"));
-    return unwrap(res);
+    return normalizeList(unwrap(res));
   },
 
-  async getById(id: string) {
+  async getById(id: string): Promise<Inventory> {
     const res = await api.get(apiPath(`/inventory/${id}`));
+    const data = unwrap(res);
+    return data?.data ?? data;
+  },
+
+  async create(payload: { plantType: string; quantity?: number; minStockLevel?: number }) {
+    const res = await api.post(apiPath("/inventory"), payload);
     return unwrap(res);
   },
 
-  async create(payload: { plantType: string; quantity?: number }) {
-    const res = await api.post(apiPath("/inventory"), payload);
+  async createPurchased(payload: CreatePurchasedInventoryPayload) {
+    const res = await api.post(apiPath("/inventory"), {
+      ...payload,
+      sourceType: payload.sourceType ?? "PURCHASE",
+    });
     return unwrap(res);
   },
 };

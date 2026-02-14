@@ -41,16 +41,58 @@ const QUICK_LINKS = [
   {
     title: "Inventory",
     icon: "inventory",
-    path: "/(admin)/more/inventory",
+    path: "/(admin)/inventory",
     color: "#EF4444",
     description: "Stock management",
+  },
+  {
+    title: "Seeds",
+    icon: "grass",
+    path: "/(admin)/seeds",
+    color: "#84CC16",
+    description: "Seed batches overview",
+  },
+  {
+    title: "Sowing",
+    icon: "eco",
+    path: "/(admin)/sowing",
+    color: "#A3A33A",
+    description: "View sowing records",
+  },
+  {
+    title: "Germination",
+    icon: "local-florist",
+    path: "/(admin)/germination",
+    color: "#22C55E",
+    description: "View germination records",
+  },
+  {
+    title: "Customers",
+    icon: "groups",
+    path: "/(admin)/customers",
+    color: "#0EA5E9",
+    description: "Read customer records",
+  },
+  {
+    title: "Expenses",
+    icon: "payments",
+    path: "/(admin)/expenses",
+    color: "#F97316",
+    description: "Read expense records",
+  },
+  {
+    title: "Labours",
+    icon: "engineering",
+    path: "/(admin)/labours",
+    color: "#14B8A6",
+    description: "Read labour records",
   },
 ];
 
 export default function MoreScreen() {
   const handleNavigation = (path: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(path);
+    router.push(path as any);
   };
 
   return (

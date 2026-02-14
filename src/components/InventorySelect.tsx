@@ -1,4 +1,5 @@
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import EntityThumbnail from "./ui/EntityThumbnail";
 import { Colors, Spacing } from "../theme";
 
 export default function InventorySelect({
@@ -22,10 +23,25 @@ export default function InventorySelect({
         opacity: item.quantity <= 0 ? 0.5 : 1,
       }}
     >
-      <Text style={{ fontWeight: "700" }}>{item.plantType?.name}</Text>
-      <Text style={{ fontSize: 12, color: Colors.textSecondary }}>
-        Available: {item.quantity}
-      </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.sm,
+        }}
+      >
+        <EntityThumbnail
+          uri={item.plantType?.imageUrl}
+          label={item.plantType?.name}
+          size={36}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontWeight: "700" }}>{item.plantType?.name}</Text>
+          <Text style={{ fontSize: 12, color: Colors.textSecondary }}>
+            Available: {item.quantity}
+          </Text>
+        </View>
+      </View>
     </Pressable>
   );
 }
