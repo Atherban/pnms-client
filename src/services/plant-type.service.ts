@@ -1,6 +1,6 @@
 // services/plant-type.service.ts
 import { api, apiPath, unwrap } from "./api";
-import type { PlantType } from "../types/plant.types";
+import type { PlantType, PlantTypeGrowthStage } from "../types/plant.types";
 import { withResolvedImage } from "../utils/image";
 
 export interface PlantTypePayload {
@@ -11,7 +11,7 @@ export interface PlantTypePayload {
   sellingPrice: number;
   minStockLevel?: number;
   defaultCostPrice?: number;
-  growthStages?: string[];
+  growthStages?: PlantTypeGrowthStage[];
 }
 
 export const PlantTypeService = {

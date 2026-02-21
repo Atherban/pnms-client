@@ -24,11 +24,25 @@ const toDateOnly = (date: string | Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const addDaysDateOnly = (date: string | Date, days: number) => {
-  const d = parseDateInput(date);
-  if (Number.isNaN(d.getTime())) throw new Error("Invalid endDate");
-  d.setDate(d.getDate() + days);
-  return toDateOnly(d);
+const toFiniteNumber = (value: unknown): number | undefined => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+const pickFirstNumber = (payload: Record<string, any>, keys: string[]) => {
+  for (const key of keys) {
+    if (!(key in payload)) continue;
+    const n = toFiniteNumber(payload[key]);
+    if (n !== undefined) return n;
+  }
+  return undefined;
+};
+
+const daysBetweenInclusive = (startDateOnly: string, endDateOnly: string) => {
+  const start = parseDateInput(startDateOnly);
+  const end = parseDateInput(endDateOnly);
+  const diffMs = end.getTime() - start.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
 };
 
 export const ProfitService = {
@@ -51,45 +65,54 @@ export const ProfitService = {
         throw new Error("Invalid profit API response");
       }
 
+      const sales = pickFirstNumber(payload, [
+        "totalSales",
+        "salesAmount",
+        "grossSales",
+        "totalRevenue",
+      ]);
+      const expenses = pickFirstNumber(payload, [
+        "totalExpenses",
+        "totalCost",
+        "expenses",
+        "expenseAmount",
+      ]);
+      const profitValue = pickFirstNumber(payload, [
+        "netProfit",
+        "totalProfit",
+        "profit",
+      ]);
+
+      const totalSales = sales ?? 0;
+      const totalExpenses = expenses ?? 0;
+      const profit = profitValue ?? totalSales - totalExpenses;
+
+      if (totalSales < 0 || totalExpenses < 0) {
+        throw new Error("Invalid profit values received from server");
+      }
+
       return {
-        totalSales: Number(
-          payload.totalSales ?? payload.salesAmount ?? payload.grossSales ?? 0,
-        ),
-        totalExpenses: Number(
-          payload.totalExpenses ?? payload.totalCost ?? payload.expenses ?? 0,
-        ),
-        profit: Number(
-          payload.netProfit ?? payload.totalProfit ?? payload.profit ?? 0,
-        ),
+        totalSales,
+        totalExpenses,
+        profit,
       };
     };
 
     const startDateOnly = toDateOnly(params.startDate);
     const endDateOnly = toDateOnly(params.endDate);
-    const endDatePlusOne = addDaysDateOnly(params.endDate, 1);
+    const inclusiveDays = daysBetweenInclusive(startDateOnly, endDateOnly);
 
-    const requestVariants = [
-      { startDate: startDateOnly, endDate: endDatePlusOne },
-      { startDate: startDateOnly, endDate: endDateOnly },
-    ];
-
-    let bestResult: { totalSales: number; totalExpenses: number; profit: number } | null =
-      null;
-
-    for (const variant of requestVariants) {
-      const res = await api.get(apiPath("/profit"), { params: variant });
-      const parsed = parseProfitResponse(res);
-
-      if (!bestResult) {
-        bestResult = parsed;
-      }
-
-      // Prefer first non-zero response to avoid false zero caused by date boundaries.
-      if (parsed.totalSales !== 0 || parsed.profit !== 0 || parsed.totalExpenses !== 0) {
-        return parsed;
-      }
+    if (inclusiveDays <= 0) {
+      throw new Error("startDate must be on or before endDate");
     }
 
-    return bestResult ?? { totalSales: 0, totalExpenses: 0, profit: 0 };
+    if (inclusiveDays > 366) {
+      throw new Error("Date range cannot exceed 366 days");
+    }
+
+    const res = await api.get(apiPath("/profit"), {
+      params: { startDate: startDateOnly, endDate: endDateOnly },
+    });
+    return parseProfitResponse(res);
   },
 };

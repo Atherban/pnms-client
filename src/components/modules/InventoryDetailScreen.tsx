@@ -13,6 +13,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InventoryService } from "../../services/inventory.service";
 import { Colors, Spacing } from "../../theme";
+import { resolveInventoryPricing } from "../../utils/inventory-pricing";
+import { resolveEntityImage } from "../../utils/image";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
@@ -65,6 +67,15 @@ export function InventoryDetailScreen({
   const formatCurrency = (value?: number) => {
     if (value === undefined || value === null) return "—";
     return `₹${value.toLocaleString("en-IN")}`;
+  };
+
+  const formatSourceType = (sourceType?: string) => {
+    if (!sourceType) return "Unknown";
+    return sourceType
+      .toLowerCase()
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
   };
 
   if (isLoading) {
@@ -159,9 +170,8 @@ export function InventoryDetailScreen({
   }
 
   const stockStatus = getStockStatus(data.quantity || 0);
-  // console.log(data);
-
-  const totalValue = (data.quantity || 0) * (data.unitCost || 0);
+  const pricing = resolveInventoryPricing(data);
+  const thumbnailUri = resolveEntityImage(data?.plantType ?? data);
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -204,7 +214,7 @@ export function InventoryDetailScreen({
         <View style={styles.heroCard}>
           <View style={styles.heroContent}>
             <EntityThumbnail
-              uri={data.plantType?.imageUrl}
+              uri={thumbnailUri}
               label={data.plantType?.name}
               size={80}
               iconName="local-florist"
@@ -271,15 +281,15 @@ export function InventoryDetailScreen({
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total Value</Text>
+            <Text style={styles.statLabel}>Inventory Value</Text>
             <Text style={[styles.statValue, styles.statValueSuccess]}>
-              {formatCurrency(totalValue)}
+              {formatCurrency(pricing.inventoryValue ?? undefined)}
             </Text>
             <Text style={styles.statUnit}>estimated</Text>
           </View>
         </View>
 
-        {/* Cost Information Card */}
+        {/* Pricing Information Card */}
         <View style={styles.infoCard}>
           <View style={styles.cardHeader}>
             <MaterialIcons
@@ -287,7 +297,7 @@ export function InventoryDetailScreen({
               size={20}
               color={Colors.primary}
             />
-            <Text style={styles.cardTitle}>Cost Information</Text>
+            <Text style={styles.cardTitle}>Pricing Information</Text>
           </View>
 
           <View style={styles.infoRow}>
@@ -300,25 +310,58 @@ export function InventoryDetailScreen({
               <Text style={styles.infoLabel}>Unit Cost</Text>
             </View>
             <Text style={styles.infoValue}>
-              {formatCurrency(data.unitCost)}
+              {formatCurrency(pricing.unitCost ?? undefined)}
             </Text>
           </View>
 
-          {data.unitCost > 0 && data.quantity > 0 && (
-            <View style={styles.infoRow}>
-              <View style={styles.infoLabelContainer}>
-                <MaterialIcons
-                  name="calculate"
-                  size={16}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.infoLabel}>Total Cost</Text>
-              </View>
-              <Text style={styles.infoValueHighlight}>
-                {formatCurrency(totalValue)}
-              </Text>
+          <View style={styles.infoRow}>
+            <View style={styles.infoLabelContainer}>
+              <MaterialIcons
+                name="sell"
+                size={16}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.infoLabel}>Selling Price</Text>
             </View>
-          )}
+            <Text style={styles.infoValue}>
+              {formatCurrency(pricing.sellingPrice ?? undefined)}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={styles.infoLabelContainer}>
+              <MaterialIcons
+                name="account-balance-wallet"
+                size={16}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.infoLabel}>Potential Revenue</Text>
+            </View>
+            <Text style={styles.infoValueHighlight}>
+              {formatCurrency(pricing.potentialRevenue ?? undefined)}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={styles.infoLabelContainer}>
+              <MaterialIcons
+                name="calculate"
+                size={16}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.infoLabel}>Potential Gross Profit</Text>
+            </View>
+            <Text
+              style={[
+                styles.infoValueHighlight,
+                pricing.grossProfit !== null && pricing.grossProfit < 0
+                  ? styles.infoValueNegative
+                  : null,
+              ]}
+            >
+              {formatCurrency(pricing.grossProfit ?? undefined)}
+            </Text>
+          </View>
         </View>
 
         {/* Source Information Card */}
@@ -344,7 +387,7 @@ export function InventoryDetailScreen({
                 color={Colors.primary}
               />
               <Text style={styles.sourceBadgeText}>
-                {data.sourceType || "—"}
+                {formatSourceType(data.sourceType)}
               </Text>
             </View>
           </View>
@@ -672,6 +715,9 @@ const styles = {
     fontSize: 16,
     color: Colors.success,
     fontWeight: "700" as const,
+  },
+  infoValueNegative: {
+    color: Colors.error,
   },
   sourceBadge: {
     flexDirection: "row" as const,

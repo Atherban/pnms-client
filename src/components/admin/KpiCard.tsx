@@ -144,7 +144,7 @@ const styles = {
     flex: 1,
   },
   value: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800" as const,
     color: Colors.text,
     marginBottom: Spacing.xs,

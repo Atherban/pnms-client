@@ -20,6 +20,7 @@ import { InventoryService } from "../../../services/inventory.service";
 import { PlantTypeService } from "../../../services/plant-type.service";
 import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
+import { resolveEntityImage } from "../../../utils/image";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -182,7 +183,7 @@ export default function StaffInventoryCreate() {
                   {selectedPlant ? (
                     <View style={styles.selectedItem}>
                       <EntityThumbnail
-                        uri={selectedPlant.imageUrl}
+                        uri={resolveEntityImage(selectedPlant)}
                         label={selectedPlant.name}
                         size={32}
                         iconName={getCategoryIcon(selectedPlant.category)}
@@ -467,7 +468,7 @@ export default function StaffInventoryCreate() {
                   >
                     <View style={styles.dropdownOptionContent}>
                       <EntityThumbnail
-                        uri={pt.imageUrl}
+                        uri={resolveEntityImage(pt)}
                         label={pt.name}
                         size={40}
                         iconName={getCategoryIcon(pt.category)}

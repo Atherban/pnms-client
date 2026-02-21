@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native
 import { SeedService } from "../../services/seed.service";
 import { Colors, Spacing } from "../../theme";
 import { useMemo, useState } from "react";
+import { resolveEntityImage } from "../../utils/image";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 export function SeedsReadScreen({ title }: { title: string }) {
@@ -81,7 +82,7 @@ export function SeedsReadScreen({ title }: { title: string }) {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <EntityThumbnail
-                uri={item.imageUrl || item.plantType?.imageUrl}
+                uri={resolveEntityImage(item) || resolveEntityImage(item?.plantType)}
                 label={item.name || item.plantType?.name}
                 size={42}
                 iconName="grass"

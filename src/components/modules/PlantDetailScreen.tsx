@@ -30,6 +30,12 @@ interface PlantDetailScreenProps {
   canUpload?: boolean;
 }
 
+type PlantImageItem = {
+  uri: string;
+  imageId: string | null;
+  canDelete: boolean;
+};
+
 const formatCurrency = (value?: number) => {
   if (!value || Number.isNaN(Number(value))) return "—";
   return `₹${Number(value).toLocaleString("en-IN")}`;
@@ -74,6 +80,25 @@ export function PlantDetailScreen({
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (imageId: string) => {
+      if (!id || !imageId) throw new Error("Plant id or image id missing");
+      return UploadService.deletePlantTypeImage(id, imageId);
+    },
+    onSuccess: async () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedImage(null);
+      await queryClient.invalidateQueries({ queryKey: ["plant-types"] });
+      await queryClient.invalidateQueries({ queryKey: ["plant-type", id] });
+      await refetch();
+      Alert.alert("Removed", "Plant image removed successfully.");
+    },
+    onError: (e: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Delete Failed", formatErrorMessage(e));
+    },
+  });
+
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
@@ -86,23 +111,75 @@ export function PlantDetailScreen({
       : (data as any);
   }, [data]);
 
-  const imageUrls = useMemo(() => {
-    const urls = new Set<string>();
-    const push = (value?: string | null) => {
-      const resolved = toImageUrl(value);
-      if (resolved) urls.add(resolved);
+  const imageItems = useMemo(() => {
+    const map = new Map<string, PlantImageItem>();
+    const upsert = (entry: PlantImageItem) => {
+      if (!entry.uri) return;
+      const existing = map.get(entry.uri);
+      if (!existing) {
+        map.set(entry.uri, entry);
+        return;
+      }
+
+      if (!existing.imageId && entry.imageId) {
+        map.set(entry.uri, entry);
+      }
     };
 
-    push(item?.imageUrl);
+    const main = toImageUrl(item?.imageUrl);
+    if (main) {
+      upsert({ uri: main, imageId: null, canDelete: false });
+    }
+
     const images = Array.isArray(item?.images) ? item.images : [];
     for (const image of images) {
-      push(image?.url ?? image?.path ?? image?.fileUrl ?? image?.fileName);
+      const uri = toImageUrl(
+        image?.url ?? image?.path ?? image?.fileUrl ?? image?.fileName,
+      );
+      if (!uri) continue;
+
+      const imageId =
+        (typeof image?._id === "string" && image._id) ||
+        (typeof image?.id === "string" && image.id) ||
+        (typeof image?.imageId === "string" && image.imageId) ||
+        null;
+
+      upsert({
+        uri,
+        imageId,
+        canDelete: Boolean(imageId),
+      });
     }
-    return Array.from(urls);
+
+    return Array.from(map.values());
   }, [item]);
 
-  const displayImage = selectedImage || imageUrls[0] || null;
+  const displayImage = selectedImage || imageItems[0]?.uri || null;
+  const selectedImageItem = imageItems.find((image) => image.uri === displayImage) ?? null;
   const growthStages = Array.isArray(item?.growthStages) ? item.growthStages : [];
+
+  const handleDeleteImage = (image: PlantImageItem) => {
+    if (!image.imageId) {
+      Alert.alert("Cannot Remove", "This image cannot be removed.");
+      return;
+    }
+    if (deleteMutation.isPending) {
+      Alert.alert("Please wait", "An image operation is already in progress.");
+      return;
+    }
+
+    Alert.alert("Remove Image", "Delete this image permanently?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          deleteMutation.mutate(image.imageId as string);
+        },
+      },
+    ]);
+  };
 
   const pickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -198,24 +275,54 @@ export function PlantDetailScreen({
             )}
           </View>
 
-          {imageUrls.length > 1 && (
+          {canUpload && selectedImageItem?.canDelete && (
+            <Pressable
+              onPress={() => handleDeleteImage(selectedImageItem)}
+              disabled={deleteMutation.isPending || uploadMutation.isPending}
+              style={[
+                styles.removeHeroButton,
+                (deleteMutation.isPending || uploadMutation.isPending) && styles.buttonDisabled,
+              ]}
+            >
+              {deleteMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.white} />
+              ) : (
+                <>
+                  <MaterialIcons name="delete" size={14} color={Colors.white} />
+                  <Text style={styles.removeHeroButtonText}>Remove</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+
+          {imageItems.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.thumbnailRow}
             >
-              {imageUrls.map((uri) => (
-                <TouchableOpacity
-                  key={uri}
-                  onPress={() => setSelectedImage(uri)}
-                  style={[
-                    styles.thumbnailWrap,
-                    selectedImage === uri && styles.thumbnailWrapSelected,
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  <Image source={{ uri }} style={styles.thumbnail} />
-                </TouchableOpacity>
+              {imageItems.map((image) => (
+                <View key={`${image.uri}-${image.imageId ?? "base"}`} style={styles.thumbnailCard}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedImage(image.uri)}
+                    style={[
+                      styles.thumbnailWrap,
+                      selectedImage === image.uri && styles.thumbnailWrapSelected,
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <Image source={{ uri: image.uri }} style={styles.thumbnail} />
+                  </TouchableOpacity>
+                  {canUpload && image.canDelete && (
+                    <Pressable
+                      onPress={() => handleDeleteImage(image)}
+                      disabled={deleteMutation.isPending || uploadMutation.isPending}
+                      style={styles.thumbnailDeleteButton}
+                    >
+                      <MaterialIcons name="close" size={12} color={Colors.white} />
+                    </Pressable>
+                  )}
+                </View>
               ))}
             </ScrollView>
           )}
@@ -287,9 +394,10 @@ export function PlantDetailScreen({
                 onPress={() => uploadMutation.mutate()}
                 style={[
                   styles.primaryButton,
-                  (!pendingFile || uploadMutation.isPending) && styles.buttonDisabled,
+                  (!pendingFile || uploadMutation.isPending || deleteMutation.isPending) &&
+                    styles.buttonDisabled,
                 ]}
-                disabled={!pendingFile || uploadMutation.isPending}
+                disabled={!pendingFile || uploadMutation.isPending || deleteMutation.isPending}
                 activeOpacity={0.8}
               >
                 {uploadMutation.isPending ? (
@@ -356,6 +464,7 @@ const styles = {
     borderRadius: 12,
     overflow: "hidden" as const,
     backgroundColor: Colors.surface,
+    position: "relative" as const,
   },
   heroImage: {
     width: "100%" as const,
@@ -373,6 +482,9 @@ const styles = {
     gap: 8,
     paddingTop: 10,
   },
+  thumbnailCard: {
+    position: "relative" as const,
+  },
   thumbnailWrap: {
     borderRadius: 8,
     borderWidth: 1,
@@ -384,6 +496,36 @@ const styles = {
     borderWidth: 2,
   },
   thumbnail: { width: 62, height: 62 },
+  thumbnailDeleteButton: {
+    position: "absolute" as const,
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.error,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: Colors.white,
+  },
+  removeHeroButton: {
+    position: "absolute" as const,
+    right: 10,
+    bottom: 10,
+    backgroundColor: Colors.error,
+    borderRadius: 16,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+  },
+  removeHeroButtonText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: "600" as const,
+  },
   name: {
     color: Colors.text,
     fontSize: 20,

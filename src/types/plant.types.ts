@@ -10,9 +10,9 @@ export interface Plant {
 }
 
 export interface PlantTypeGrowthStage {
-  stage: string;
-  days?: number;
-  notes?: string;
+  stage: "SEED" | "SOWN" | "GERMINATED" | "HARDENED" | "READY_FOR_SALE";
+  dayFrom: number;
+  dayTo: number;
 }
 
 export interface PlantType {
@@ -26,7 +26,7 @@ export interface PlantType {
   minStockLevel?: number;
   defaultCostPrice?: number;
   description?: string;
-  growthStages?: string[] | PlantTypeGrowthStage[];
+  growthStages?: PlantTypeGrowthStage[];
   imageUrl?: string;
   images?: { fileName?: string; url?: string; path?: string }[];
   createdAt?: string;

@@ -11,6 +11,10 @@ export interface Inventory {
   sourceModel?: string | Record<string, unknown>;
   initialQuantity?: number;
   unitCost?: number;
+  unitPrice?: number;
+  sellingPrice?: number;
+  costPrice?: number;
+  purchasePrice?: number;
   growthStage?: string;
   receivedAt?: string;
   createdAt?: string;

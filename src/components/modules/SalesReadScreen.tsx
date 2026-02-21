@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native
 import { useMemo, useState } from "react";
 import { SalesService } from "../../services/sales.service";
 import { Colors, Spacing } from "../../theme";
+import { resolveEntityImage } from "../../utils/image";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 const getAmount = (sale: any) =>
@@ -85,11 +86,17 @@ export function SalesReadScreen({ title }: { title: string }) {
               firstItem.inventoryId.plantType) ||
             (typeof firstItem?.plantType === "object" && firstItem.plantType) ||
             null;
+          const thumbnail =
+            resolveEntityImage(plantObj) ??
+            resolveEntityImage(firstItem?.inventory) ??
+            resolveEntityImage(firstItem?.inventoryId) ??
+            resolveEntityImage(firstItem) ??
+            resolveEntityImage(item);
           return (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <EntityThumbnail
-                  uri={plantObj?.imageUrl}
+                  uri={thumbnail}
                   label={plantObj?.name}
                   size={42}
                   iconName="local-florist"

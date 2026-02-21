@@ -37,6 +37,19 @@ export default function AdminProfit() {
     return `${year}-${month}-${day}`;
   };
 
+  const toDateOnlyValue = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const getInclusiveDays = (start: Date, end: Date) => {
+    const startOnly = toDateOnlyValue(start);
+    const endOnly = toDateOnlyValue(end);
+    const diffMs = endOnly.getTime() - startOnly.getTime();
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  };
+
   const formatDisplayDate = (date: Date | null) => {
     if (!date) return "Select date";
     return date.toLocaleDateString("en-IN", {
@@ -50,13 +63,25 @@ export default function AdminProfit() {
 
   const handleStartDateConfirm = (date: Date) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setStartDate(date);
+    const selected = toDateOnlyValue(date);
+    setStartDate(selected);
+    setEndDate((currentEnd) => {
+      if (!currentEnd) return currentEnd;
+      const normalizedEnd = toDateOnlyValue(currentEnd);
+      return selected > normalizedEnd ? selected : normalizedEnd;
+    });
     setShowStartPicker(false);
   };
 
   const handleEndDateConfirm = (date: Date) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setEndDate(date);
+    const selected = toDateOnlyValue(date);
+    setEndDate(selected);
+    setStartDate((currentStart) => {
+      if (!currentStart) return currentStart;
+      const normalizedStart = toDateOnlyValue(currentStart);
+      return selected < normalizedStart ? selected : normalizedStart;
+    });
     setShowEndPicker(false);
   };
 
@@ -68,8 +93,8 @@ export default function AdminProfit() {
 
   const handleQuickRange = (days: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const end = new Date();
-    const start = new Date();
+    const end = toDateOnlyValue(new Date());
+    const start = toDateOnlyValue(new Date());
     start.setDate(start.getDate() - days);
     setStartDate(start);
     setEndDate(end);
@@ -101,6 +126,16 @@ export default function AdminProfit() {
       return;
     }
 
+    const rangeDays = getInclusiveDays(startDate, endDate);
+    if (rangeDays > 366) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        "Invalid Date Range",
+        "Date range cannot exceed 366 days. Please select a shorter period.",
+      );
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     mutation.mutate({
@@ -126,13 +161,12 @@ export default function AdminProfit() {
 
   const dateRangeDays =
     startDate && endDate
-      ? Math.max(
-          1,
-          Math.ceil(
-            (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-          ),
-        )
+      ? getInclusiveDays(startDate, endDate)
       : 0;
+
+  const isDateRangeInvalid =
+    Boolean(startDate && endDate) &&
+    (startDate > endDate || getInclusiveDays(startDate, endDate) > 366);
 
   /* -------------------- UI -------------------- */
 
@@ -323,17 +357,17 @@ export default function AdminProfit() {
         <View style={styles.section}>
           <Pressable
             onPress={handleFetch}
-            disabled={!startDate || !endDate || mutation.isPending}
+            disabled={!startDate || !endDate || mutation.isPending || isDateRangeInvalid}
             style={({ pressed }) => [
               styles.generateButton,
-              (!startDate || !endDate) && styles.generateButtonDisabled,
+              (!startDate || !endDate || isDateRangeInvalid) && styles.generateButtonDisabled,
               pressed && styles.generateButtonPressed,
               mutation.isPending && styles.generateButtonLoading,
             ]}
           >
             <LinearGradient
               colors={
-                !startDate || !endDate
+                !startDate || !endDate || isDateRangeInvalid
                   ? [Colors.border, Colors.borderLight]
                   : [Colors.success, "#34D399"]
               }
@@ -362,6 +396,11 @@ export default function AdminProfit() {
           {(!startDate || !endDate) && (
             <Text style={styles.hintText}>
               ⓘ Please select both start and end dates
+            </Text>
+          )}
+          {isDateRangeInvalid && (
+            <Text style={styles.hintText}>
+              ⓘ Invalid range. Keep start before end and within 366 days.
             </Text>
           )}
         </View>

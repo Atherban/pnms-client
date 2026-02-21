@@ -59,6 +59,41 @@ const uploadImage = async (path: string, file: UploadFile) => {
   return true;
 };
 
+const deleteImage = async (path: string) => {
+  const token = await getToken();
+
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const rawText = await res.text();
+    let payload: any = null;
+
+    try {
+      payload = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      payload = null;
+    }
+
+    throw normalizeError({
+      code: res.status,
+      status: res.status,
+      message: typeof payload?.message === "string" ? payload.message : rawText || "Delete failed",
+      details: payload?.details ?? payload?.error?.details,
+      response: {
+        status: res.status,
+        data: payload ?? rawText,
+      },
+    });
+  }
+
+  return true;
+};
+
 export const UploadService = {
   async uploadPlantTypeImage(plantTypeId: string, file: UploadFile) {
     return uploadImage(`/plant-types/${plantTypeId}/image`, file);
@@ -70,6 +105,18 @@ export const UploadService = {
 
   async uploadSeedImage(seedId: string, file: UploadFile) {
     return uploadImage(`/seeds/${seedId}/image`, file);
+  },
+
+  async deletePlantTypeImage(plantTypeId: string, imageId: string) {
+    return deleteImage(
+      `/plant-types/${encodeURIComponent(plantTypeId)}/image/${encodeURIComponent(imageId)}`,
+    );
+  },
+
+  async deleteSeedImage(seedId: string, imageId: string) {
+    return deleteImage(
+      `/seeds/${encodeURIComponent(seedId)}/image/${encodeURIComponent(imageId)}`,
+    );
   },
 
   // Backward compatibility (deprecated)

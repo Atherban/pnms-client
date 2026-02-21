@@ -7,30 +7,84 @@ const getApiOrigin = () => {
 };
 
 const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
+const isDataOrLocalUri = (value: string) =>
+  /^(data:|blob:|file:)/i.test(value);
+
+const normalizePathSlashes = (value: string) => {
+  const withForwardSlashes = value.replace(/\\/g, "/");
+  return withForwardSlashes.replace(/([^:]\/)\/+/g, "$1");
+};
+
+const extractStringCandidate = (value: any): string | undefined => {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return undefined;
+
+  const nestedCandidates = [
+    value.url,
+    value.path,
+    value.fileUrl,
+    value.fileName,
+    value.imageUrl,
+    value.imagePath,
+    value.secure_url,
+    value.src,
+  ];
+  for (const candidate of nestedCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
 
 export const toImageUrl = (value?: string | null): string | undefined => {
   if (!value || typeof value !== "string") return undefined;
-  const normalized = value.trim();
+  const normalized = normalizePathSlashes(value.trim().replace(/^\.\//, ""));
   if (!normalized) return undefined;
   if (isAbsoluteUrl(normalized)) return normalized;
+  if (isDataOrLocalUri(normalized)) return normalized;
+  if (normalized.startsWith("//")) return `https:${normalized}`;
 
   const origin = getApiOrigin();
   if (!origin) return normalized;
   if (normalized.startsWith("/")) return `${origin}${normalized}`;
+  if (
+    normalized.startsWith("uploads/") ||
+    normalized.startsWith("upload/") ||
+    normalized.startsWith("api/")
+  ) {
+    return `${origin}/${normalized}`;
+  }
   return `${origin}/uploads/${normalized}`;
 };
 
 const getImageCandidate = (entity: any): string | undefined => {
   if (!entity || typeof entity !== "object") return undefined;
 
-  const direct = toImageUrl(entity.imageUrl ?? entity.image ?? entity.thumbnail);
-  if (direct) return direct;
+  const directCandidates = [
+    entity.imageUrl,
+    entity.image,
+    entity.thumbnail,
+    entity.fileUrl,
+    entity.url,
+    entity.path,
+    entity.fileName,
+    entity.avatar,
+    entity.photo,
+    entity.imagePath,
+    entity.secure_url,
+    entity.src,
+  ];
+
+  for (const candidate of directCandidates) {
+    const direct = toImageUrl(extractStringCandidate(candidate) ?? null);
+    if (direct) return direct;
+  }
 
   const images = Array.isArray(entity.images) ? entity.images : [];
   for (const image of images) {
-    const fromImage = toImageUrl(
-      image?.url ?? image?.path ?? image?.fileUrl ?? image?.fileName,
-    );
+    const fromImage = toImageUrl(extractStringCandidate(image) ?? null);
     if (fromImage) return fromImage;
   }
 

@@ -30,6 +30,7 @@ import { InventoryService } from "../../../services/inventory.service";
 import { SalesService } from "../../../services/sales.service";
 import { Colors } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
+import { resolveEntityImage } from "../../../utils/image";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% of screen height for better visibility
@@ -51,6 +52,12 @@ interface CartItem {
   unitPrice: number;
   totalPrice: number;
   maxAvailable: number;
+}
+
+interface CreateCustomerForm {
+  name: string;
+  mobileNumber: string;
+  address: string;
 }
 
 // ==================== UTILITY FUNCTIONS ====================
@@ -120,6 +127,7 @@ const QuantitySelectorModal = ({
   const plantName = item?.plantType?.name || "Unknown Plant";
   const category = item?.plantType?.category || "Uncategorized";
   const sellingPrice = item?.plantType?.sellingPrice || 0;
+  const thumbnailUri = resolveEntityImage(item?.plantType ?? item);
 
   // Generate quick select options based on available stock
   const generateQuickOptions = () => {
@@ -241,7 +249,7 @@ const QuantitySelectorModal = ({
             {/* Product Info */}
             <View style={styles.bottomSheetProduct}>
               <EntityThumbnail
-                uri={item?.plantType?.imageUrl}
+                uri={thumbnailUri}
                 label={plantName}
                 size={80}
                 style={styles.bottomSheetThumbnail}
@@ -456,6 +464,7 @@ const InventoryCard = ({
   const stock = item.quantity || 0;
   const remainingStock = Math.max(0, stock - cartQuantity);
   const sellingPrice = item.plantType?.sellingPrice || 0;
+  const thumbnailUri = resolveEntityImage(item?.plantType ?? item);
   const isLowStock = remainingStock <= 5 && remainingStock > 0;
   const isOutOfStock = remainingStock <= 0;
   const isInCart = cartQuantity > 0;
@@ -473,7 +482,7 @@ const InventoryCard = ({
     >
       <View style={styles.inventoryCardContent}>
         <EntityThumbnail
-          uri={item.plantType?.imageUrl}
+          uri={thumbnailUri}
           label={plantName}
           size={64}
           style={styles.inventoryThumbnail}
@@ -556,12 +565,13 @@ const CartItemComponent = ({
 }: CartItemProps) => {
   const plantName = item.inventory.plantType?.name || "Unknown Plant";
   const unitPrice = item.unitPrice;
+  const thumbnailUri = resolveEntityImage(item?.inventory?.plantType ?? item?.inventory);
 
   return (
     <View style={styles.cartItem}>
       <View style={styles.cartItemLeft}>
         <EntityThumbnail
-          uri={item.inventory.plantType?.imageUrl}
+          uri={thumbnailUri}
           label={plantName}
           size={48}
           style={styles.cartItemThumbnail}
@@ -613,51 +623,6 @@ const CartItemComponent = ({
     </View>
   );
 };
-
-// ==================== CUSTOMER CHIP ====================
-
-interface CustomerChipProps {
-  customer: any;
-  isSelected: boolean;
-  onSelect: (id: string) => void;
-}
-
-const CustomerChip = ({
-  customer,
-  isSelected,
-  onSelect,
-}: CustomerChipProps) => (
-  <TouchableOpacity
-    onPress={() => onSelect(customer._id)}
-    style={[styles.customerChip, isSelected && styles.customerChipSelected]}
-    activeOpacity={0.7}
-  >
-    <View
-      style={[
-        styles.customerChipAvatar,
-        { backgroundColor: isSelected ? `${Colors.primary}20` : "#F3F4F6" },
-      ]}
-    >
-      <Text
-        style={[
-          styles.customerChipInitial,
-          isSelected && { color: Colors.primary },
-        ]}
-      >
-        {customer.name?.charAt(0).toUpperCase() || "?"}
-      </Text>
-    </View>
-    <Text
-      style={[
-        styles.customerChipText,
-        isSelected && styles.customerChipTextSelected,
-      ]}
-      numberOfLines={1}
-    >
-      {customer.name}
-    </Text>
-  </TouchableOpacity>
-);
 
 // ==================== EMPTY STATE ====================
 
@@ -759,6 +724,14 @@ export default function StaffSalesCreate() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isQuantityModalVisible, setIsQuantityModalVisible] = useState(false);
+  const [isCustomerPickerVisible, setIsCustomerPickerVisible] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [isCreateCustomerVisible, setIsCreateCustomerVisible] = useState(false);
+  const [customerForm, setCustomerForm] = useState<CreateCustomerForm>({
+    name: "",
+    mobileNumber: "",
+    address: "",
+  });
 
   // Queries
   const {
@@ -771,7 +744,11 @@ export default function StaffSalesCreate() {
     queryFn: InventoryService.getAll,
   });
 
-  const { data: customerData } = useQuery({
+  const {
+    data: customerData,
+    refetch: refetchCustomers,
+    isFetching: isCustomersFetching,
+  } = useQuery({
     queryKey: ["customers"],
     queryFn: CustomerService.getAll,
   });
@@ -790,6 +767,26 @@ export default function StaffSalesCreate() {
     () => customers.find((c: any) => c._id === selectedCustomer)?.name,
     [customers, selectedCustomer],
   );
+  const selectedCustomerInfo = useMemo(
+    () => customers.find((c: any) => c._id === selectedCustomer),
+    [customers, selectedCustomer],
+  );
+  const filteredCustomers = useMemo(() => {
+    const term = customerSearch.trim().toLowerCase();
+    if (!term) return customers.slice(0, 20);
+    return customers
+      .filter((customer: any) => {
+        const name = String(customer?.name ?? "").toLowerCase();
+        const mobile = String(customer?.mobileNumber ?? "").toLowerCase();
+        const address = String(customer?.address ?? "").toLowerCase();
+        return (
+          name.includes(term) ||
+          mobile.includes(term) ||
+          address.includes(term)
+        );
+      })
+      .slice(0, 100);
+  }, [customerSearch, customers]);
 
   // Cart helpers
   const getCartQuantity = useCallback(
@@ -886,6 +883,29 @@ export default function StaffSalesCreate() {
     },
   });
 
+  const createCustomerMutation = useMutation({
+    mutationFn: (payload: { name: string; mobileNumber?: string; address?: string }) =>
+      CustomerService.create(payload),
+    onSuccess: async (response: any) => {
+      const created = response?.data ?? response;
+      await queryClient.invalidateQueries({ queryKey: ["customers"] });
+      await refetchCustomers();
+      const createdId = created?._id ?? created?.id;
+      if (createdId) {
+        setSelectedCustomer(String(createdId));
+      }
+      setIsCreateCustomerVisible(false);
+      setIsCustomerPickerVisible(false);
+      setCustomerForm({ name: "", mobileNumber: "", address: "" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Customer Added", "Customer created and selected for this sale.");
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Failed to Create Customer", formatErrorMessage(err));
+    },
+  });
+
   // Handlers
   const handleAddPress = useCallback((item: any) => {
     setSelectedItem(item);
@@ -950,6 +970,57 @@ export default function StaffSalesCreate() {
     );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
+
+  const handleOpenCustomerPicker = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCustomerSearch("");
+    setIsCustomerPickerVisible(true);
+  }, []);
+
+  const handleOpenCreateCustomer = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCustomerSearch("");
+    setIsCreateCustomerVisible(true);
+  }, []);
+
+  const handleCreateCustomer = useCallback(() => {
+    const name = customerForm.name.trim();
+    const mobileRaw = customerForm.mobileNumber.trim();
+    const mobileDigits = mobileRaw.replace(/[^\d]/g, "");
+    const address = customerForm.address.trim();
+
+    if (name.length < 2) {
+      Alert.alert("Validation", "Customer name must be at least 2 characters.");
+      return;
+    }
+    if (mobileRaw && mobileDigits.length !== 10) {
+      Alert.alert("Validation", "Mobile number must be exactly 10 digits.");
+      return;
+    }
+
+    const hasDuplicate = customers.some((customer: any) => {
+      const sameName =
+        String(customer?.name ?? "").trim().toLowerCase() === name.toLowerCase();
+      const sameMobile =
+        mobileDigits.length === 10 &&
+        String(customer?.mobileNumber ?? "").replace(/[^\d]/g, "") === mobileDigits;
+      return sameName || sameMobile;
+    });
+
+    if (hasDuplicate) {
+      Alert.alert(
+        "Duplicate Customer",
+        "A customer with same name or mobile may already exist.",
+      );
+      return;
+    }
+
+    createCustomerMutation.mutate({
+      name,
+      mobileNumber: mobileDigits || undefined,
+      address: address || undefined,
+    });
+  }, [createCustomerMutation, customerForm, customers]);
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery("");
@@ -1067,25 +1138,55 @@ export default function StaffSalesCreate() {
             </View>
 
             {/* Customer Section */}
-            {customers.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Customer (Optional)</Text>
-                <FlatList
-                  horizontal
-                  data={customers}
-                  keyExtractor={(item) => item._id}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.customersList}
-                  renderItem={({ item }) => (
-                    <CustomerChip
-                      customer={item}
-                      isSelected={selectedCustomer === item._id}
-                      onSelect={handleSelectCustomer}
-                    />
-                  )}
-                />
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Customer (Optional)</Text>
+              <View style={styles.customerSelectionCard}>
+                <View style={styles.customerSelectionRow}>
+                  <View style={styles.customerSelectionIcon}>
+                    <MaterialIcons name="person" size={18} color={Colors.primary} />
+                  </View>
+                  <View style={styles.customerSelectionInfo}>
+                    <Text style={styles.customerSelectionLabel}>Selected Customer</Text>
+                    <Text style={styles.customerSelectionValue} numberOfLines={1}>
+                      {selectedCustomerInfo?.name || "Walk-in Customer"}
+                    </Text>
+                    {selectedCustomerInfo?.mobileNumber ? (
+                      <Text style={styles.customerSelectionMeta}>
+                        {selectedCustomerInfo.mobileNumber}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {selectedCustomer ? (
+                    <TouchableOpacity
+                      onPress={() => setSelectedCustomer(undefined)}
+                      style={styles.customerClearButton}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="close" size={16} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                <View style={styles.customerActionRow}>
+                  <TouchableOpacity
+                    onPress={handleOpenCustomerPicker}
+                    style={styles.customerActionButton}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="search" size={16} color={Colors.primary} />
+                    <Text style={styles.customerActionButtonText}>Choose Customer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleOpenCreateCustomer}
+                    style={styles.customerActionButton}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="person-add" size={16} color={Colors.primary} />
+                    <Text style={styles.customerActionButtonText}>Add Customer</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            )}
+            </View>
 
             {/* Search */}
             <View style={styles.section}>
@@ -1214,6 +1315,204 @@ export default function StaffSalesCreate() {
         </View>
       )}
 
+      {/* Customer Picker Modal */}
+      <Modal
+        visible={isCustomerPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCustomerPickerVisible(false)}
+      >
+        <View style={styles.pickerModalContainer}>
+          <TouchableOpacity
+            style={styles.pickerModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsCustomerPickerVisible(false)}
+          />
+          <View style={styles.pickerModalSheet}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Select Customer</Text>
+              <TouchableOpacity
+                onPress={() => setIsCustomerPickerVisible(false)}
+                style={styles.pickerModalCloseButton}
+              >
+                <MaterialIcons name="close" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerSearchContainer}>
+              <MaterialIcons name="search" size={18} color="#9CA3AF" />
+              <TextInput
+                value={customerSearch}
+                onChangeText={setCustomerSearch}
+                placeholder="Search by name, mobile..."
+                placeholderTextColor="#9CA3AF"
+                style={styles.pickerSearchInput}
+              />
+              {customerSearch.length > 0 ? (
+                <TouchableOpacity onPress={() => setCustomerSearch("")}>
+                  <MaterialIcons name="close" size={18} color="#9CA3AF" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedCustomer(undefined);
+                setIsCustomerPickerVisible(false);
+              }}
+              style={styles.walkInOption}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="person-outline" size={16} color={Colors.textSecondary} />
+              <Text style={styles.walkInOptionText}>Use Walk-in Customer</Text>
+            </TouchableOpacity>
+
+            {isCustomersFetching ? (
+              <View style={styles.customerPickerLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.customerPickerLoadingText}>Loading customers...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredCustomers}
+                keyExtractor={(item: any) => item._id}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.pickerListContent}
+                ListEmptyComponent={
+                  <Text style={styles.pickerEmptyText}>No customers found.</Text>
+                }
+                renderItem={({ item }) => {
+                  const isSelected = selectedCustomer === item._id;
+                  return (
+                    <TouchableOpacity
+                      onPress={() => {
+                        handleSelectCustomer(item._id);
+                        setIsCustomerPickerVisible(false);
+                      }}
+                      style={[
+                        styles.pickerCustomerItem,
+                        isSelected && styles.pickerCustomerItemSelected,
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.pickerCustomerAvatar}>
+                        <Text style={styles.pickerCustomerInitial}>
+                          {item?.name?.charAt(0)?.toUpperCase() || "?"}
+                        </Text>
+                      </View>
+                      <View style={styles.pickerCustomerInfo}>
+                        <Text style={styles.pickerCustomerName} numberOfLines={1}>
+                          {item?.name || "Unnamed Customer"}
+                        </Text>
+                        <Text style={styles.pickerCustomerMeta} numberOfLines={1}>
+                          {item?.mobileNumber || "No mobile"}{" "}
+                          {item?.address ? `• ${item.address}` : ""}
+                        </Text>
+                      </View>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={18} color={Colors.primary} />
+                      ) : null}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create Customer Modal */}
+      <Modal
+        visible={isCreateCustomerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCreateCustomerVisible(false)}
+      >
+        <View style={styles.pickerModalContainer}>
+          <TouchableOpacity
+            style={styles.pickerModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setIsCreateCustomerVisible(false)}
+          />
+          <View style={styles.pickerModalSheet}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Add Customer</Text>
+              <TouchableOpacity
+                onPress={() => setIsCreateCustomerVisible(false)}
+                style={styles.pickerModalCloseButton}
+              >
+                <MaterialIcons name="close" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.createCustomerForm}>
+              <Text style={styles.createCustomerLabel}>Name *</Text>
+              <TextInput
+                value={customerForm.name}
+                onChangeText={(text) =>
+                  setCustomerForm((prev) => ({ ...prev, name: text }))
+                }
+                placeholder="Enter customer name"
+                placeholderTextColor="#9CA3AF"
+                style={styles.createCustomerInput}
+              />
+
+              <Text style={styles.createCustomerLabel}>Mobile Number</Text>
+              <TextInput
+                value={customerForm.mobileNumber}
+                onChangeText={(text) =>
+                  setCustomerForm((prev) => ({
+                    ...prev,
+                    mobileNumber: text.replace(/[^\d]/g, "").slice(0, 10),
+                  }))
+                }
+                placeholder="10-digit mobile number"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                style={styles.createCustomerInput}
+              />
+
+              <Text style={styles.createCustomerLabel}>Address</Text>
+              <TextInput
+                value={customerForm.address}
+                onChangeText={(text) =>
+                  setCustomerForm((prev) => ({ ...prev, address: text }))
+                }
+                placeholder="Address (optional)"
+                placeholderTextColor="#9CA3AF"
+                style={[styles.createCustomerInput, styles.createCustomerInputMultiline]}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.createCustomerActions}>
+              <TouchableOpacity
+                onPress={() => setIsCreateCustomerVisible(false)}
+                style={styles.createCustomerCancelButton}
+              >
+                <Text style={styles.createCustomerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleCreateCustomer}
+                disabled={createCustomerMutation.isPending}
+                style={[
+                  styles.createCustomerSubmitButton,
+                  createCustomerMutation.isPending &&
+                    styles.createCustomerSubmitButtonDisabled,
+                ]}
+              >
+                {createCustomerMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.createCustomerSubmitText}>Create & Select</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Quantity Bottom Sheet */}
       <QuantitySelectorModal
         visible={isQuantityModalVisible}
@@ -1332,43 +1631,73 @@ const styles = StyleSheet.create({
   },
 
   // Customer
-  customersList: {
-    paddingRight: 20,
-    gap: 12,
-  },
-  customerChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 8,
-    paddingRight: 14,
+  customerSelectionCard: {
     backgroundColor: Colors.white,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    borderRadius: 30,
-    gap: 8,
+    padding: 12,
+    gap: 12,
   },
-  customerChipSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}05`,
+  customerSelectionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  customerChipAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  customerSelectionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: `${Colors.primary}10`,
   },
-  customerChipInitial: {
-    fontSize: 14,
-    fontWeight: "600",
+  customerSelectionInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  customerSelectionLabel: {
+    fontSize: 11,
     color: "#6B7280",
+    marginBottom: 2,
   },
-  customerChipText: {
-    fontSize: 13,
-    fontWeight: "500",
+  customerSelectionValue: {
+    fontSize: 15,
+    fontWeight: "600",
     color: "#111827",
   },
-  customerChipTextSelected: {
+  customerSelectionMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  customerClearButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+  },
+  customerActionRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  customerActionButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#F9FAFB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  customerActionButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
     color: Colors.primary,
   },
 
@@ -1389,6 +1718,200 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#111827",
     padding: 0,
+  },
+
+  // Customer Picker + Create Customer Modal
+  pickerModalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  pickerModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.35)",
+  },
+  pickerModalSheet: {
+    maxHeight: "82%",
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  pickerModalCloseButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+  },
+  pickerSearchContainer: {
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    color: "#111827",
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+  walkInOption: {
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 10,
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+  },
+  walkInOptionText: {
+    fontSize: 13,
+    color: "#374151",
+    fontWeight: "500",
+  },
+  customerPickerLoading: {
+    paddingVertical: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  customerPickerLoadingText: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  pickerListContent: {
+    paddingBottom: 10,
+  },
+  pickerEmptyText: {
+    textAlign: "center",
+    color: "#6B7280",
+    fontSize: 13,
+    paddingVertical: 24,
+  },
+  pickerCustomerItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: Colors.white,
+    marginBottom: 8,
+  },
+  pickerCustomerItemSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}08`,
+  },
+  pickerCustomerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+  },
+  pickerCustomerInitial: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  pickerCustomerInfo: {
+    flex: 1,
+  },
+  pickerCustomerName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  pickerCustomerMeta: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  createCustomerForm: {
+    gap: 6,
+    marginBottom: 14,
+  },
+  createCustomerLabel: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  createCustomerInput: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 12,
+    height: 42,
+    color: "#111827",
+    fontSize: 14,
+  },
+  createCustomerInputMultiline: {
+    height: 84,
+    textAlignVertical: "top",
+    paddingTop: 10,
+  },
+  createCustomerActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  createCustomerCancelButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.white,
+  },
+  createCustomerCancelText: {
+    fontSize: 14,
+    color: "#6B7280",
+    fontWeight: "600",
+  },
+  createCustomerSubmitButton: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+  },
+  createCustomerSubmitButtonDisabled: {
+    opacity: 0.7,
+  },
+  createCustomerSubmitText: {
+    fontSize: 14,
+    color: Colors.white,
+    fontWeight: "700",
   },
 
   // Inventory Card

@@ -18,6 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import EntityThumbnail from "../ui/EntityThumbnail";
 import { InventoryService } from "../../services/inventory.service";
 import { Colors, Spacing } from "../../theme";
+import { resolveInventoryPricing } from "../../utils/inventory-pricing";
+import { resolveEntityImage } from "../../utils/image";
 
 const BOTTOM_NAV_HEIGHT = 80;
 type RoleGroup = "staff" | "admin" | "viewer";
@@ -305,8 +307,8 @@ const InventoryCard = ({
   const sourceInfo = getSourceInfo(item.sourceType);
   const plantName = item.plantType?.name || "Unknown Plant";
   const category = item.plantType?.category || "Uncategorized";
-  const sellingPrice = item.plantType?.sellingPrice || 0;
-  const totalValue = sellingPrice * (item.quantity || 0);
+  const pricing = resolveInventoryPricing(item);
+  const thumbnailUri = resolveEntityImage(item?.plantType ?? item);
 
   return (
     <Pressable
@@ -324,7 +326,7 @@ const InventoryCard = ({
       >
         <View style={styles.cardHeader}>
           <EntityThumbnail
-            uri={item.plantType?.imageUrl}
+            uri={thumbnailUri}
             label={plantName}
             size={56}
             style={styles.thumbnail}
@@ -374,6 +376,20 @@ const InventoryCard = ({
                   {formatSourceType(item.sourceType)}
                 </Text>
               </View>
+
+              <View style={styles.detailItem}>
+                <MaterialIcons
+                  name="sell"
+                  size={14}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.detailText}>
+                  Sell:{" "}
+                  {pricing.sellingPrice !== null
+                    ? formatCurrency(pricing.sellingPrice)
+                    : "—"}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -400,15 +416,19 @@ const InventoryCard = ({
           </View>
 
           <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Unit Price</Text>
+            <Text style={styles.priceLabel}>Unit Cost</Text>
             <Text style={styles.priceValue}>
-              {formatCurrency(sellingPrice)}
+              {pricing.unitCost !== null ? formatCurrency(pricing.unitCost) : "—"}
             </Text>
           </View>
 
           <View style={styles.totalValueContainer}>
-            <Text style={styles.totalValueLabel}>Total Value</Text>
-            <Text style={styles.totalValue}>{formatCurrency(totalValue)}</Text>
+            <Text style={styles.totalValueLabel}>Inventory Value</Text>
+            <Text style={styles.totalValue}>
+              {pricing.inventoryValue !== null
+                ? formatCurrency(pricing.inventoryValue)
+                : "—"}
+            </Text>
           </View>
         </View>
 
@@ -581,11 +601,17 @@ export function InventoryListScreen({
         const plantName = item.plantType?.name?.toLowerCase() || "";
         const category = item.plantType?.category?.toLowerCase() || "";
         const sourceType = item.sourceType?.toLowerCase() || "";
+        const pricing = resolveInventoryPricing(item);
+        const unitCost = pricing.unitCost !== null ? String(pricing.unitCost) : "";
+        const sellingPrice =
+          pricing.sellingPrice !== null ? String(pricing.sellingPrice) : "";
         
         return (
           plantName.includes(query) ||
           category.includes(query) ||
-          sourceType.includes(query)
+          sourceType.includes(query) ||
+          unitCost.includes(query) ||
+          sellingPrice.includes(query)
         );
       });
     }
@@ -1278,6 +1304,7 @@ const styles = {
   },
   detailsGrid: {
     flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
     gap: Spacing.md,
     marginTop: 4,
   },

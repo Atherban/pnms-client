@@ -16,9 +16,39 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PlantTypeService } from "../../../services/plant-type.service";
 import { Colors, Spacing } from "../../../theme";
+import type { PlantTypeGrowthStage } from "../../../types/plant.types";
 import { formatErrorMessage } from "../../../utils/error";
 
 const priceRegex = /^\d+(\.\d{1,2})?$/;
+const GROWTH_STAGE_OPTIONS: PlantTypeGrowthStage["stage"][] = [
+  "SEED",
+  "SOWN",
+  "GERMINATED",
+  "HARDENED",
+  "READY_FOR_SALE",
+];
+
+type GrowthStageFormEntry = {
+  stage: PlantTypeGrowthStage["stage"];
+  dayFrom: string;
+  dayTo: string;
+};
+
+const INITIAL_GROWTH_STAGES: GrowthStageFormEntry[] = GROWTH_STAGE_OPTIONS.map(
+  (stage) => ({
+    stage,
+    dayFrom: "",
+    dayTo: "",
+  }),
+);
+const MAX_GROWTH_DAY = 180;
+const DAY_OPTIONS = Array.from({ length: MAX_GROWTH_DAY + 1 }, (_, i) => i);
+
+type DayPickerState = {
+  visible: boolean;
+  stage: PlantTypeGrowthStage["stage"] | null;
+  field: "dayFrom" | "dayTo";
+};
 
 export default function CreatePlantType() {
   const router = useRouter();
@@ -31,22 +61,25 @@ export default function CreatePlantType() {
   const [sellingPrice, setSellingPrice] = useState("");
   const [minStockLevel, setMinStockLevel] = useState("");
   const [defaultCostPrice, setDefaultCostPrice] = useState("");
-  const [growthStages, setGrowthStages] = useState("");
+  const [growthStages, setGrowthStages] = useState<GrowthStageFormEntry[]>(
+    INITIAL_GROWTH_STAGES,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [varietyOpen, setVarietyOpen] = useState(false);
+  const [dayPicker, setDayPicker] = useState<DayPickerState>({
+    visible: false,
+    stage: null,
+    field: "dayFrom",
+  });
 
   const CATEGORY_OPTIONS = ["VEGETABLE", "FLOWER", "FRUIT", "HERB"];
 
-  const VARIETY_OPTIONS: Record<string, string[]> = {
-    VEGETABLE: ["Tomato", "Cucumber", "Spinach", "Carrot", "Okra"],
-    FLOWER: ["Rose", "Lily", "Marigold", "Jasmine", "Sunflower"],
-    FRUIT: ["Mango", "Apple", "Banana", "Papaya", "Guava"],
-    HERB: ["Basil", "Mint", "Coriander", "Parsley", "Thyme"],
-  };
-
-  const availableVarieties =
-    category && VARIETY_OPTIONS[category] ? VARIETY_OPTIONS[category] : [];
+  const formatStageLabel = (stage: PlantTypeGrowthStage["stage"]) =>
+    stage
+      .toLowerCase()
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
 
   const parsedPrice = useMemo(() => {
     const trimmed = sellingPrice.trim();
@@ -77,14 +110,46 @@ export default function CreatePlantType() {
     return value >= 0 ? value : null;
   }, [defaultCostPrice]);
 
-  const parsedGrowthStages = useMemo(
-    () =>
-      growthStages
-        .split(",")
-        .map((entry) => entry.trim())
-        .filter(Boolean),
-    [growthStages],
-  );
+  const parsedGrowthStages = useMemo(() => {
+    let hasAnyValues = false;
+    const parsed: PlantTypeGrowthStage[] = [];
+
+    for (const entry of growthStages) {
+      const fromText = entry.dayFrom.trim();
+      const toText = entry.dayTo.trim();
+      const hasInput = Boolean(fromText || toText);
+
+      if (!hasInput) continue;
+      hasAnyValues = true;
+
+      if (!fromText || !toText) return null;
+
+      const dayFrom = Number(fromText);
+      const dayTo = Number(toText);
+
+      if (
+        !Number.isInteger(dayFrom) ||
+        !Number.isInteger(dayTo) ||
+        dayFrom < 0 ||
+        dayTo < 0 ||
+        dayTo < dayFrom
+      ) {
+        return null;
+      }
+
+      parsed.push({ stage: entry.stage, dayFrom, dayTo });
+    }
+
+    return hasAnyValues ? parsed : undefined;
+  }, [growthStages]);
+
+  const parsedVariety = useMemo(() => {
+    const trimmed = variety.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.length < 2 || trimmed.length > 50) return null;
+    const varietyRegex = /^[a-zA-Z0-9][a-zA-Z0-9\s\-'/().,&]*$/;
+    return varietyRegex.test(trimmed) ? trimmed : null;
+  }, [variety]);
 
   const mutation = useMutation({
     mutationFn: PlantTypeService.create,
@@ -130,6 +195,20 @@ export default function CreatePlantType() {
       Alert.alert("Validation Error", "Enter a valid default cost price");
       return;
     }
+    if (variety.trim() && parsedVariety === null) {
+      Alert.alert(
+        "Validation Error",
+        "Variety must be 2-50 characters and use only letters, numbers, spaces, or - ' / ( ) . , &",
+      );
+      return;
+    }
+    if (parsedGrowthStages === null) {
+      Alert.alert(
+        "Validation Error",
+        "Growth stages must use whole numbers, dayFrom/dayTo cannot be empty, day values must be >= 0, and dayTo must be >= dayFrom",
+      );
+      return;
+    }
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsSubmitting(true);
@@ -137,12 +216,12 @@ export default function CreatePlantType() {
     mutation.mutate({
       name: name.trim(),
       category: category.trim(),
-      variety: variety.trim() || undefined,
+      variety: parsedVariety,
       lifecycleDays: parsedLifecycleDays ?? undefined,
       sellingPrice: parsedPrice,
       minStockLevel: parsedMinStockLevel ?? undefined,
       defaultCostPrice: parsedDefaultCostPrice ?? undefined,
-      growthStages: parsedGrowthStages.length > 0 ? parsedGrowthStages : undefined,
+      growthStages: parsedGrowthStages,
     });
   };
 
@@ -153,7 +232,82 @@ export default function CreatePlantType() {
     (!lifecycleDays.trim() || parsedLifecycleDays !== null) &&
     (!minStockLevel.trim() || parsedMinStockLevel !== null) &&
     (!defaultCostPrice.trim() || parsedDefaultCostPrice !== null) &&
+    (!variety.trim() || parsedVariety !== null) &&
+    parsedGrowthStages !== null &&
     !isSubmitting;
+
+  const selectedDayValue = useMemo(() => {
+    if (!dayPicker.stage) return null;
+    const matched = growthStages.find((entry) => entry.stage === dayPicker.stage);
+    if (!matched) return null;
+    const value = matched[dayPicker.field];
+    return value ? Number(value) : null;
+  }, [dayPicker.field, dayPicker.stage, growthStages]);
+
+  const handleGrowthStageChange = (
+    stage: PlantTypeGrowthStage["stage"],
+    field: "dayFrom" | "dayTo",
+    value: string,
+  ) => {
+    const numericValue = value.replace(/[^\d]/g, "");
+    setGrowthStages((prev) =>
+      prev.map((item) => {
+        if (item.stage !== stage) return item;
+        const next = { ...item, [field]: numericValue };
+        if (numericValue) {
+          const num = Number(numericValue);
+          if (field === "dayFrom" && next.dayTo && num > Number(next.dayTo)) {
+            next.dayTo = numericValue;
+          }
+          if (field === "dayTo" && next.dayFrom && num < Number(next.dayFrom)) {
+            next.dayFrom = numericValue;
+          }
+        }
+        return next;
+      }),
+    );
+  };
+
+  const handleGrowthStageShift = (
+    stage: PlantTypeGrowthStage["stage"],
+    field: "dayFrom" | "dayTo",
+    delta: number,
+  ) => {
+    const current = growthStages.find((entry) => entry.stage === stage)?.[field] ?? "";
+    const nextValue = Math.max(
+      0,
+      Math.min(MAX_GROWTH_DAY, Number(current || 0) + delta),
+    );
+    handleGrowthStageChange(stage, field, String(nextValue));
+  };
+
+  const handleGrowthStageClear = (
+    stage: PlantTypeGrowthStage["stage"],
+    field: "dayFrom" | "dayTo",
+  ) => {
+    setGrowthStages((prev) =>
+      prev.map((item) =>
+        item.stage === stage ? { ...item, [field]: "" } : item,
+      ),
+    );
+  };
+
+  const openDayPicker = (
+    stage: PlantTypeGrowthStage["stage"],
+    field: "dayFrom" | "dayTo",
+  ) => {
+    setDayPicker({ visible: true, stage, field });
+  };
+
+  const closeDayPicker = () => {
+    setDayPicker({ visible: false, stage: null, field: "dayFrom" });
+  };
+
+  const handleDaySelect = (day: number) => {
+    if (!dayPicker.stage) return;
+    handleGrowthStageChange(dayPicker.stage, dayPicker.field, String(day));
+    closeDayPicker();
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -224,29 +378,19 @@ export default function CreatePlantType() {
               <MaterialIcons name="spa" size={18} color={Colors.text} />
               <Text style={styles.inputLabelText}>Variety (Optional)</Text>
             </View>
-            <Pressable
-              onPress={() => setVarietyOpen(true)}
-              disabled={!category}
-              style={({ pressed }) => [
-                styles.selector,
-                !category && styles.selectorDisabled,
-                pressed && styles.selectorPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.selectorText,
-                  !variety && styles.selectorPlaceholder,
-                ]}
-              >
-                {variety || (category ? "Select variety" : "Select category")}
+            <TextInput
+              value={variety}
+              onChangeText={setVariety}
+              placeholder="e.g. Cherry Tomato"
+              placeholderTextColor={Colors.textTertiary}
+              style={[styles.input, variety.trim() && parsedVariety === null && styles.inputError]}
+              maxLength={50}
+            />
+            {variety.trim() && parsedVariety === null && (
+              <Text style={styles.validationText}>
+                Use 2-50 chars with letters, numbers, spaces, or - &apos; / ( ) . , &
               </Text>
-              <MaterialIcons
-                name="keyboard-arrow-down"
-                size={20}
-                color={Colors.textSecondary}
-              />
-            </Pressable>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
@@ -312,15 +456,106 @@ export default function CreatePlantType() {
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
               <MaterialIcons name="timeline" size={18} color={Colors.text} />
-              <Text style={styles.inputLabelText}>Growth Stages (comma separated)</Text>
+              <Text style={styles.inputLabelText}>Growth Stages (Optional)</Text>
             </View>
-            <TextInput
-              value={growthStages}
-              onChangeText={setGrowthStages}
-              placeholder="Seedling, Vegetative, Flowering"
-              placeholderTextColor={Colors.textTertiary}
-              style={styles.input}
-            />
+            <Text style={styles.growthStageHint}>
+              Pick day ranges by stage. Use day selector or +/- controls.
+            </Text>
+            <View style={styles.growthStagesCard}>
+              {growthStages.map((entry) => (
+                <View key={entry.stage} style={styles.growthStageRow}>
+                  <Text style={styles.growthStageName}>{formatStageLabel(entry.stage)}</Text>
+                  <View style={styles.growthStageInputs}>
+                    <View style={styles.growthStageFieldGroup}>
+                      <Text style={styles.growthStageFieldLabel}>From Day</Text>
+                      <Pressable
+                        onPress={() => openDayPicker(entry.stage, "dayFrom")}
+                        style={[
+                          styles.growthStageDayButton,
+                          parsedGrowthStages === null && styles.inputError,
+                        ]}
+                      >
+                        <MaterialIcons name="event" size={15} color={Colors.primary} />
+                        <Text
+                          style={[
+                            styles.growthStageDayButtonText,
+                            !entry.dayFrom && styles.growthStageDayButtonPlaceholder,
+                          ]}
+                        >
+                          {entry.dayFrom ? `Day ${entry.dayFrom}` : "Select"}
+                        </Text>
+                      </Pressable>
+                      <View style={styles.growthStageAdjustRow}>
+                        <Pressable
+                          onPress={() => handleGrowthStageShift(entry.stage, "dayFrom", -1)}
+                          style={styles.growthStageAdjustButton}
+                        >
+                          <MaterialIcons name="remove" size={14} color={Colors.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleGrowthStageClear(entry.stage, "dayFrom")}
+                          style={styles.growthStageClearButton}
+                        >
+                          <Text style={styles.growthStageClearButtonText}>Clear</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleGrowthStageShift(entry.stage, "dayFrom", 1)}
+                          style={styles.growthStageAdjustButton}
+                        >
+                          <MaterialIcons name="add" size={14} color={Colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    </View>
+                    <View style={styles.growthStageFieldGroup}>
+                      <Text style={styles.growthStageFieldLabel}>To Day</Text>
+                      <Pressable
+                        onPress={() => openDayPicker(entry.stage, "dayTo")}
+                        style={[
+                          styles.growthStageDayButton,
+                          parsedGrowthStages === null && styles.inputError,
+                        ]}
+                      >
+                        <MaterialIcons name="event" size={15} color={Colors.primary} />
+                        <Text
+                          style={[
+                            styles.growthStageDayButtonText,
+                            !entry.dayTo && styles.growthStageDayButtonPlaceholder,
+                          ]}
+                        >
+                          {entry.dayTo ? `Day ${entry.dayTo}` : "Select"}
+                        </Text>
+                      </Pressable>
+                      <View style={styles.growthStageAdjustRow}>
+                        <Pressable
+                          onPress={() => handleGrowthStageShift(entry.stage, "dayTo", -1)}
+                          style={styles.growthStageAdjustButton}
+                        >
+                          <MaterialIcons name="remove" size={14} color={Colors.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleGrowthStageClear(entry.stage, "dayTo")}
+                          style={styles.growthStageClearButton}
+                        >
+                          <Text style={styles.growthStageClearButtonText}>Clear</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleGrowthStageShift(entry.stage, "dayTo", 1)}
+                          style={styles.growthStageAdjustButton}
+                        >
+                          <MaterialIcons name="add" size={14} color={Colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+            {parsedGrowthStages === null && (
+              <Text style={styles.validationText}>
+                Fill both day fields, use whole numbers only, keep values &gt;= 0, and set To
+                &gt;= From.
+              </Text>
+            )}
           </View>
 
           <View style={styles.actionsContainer}>
@@ -362,7 +597,6 @@ export default function CreatePlantType() {
                 key={option}
                 onPress={() => {
                   setCategory(option);
-                  setVariety("");
                   setCategoryOpen(false);
                 }}
                 style={styles.sheetOption}
@@ -381,41 +615,63 @@ export default function CreatePlantType() {
         </Pressable>
       </Modal>
 
-      <Modal transparent visible={varietyOpen} animationType="slide">
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setVarietyOpen(false)}
-        >
+      <Modal transparent visible={dayPicker.visible} animationType="slide">
+        <Pressable style={styles.modalBackdrop} onPress={closeDayPicker}>
           <Pressable style={styles.sheet} onPress={() => null}>
-            <Text style={styles.sheetTitle}>Select Variety</Text>
-            {availableVarieties.length === 0 ? (
-              <Text style={styles.sheetEmpty}>
-                No varieties available for this category.
-              </Text>
-            ) : (
-              availableVarieties.map((option) => (
+            <Text style={styles.sheetTitle}>
+              Select {dayPicker.field === "dayFrom" ? "Start Day" : "End Day"}
+            </Text>
+            <Text style={styles.sheetSubTitle}>
+              {dayPicker.stage ? formatStageLabel(dayPicker.stage) : ""}
+            </Text>
+            <View style={styles.quickDayRow}>
+              {[7, 14, 21, 30, 45, 60, 90].map((day) => (
                 <Pressable
-                  key={option}
-                  onPress={() => {
-                    setVariety(option);
-                    setVarietyOpen(false);
-                  }}
-                  style={styles.sheetOption}
+                  key={day}
+                  onPress={() => handleDaySelect(day)}
+                  style={[
+                    styles.quickDayChip,
+                    selectedDayValue === day && styles.quickDayChipSelected,
+                  ]}
                 >
-                  <Text style={styles.sheetOptionText}>{option}</Text>
-                  {variety === option && (
-                    <MaterialIcons
-                      name="check"
-                      size={18}
-                      color={Colors.primary}
-                    />
-                  )}
+                  <Text
+                    style={[
+                      styles.quickDayChipText,
+                      selectedDayValue === day && styles.quickDayChipTextSelected,
+                    ]}
+                  >
+                    {day}
+                  </Text>
                 </Pressable>
-              ))
-            )}
+              ))}
+            </View>
+            <ScrollView style={styles.dayGridScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.dayGrid}>
+                {DAY_OPTIONS.map((day) => (
+                  <Pressable
+                    key={day}
+                    onPress={() => handleDaySelect(day)}
+                    style={[
+                      styles.dayCell,
+                      selectedDayValue === day && styles.dayCellSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayCellText,
+                        selectedDayValue === day && styles.dayCellTextSelected,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
+
     </SafeAreaView>
   );
 }
@@ -497,6 +753,9 @@ const styles = {
     color: Colors.text,
     backgroundColor: Colors.background,
   },
+  inputError: {
+    borderColor: Colors.error,
+  },
   selector: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -522,6 +781,96 @@ const styles = {
   selectorPlaceholder: {
     color: Colors.textTertiary,
     fontWeight: "400" as const,
+  },
+  validationText: {
+    marginTop: Spacing.xs,
+    fontSize: 12,
+    color: Colors.error,
+  },
+  growthStageHint: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  growthStagesCard: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    backgroundColor: Colors.background,
+    padding: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  growthStageRow: {
+    gap: Spacing.xs,
+  },
+  growthStageName: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: "700" as const,
+    letterSpacing: 0.5,
+  },
+  growthStageInputs: {
+    flexDirection: "row" as const,
+    gap: Spacing.sm,
+  },
+  growthStageFieldGroup: {
+    flex: 1,
+    gap: 6,
+  },
+  growthStageFieldLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    fontWeight: "600" as const,
+  },
+  growthStageDayButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surface,
+  },
+  growthStageDayButtonText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: "600" as const,
+  },
+  growthStageDayButtonPlaceholder: {
+    color: Colors.textTertiary,
+    fontWeight: "400" as const,
+  },
+  growthStageAdjustRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    gap: Spacing.xs,
+  },
+  growthStageAdjustButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: Colors.surface,
+  },
+  growthStageClearButton: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    paddingVertical: 5,
+    alignItems: "center" as const,
+    backgroundColor: Colors.surface,
+  },
+  growthStageClearButtonText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: "600" as const,
   },
   actionsContainer: {
     flexDirection: "row" as const,
@@ -576,7 +925,12 @@ const styles = {
     fontSize: 16,
     fontWeight: "700" as const,
     color: Colors.text,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  sheetSubTitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.sm,
   },
   sheetOption: {
     flexDirection: "row" as const,
@@ -594,5 +948,62 @@ const styles = {
     color: Colors.textSecondary,
     fontSize: 14,
     paddingVertical: Spacing.sm,
+  },
+  quickDayRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  quickDayChip: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    backgroundColor: Colors.surface,
+  },
+  quickDayChipSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "12",
+  },
+  quickDayChipText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: "600" as const,
+  },
+  quickDayChipTextSelected: {
+    color: Colors.primary,
+  },
+  dayGridScroll: {
+    maxHeight: 300,
+  },
+  dayGrid: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  dayCell: {
+    width: 40,
+    height: 36,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: Colors.surface,
+  },
+  dayCellSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "15",
+  },
+  dayCellText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: "600" as const,
+  },
+  dayCellTextSelected: {
+    color: Colors.primary,
   },
 };

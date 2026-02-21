@@ -23,6 +23,7 @@ import { SeedService } from "../../../services/seed.service";
 import { Colors } from "../../../theme";
 import { PlantType } from "../../../types/plant.types";
 import { formatErrorMessage } from "../../../utils/error";
+import { resolveEntityImage } from "../../../utils/image";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -73,7 +74,7 @@ const PlantTypeSelector = ({
         testID={`plant-type-${item._id}`}
       >
         <EntityThumbnail
-          uri={item.imageUrl}
+          uri={resolveEntityImage(item)}
           label={item.name}
           size={44}
           iconName="spa"

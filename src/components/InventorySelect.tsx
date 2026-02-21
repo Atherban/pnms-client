@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import EntityThumbnail from "./ui/EntityThumbnail";
 import { Colors, Spacing } from "../theme";
+import { resolveEntityImage } from "../utils/image";
 
 export default function InventorySelect({
   item,
@@ -31,7 +32,7 @@ export default function InventorySelect({
         }}
       >
         <EntityThumbnail
-          uri={item.plantType?.imageUrl}
+          uri={resolveEntityImage(item?.plantType ?? item)}
           label={item.plantType?.name}
           size={36}
         />

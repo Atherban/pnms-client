@@ -2,8 +2,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,11 +15,12 @@ import {
   ScrollView,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PlantTypeService } from "../../services/plant-type.service";
 import { Colors, Spacing } from "../../theme";
+import { resolveEntityImage } from "../../utils/image";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
@@ -133,6 +134,40 @@ const getPriceRange = (price: number): PriceRange | null => {
 
 const formatCurrency = (value: number) => {
   return `₹${value.toLocaleString("en-IN")}`;
+};
+
+const formatEnumLabel = (value?: string) => {
+  if (!value) return "—";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
+const getGrowthStageSummary = (growthStages: any) => {
+  if (!Array.isArray(growthStages) || growthStages.length === 0) {
+    return { count: 0, rangeLabel: "Not configured" };
+  }
+
+  const validStages = growthStages.filter(
+    (stage: any) =>
+      stage &&
+      typeof stage.stage === "string" &&
+      typeof stage.dayFrom === "number" &&
+      typeof stage.dayTo === "number",
+  );
+
+  if (validStages.length === 0) {
+    return { count: 0, rangeLabel: "Not configured" };
+  }
+
+  const minDayFrom = Math.min(...validStages.map((stage: any) => stage.dayFrom));
+  const maxDayTo = Math.max(...validStages.map((stage: any) => stage.dayTo));
+  return {
+    count: validStages.length,
+    rangeLabel: `Day ${minDayFrom}-${maxDayTo}`,
+  };
 };
 
 // ==================== FILTER SECTION COMPONENT ====================
@@ -724,9 +759,11 @@ const PlantTypeCard = ({
   isDeletePending,
 }: PlantTypeCardProps) => {
   const price = Number(item.sellingPrice ?? 0);
+  const defaultCostPrice = Number(item.defaultCostPrice ?? 0);
   const lifecycleDays = Number(item.lifecycleDays ?? 0);
+  const minStockLevel = Number(item.minStockLevel ?? 0);
   const lifecycleCategory = getLifecycleCategory(lifecycleDays);
-  const priceRange = getPriceRange(price);
+  const growthStages = getGrowthStageSummary(item.growthStages);
 
   return (
     <Pressable
@@ -741,7 +778,7 @@ const PlantTypeCard = ({
       >
         <View style={styles.cardHeader}>
           <EntityThumbnail
-            uri={item.imageUrl}
+            uri={resolveEntityImage(item)}
             label={item.name}
             size={56}
             iconName="local-florist"
@@ -787,7 +824,7 @@ const PlantTypeCard = ({
                   color={Colors.textSecondary}
                 />
                 <Text style={styles.detailText} numberOfLines={1}>
-                  {item.category || "Uncategorized"}
+                  {formatEnumLabel(item.category)}
                 </Text>
               </View>
 
@@ -803,46 +840,55 @@ const PlantTypeCard = ({
                   </Text>
                 </View>
               )}
-            </View>
-
-            {priceRange && (
-              <View style={styles.priceRangeIndicator}>
+              <View style={styles.detailItem}>
                 <MaterialIcons
-                  name={PRICE_RANGES[priceRange].icon as any}
-                  size={12}
-                  color={PRICE_RANGES[priceRange].color}
+                  name="timeline"
+                  size={14}
+                  color={Colors.textSecondary}
                 />
-                <Text
-                  style={[
-                    styles.priceRangeText,
-                    { color: PRICE_RANGES[priceRange].color },
-                  ]}
-                >
-                  {PRICE_RANGES[priceRange].label}
+                <Text style={styles.detailText} numberOfLines={1}>
+                  {growthStages.count > 0
+                    ? `${growthStages.count} stages`
+                    : "Stages not set"}
                 </Text>
               </View>
-            )}
+            </View>
           </View>
         </View>
 
         <View style={styles.cardDivider} />
 
         <View style={styles.cardFooter}>
-          <View style={styles.lifecycleContainer}>
-            <Text style={styles.lifecycleLabel}>Lifecycle</Text>
-            <View style={styles.lifecycleValueContainer}>
-              <MaterialIcons name="timer" size={16} color={Colors.primary} />
-              <Text style={styles.lifecycleValue}>
-                {lifecycleDays > 0 ? `${lifecycleDays} days` : "—"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Selling Price</Text>
-            <Text style={styles.priceValue}>
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Selling Price</Text>
+            <Text style={styles.metricValueSuccess}>
               {price > 0 ? formatCurrency(price) : "—"}
             </Text>
+          </View>
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Default Cost</Text>
+            <Text style={styles.metricValue}>
+              {defaultCostPrice > 0 ? formatCurrency(defaultCostPrice) : "—"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cardFooterSecondary}>
+          <View style={styles.infoPill}>
+            <MaterialIcons name="timer" size={14} color={Colors.primary} />
+            <Text style={styles.infoPillText}>
+              {lifecycleDays > 0 ? `${lifecycleDays} days` : "Lifecycle —"}
+            </Text>
+          </View>
+          <View style={styles.infoPill}>
+            <MaterialIcons name="inventory-2" size={14} color={Colors.primary} />
+            <Text style={styles.infoPillText}>
+              {minStockLevel > 0 ? `Min ${minStockLevel}` : "Min stock —"}
+            </Text>
+          </View>
+          <View style={styles.infoPill}>
+            <MaterialIcons name="timeline" size={14} color={Colors.primary} />
+            <Text style={styles.infoPillText}>{growthStages.rangeLabel}</Text>
           </View>
         </View>
 
@@ -1030,7 +1076,8 @@ export function PlantTypesViewScreen({
     onError: (deleteError: any) => {
       Alert.alert(
         "Delete failed",
-        deleteError?.message || "Unable to delete plant type. Please try again.",
+        deleteError?.message ||
+          "Unable to delete plant type. Please try again.",
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
@@ -1148,12 +1195,27 @@ export function PlantTypesViewScreen({
         const category = item.category?.toLowerCase() || "";
         const variety = item.variety?.toLowerCase() || "";
         const description = item.description?.toLowerCase() || "";
+        const lifecycle = String(item.lifecycleDays ?? "");
+        const minStock = String(item.minStockLevel ?? "");
+        const sellingPrice = String(item.sellingPrice ?? "");
+        const defaultCostPrice = String(item.defaultCostPrice ?? "");
+        const growthStageText = Array.isArray(item.growthStages)
+          ? item.growthStages
+              .map((stage: any) => String(stage?.stage ?? ""))
+              .join(" ")
+              .toLowerCase()
+          : "";
 
         return (
           name.includes(query) ||
           category.includes(query) ||
           variety.includes(query) ||
-          description.includes(query)
+          description.includes(query) ||
+          lifecycle.includes(query) ||
+          minStock.includes(query) ||
+          sellingPrice.includes(query) ||
+          defaultCostPrice.includes(query) ||
+          growthStageText.includes(query)
         );
       });
     }
@@ -1223,10 +1285,13 @@ export function PlantTypesViewScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
-  const handleItemPress = useCallback((itemId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/${`(${routeGroup})`}/plants/${itemId}` as any);
-  }, [routeGroup, router]);
+  const handleItemPress = useCallback(
+    (itemId: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.push(`/${`(${routeGroup})`}/plants/${itemId}` as any);
+    },
+    [routeGroup, router],
+  );
 
   const handleCreatePress = useCallback(() => {
     router.push(`/${`(${routeGroup})`}/plants/create` as any);
@@ -2164,6 +2229,7 @@ const styles = {
   },
   detailsGrid: {
     flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
     gap: Spacing.md,
     marginTop: 4,
   },
@@ -2178,16 +2244,6 @@ const styles = {
     color: Colors.textSecondary,
     flex: 1,
   },
-  priceRangeIndicator: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    marginTop: 4,
-  },
-  priceRangeText: {
-    fontSize: 11,
-    fontWeight: "600" as const,
-  },
   cardDivider: {
     height: 1,
     backgroundColor: Colors.borderLight,
@@ -2195,40 +2251,48 @@ const styles = {
   },
   cardFooter: {
     flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
+    gap: Spacing.md,
     alignItems: "center" as const,
   },
-  lifecycleContainer: {
+  metricBlock: {
     flex: 1,
   },
-  lifecycleLabel: {
+  metricLabel: {
     fontSize: 11,
     color: Colors.textTertiary,
     marginBottom: 2,
   },
-  lifecycleValueContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
+  metricValue: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: Colors.text,
   },
-  lifecycleValue: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.primary,
-  },
-  priceContainer: {
-    flex: 1,
-    alignItems: "flex-end" as const,
-  },
-  priceLabel: {
-    fontSize: 11,
-    color: Colors.textTertiary,
-    marginBottom: 2,
-  },
-  priceValue: {
+  metricValueSuccess: {
     fontSize: 16,
     fontWeight: "700" as const,
     color: Colors.success,
+  },
+  cardFooterSecondary: {
+    marginTop: Spacing.sm,
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: Spacing.xs,
+  },
+  infoPill: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.surface,
+  },
+  infoPillText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: "500" as const,
   },
   descriptionContainer: {
     marginTop: Spacing.sm,

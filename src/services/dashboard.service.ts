@@ -39,16 +39,10 @@ const toLocalDateKey = (value: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const startOfTodayISO = () => {
+const todayDateOnly = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-};
-
-const endOfTodayISO = () => {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d.toISOString();
+  return toLocalDateKey(d);
 };
 
 /* ---------------- Service ---------------- */
@@ -61,8 +55,8 @@ export const DashboardService = {
         SeedService.getAll(),
         SalesService.getAll(),
         ProfitService.getProfit({
-          startDate: startOfTodayISO(),
-          endDate: endOfTodayISO(),
+          startDate: todayDateOnly(),
+          endDate: todayDateOnly(),
         }),
       ]);
 

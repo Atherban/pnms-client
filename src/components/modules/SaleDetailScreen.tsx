@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import EntityThumbnail from "../ui/EntityThumbnail";
 import { SalesService } from "../../services/sales.service";
 import { Colors, Spacing } from "../../theme";
+import { resolveEntityImage } from "../../utils/image";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -139,7 +140,13 @@ const getItemDisplayData = (item: any) => {
   const unitPrice =
     Number(item?.priceAtSale ?? item?.unitPrice ?? item?.price ?? 0) || 0;
   const lineTotal = unitPrice * quantity;
-  const thumbnail = plantType?.imageUrl;
+  const thumbnail =
+    resolveEntityImage(plantType) ??
+    resolveEntityImage(inventoryObj?.plantType) ??
+    resolveEntityImage(inventoryIdObj?.plantType) ??
+    resolveEntityImage(item?.inventory) ??
+    resolveEntityImage(item?.inventoryId) ??
+    resolveEntityImage(item);
 
   return { plantName, category, quantity, unitPrice, lineTotal, thumbnail };
 };
