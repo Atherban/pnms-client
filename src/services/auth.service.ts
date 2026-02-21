@@ -63,6 +63,12 @@ export const AuthService = {
     return await getUser();
   },
 
+  async getProfile(): Promise<AuthUser> {
+    const response = await api.get(apiPath("/auth/profile"));
+    const data = unwrap<any>(response);
+    return data?.data ?? data?.user ?? data;
+  },
+
   /* Check if user is authenticated */
   async isAuthenticated(): Promise<boolean> {
     const token = await getToken();

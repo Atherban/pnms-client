@@ -1,10 +1,11 @@
 // app/(staff)/sales/create.tsx
 import { MaterialIcons } from "@expo/vector-icons";
+import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,7 +33,7 @@ import { formatErrorMessage } from "../../../utils/error";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% of screen height for better visibility
-const TAB_BAR_GUARD_HEIGHT = 76;
+const CART_FOOTER_BOTTOM_GAP = -12;
 
 // ==================== CONSTANTS & TYPES ====================
 
@@ -743,7 +744,11 @@ export default function StaffSalesCreate() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
-  const bottomNavOffset = Math.max(TAB_BAR_GUARD_HEIGHT, insets.bottom + 56);
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+  const cartFooterBottomOffset =
+    (tabBarHeight > 0 ? tabBarHeight : 0) + CART_FOOTER_BOTTOM_GAP;
+  const cartFooterInnerPadding =
+    tabBarHeight > 0 ? 16 : Math.max(insets.bottom + 4, 16);
 
   // State
   const [searchQuery, setSearchQuery] = useState("");
@@ -828,9 +833,9 @@ export default function StaffSalesCreate() {
     return { subtotal, totalItems };
   }, [cart]);
   const cartFooterHeight = useMemo(() => {
-    const baseHeight = 250;
-    const perItemHeight = 72;
-    return Math.min(440, baseHeight + cart.length * perItemHeight);
+    const baseHeight = 254;
+    const perItemHeight = 40;
+    return Math.min(400, baseHeight + cart.length * perItemHeight);
   }, [cart.length]);
 
   // Mutation
@@ -852,6 +857,11 @@ export default function StaffSalesCreate() {
         "✅ Success",
         `Sale completed! Total: ${formatCurrency(sale?.totalAmount ?? 0)}`,
         [
+          {
+            text: "View Bill",
+            onPress: () =>
+              sale?._id && router.push(`/(staff)/sales/bill/${sale._id}`),
+          },
           {
             text: "View Sale",
             onPress: () =>
@@ -965,7 +975,7 @@ export default function StaffSalesCreate() {
   if (error) return <ErrorState error={error} onRetry={refetch} />;
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
@@ -998,8 +1008,17 @@ export default function StaffSalesCreate() {
         contentContainerStyle={[
           styles.listContent,
           cart.length > 0
-            ? { paddingBottom: cartFooterHeight + bottomNavOffset + 24 }
-            : { paddingBottom: 20 + bottomNavOffset },
+            ? {
+                paddingBottom:
+                  cartFooterHeight +
+                  cartFooterBottomOffset +
+                  cartFooterInnerPadding +
+                  24,
+              }
+            : {
+                paddingBottom:
+                  20 + cartFooterBottomOffset + cartFooterInnerPadding,
+              },
         ]}
         ListHeaderComponent={
           <>
@@ -1110,8 +1129,8 @@ export default function StaffSalesCreate() {
           style={[
             styles.cartFooter,
             {
-              bottom: bottomNavOffset,
-              paddingBottom: 82 + insets.bottom,
+              bottom: cartFooterBottomOffset,
+              paddingBottom: cartFooterInnerPadding,
               maxHeight: cartFooterHeight,
             },
           ]}
@@ -1262,6 +1281,7 @@ const styles = StyleSheet.create({
 
   // List Content
   listContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 24,
@@ -1458,7 +1478,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
@@ -1486,7 +1506,7 @@ const styles = StyleSheet.create({
     color: "#1F2937",
   },
   cartItemsSection: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   cartItemsHeader: {
     flexDirection: "row",
@@ -1505,13 +1525,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   cartItemsList: {
-    maxHeight: 170,
+    maxHeight: 150,
   },
   cartSummary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   cartSummaryLabel: {
     fontSize: 12,
@@ -1538,6 +1558,7 @@ const styles = StyleSheet.create({
   submitButton: {
     borderRadius: 12,
     overflow: "hidden",
+    marginTop: 4,
   },
   submitGradient: {
     height: 48,

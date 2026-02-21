@@ -8,7 +8,6 @@ import { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Platform,
   ScrollView,
   Text,
@@ -26,7 +25,6 @@ import { PlantType } from "../../../types/plant.types";
 import { formatErrorMessage } from "../../../utils/error";
 
 const BOTTOM_NAV_HEIGHT = 80;
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 // ==================== PLANT TYPE SELECTOR ====================
 
@@ -478,7 +476,7 @@ export default function StaffSeedCreate() {
   // Loading state
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -487,7 +485,7 @@ export default function StaffSeedCreate() {
   // Error state
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <ErrorState
           message={
             (error as any)?.message ||
@@ -510,7 +508,7 @@ export default function StaffSeedCreate() {
     purchaseDate.length > 0; // Purchase date is now required
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Fixed Blue Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
@@ -518,7 +516,7 @@ export default function StaffSeedCreate() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <View style={styles.headerContent}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={handleBack}
@@ -538,7 +536,7 @@ export default function StaffSeedCreate() {
 
             <View style={styles.headerRight} />
           </View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
 
       {/* Form Content - ScrollView with all content including footer */}
@@ -861,6 +859,7 @@ const styles = {
 
   // Scroll Content
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
   },
@@ -1142,7 +1141,8 @@ const styles = {
     paddingHorizontal: 0,
     paddingVertical: 8,
     gap: 12,
-    marginBottom: BOTTOM_NAV_HEIGHT,
+    marginTop: "auto" as const,
+    marginBottom: 0,
   },
   cancelButton: {
     flex: 1,

@@ -36,7 +36,8 @@ const SeedCard = ({ seed, isSelected, onSelect }: SeedCardProps) => {
   const getSeedStock = (seed?: Seed) => {
     const totalPurchased = Number(seed?.totalPurchased ?? 0);
     const seedsUsed = Number(seed?.seedsUsed ?? 0);
-    return totalPurchased - seedsUsed;
+    const discardedSeeds = Number(seed?.discardedSeeds ?? 0);
+    return Math.max(0, totalPurchased - seedsUsed - discardedSeeds);
   };
 
   const stock = getSeedStock(seed);
@@ -209,7 +210,7 @@ const FormField = ({
       />
 
       {error ? (
-        <View style={styles.errorContainer}>
+        <View style={styles.fieldErrorContainer}>
           <MaterialIcons name="error" size={14} color={Colors.error} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -248,7 +249,7 @@ const ErrorState = ({ message, onRetry, onBack }: ErrorStateProps) => (
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
     >
-      <SafeAreaView edges={["top"]} style={styles.errorHeaderContent}>
+      <View style={styles.errorHeaderContent}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.errorBackButton}
@@ -258,7 +259,7 @@ const ErrorState = ({ message, onRetry, onBack }: ErrorStateProps) => (
         </TouchableOpacity>
         <Text style={styles.errorHeaderTitle}>Record Sowing</Text>
         <View style={styles.errorHeaderSpacer} />
-      </SafeAreaView>
+      </View>
     </LinearGradient>
 
     <View style={styles.errorContainer}>
@@ -324,7 +325,8 @@ export default function StaffSowingCreate() {
   const getSeedStock = (seed?: Seed) => {
     const totalPurchased = Number(seed?.totalPurchased ?? 0);
     const seedsUsed = Number(seed?.seedsUsed ?? 0);
-    return totalPurchased - seedsUsed;
+    const discardedSeeds = Number(seed?.discardedSeeds ?? 0);
+    return Math.max(0, totalPurchased - seedsUsed - discardedSeeds);
   };
 
   const maxQuantity = getSeedStock(selectedSeed);
@@ -414,7 +416,7 @@ export default function StaffSowingCreate() {
   // Loading state
   if (loadingSeeds) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -450,7 +452,7 @@ export default function StaffSowingCreate() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <View style={styles.headerContent}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={handleBack}
@@ -470,7 +472,7 @@ export default function StaffSowingCreate() {
 
             <View style={styles.headerRight} />
           </View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
 
       {/* Form Content with Keyboard Handling */}
@@ -715,6 +717,7 @@ const styles = {
 
   // Scroll Content
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: BOTTOM_NAV_HEIGHT + 20,
@@ -822,7 +825,7 @@ const styles = {
   formInputError: {
     borderColor: Colors.error,
   },
-  errorContainer: {
+  fieldErrorContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
@@ -991,7 +994,8 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
     gap: 12,
-    marginTop: 8,
+    marginTop: "auto" as const,
+    paddingTop: 12,
   },
   cancelButton: {
     flex: 1,

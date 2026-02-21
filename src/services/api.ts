@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ENV } from "../constants/env";
 import { useAuthStore } from "../stores/auth.store";
+import { normalizeError } from "../utils/error";
 import { getToken, removeToken, removeUser } from "../utils/storage";
 
 export const api = axios.create({
@@ -24,8 +25,11 @@ export const unwrap = <T = any>(res: any): T => {
 };
 
 api.interceptors.request.use(async (config) => {
-  const token = await getToken();
-  if (token) {
+  const storeToken = useAuthStore.getState().token;
+  const token = storeToken || (await getToken());
+  const hasAuthorizationHeader = Boolean(config.headers?.Authorization);
+
+  if (token && !hasAuthorizationHeader) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -35,7 +39,6 @@ api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const status = error.response?.status;
-    const payload = error.response?.data ?? {};
 
     if (status === 401) {
       await removeToken();
@@ -43,12 +46,6 @@ api.interceptors.response.use(
       useAuthStore.getState().clearAuth();
     }
 
-    return Promise.reject({
-      code: status ?? "UNKNOWN",
-      status: status ?? undefined,
-      message: payload?.message || "Unexpected error",
-      details: payload?.details,
-      response: error.response,
-    });
+    return Promise.reject(normalizeError(error));
   },
 );

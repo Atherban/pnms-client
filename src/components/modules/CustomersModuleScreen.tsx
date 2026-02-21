@@ -144,7 +144,7 @@ export function CustomersModuleScreen({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.center} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.loadingCard}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading customers...</Text>
@@ -155,7 +155,7 @@ export function CustomersModuleScreen({
 
   if (error) {
     return (
-      <SafeAreaView style={styles.center} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.errorCard}>
           <MaterialIcons name="error-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
@@ -179,7 +179,7 @@ export function CustomersModuleScreen({
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Header with Gradient */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
@@ -680,6 +680,7 @@ const styles = {
     justifyContent: "flex-end" as const,
   },
   sheetKeyboardWrap: {
+    flex: 1,
     justifyContent: "flex-end" as const,
   },
   sheetContainer: {

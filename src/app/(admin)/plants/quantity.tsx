@@ -29,7 +29,7 @@ export default function PlantTypeDetails() {
 
   if (!id) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="info" size={56} color={Colors.textSecondary} />
           <Text style={styles.emptyTitle}>Plant Type Not Selected</Text>
@@ -49,7 +49,7 @@ export default function PlantTypeDetails() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
           style={styles.headerGradient}
@@ -74,7 +74,7 @@ export default function PlantTypeDetails() {
 
   if (error || !plantType) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
           style={styles.headerGradient}
@@ -107,7 +107,7 @@ export default function PlantTypeDetails() {
   const lifecycleDays = Number(plantType.lifecycleDays ?? 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
         style={styles.headerGradient}

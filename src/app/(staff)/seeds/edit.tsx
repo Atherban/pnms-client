@@ -19,7 +19,7 @@ import {
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SeedService } from "../../../services/seed.service";
-import { Colors, Spacing } from "../../../theme";
+import { Colors } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 
 const BOTTOM_NAV_HEIGHT = 80;
@@ -29,6 +29,7 @@ interface SeedEditModel {
   name: string;
   supplierName?: string;
   totalPurchased?: number;
+  seedsUsed?: number;
   expiryDate?: string;
 }
 
@@ -176,7 +177,7 @@ export default function StaffSeedEdit() {
   const isInitializedRef = useRef(false);
 
   // Fetch seed data
-  const { data, isLoading, error, refetch } = useQuery<SeedEditModel>({
+  const { data, isLoading, error } = useQuery<SeedEditModel>({
     queryKey: ["seed", seedId],
     queryFn: () => SeedService.getById(seedId as string),
     enabled: !!seedId,
@@ -346,10 +347,16 @@ export default function StaffSeedEdit() {
     router.back();
   };
 
+  const handleManageImages = () => {
+    if (!seedId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(`/(staff)/seeds/${seedId}` as any);
+  };
+
   // Loading state
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -358,7 +365,7 @@ export default function StaffSeedEdit() {
   // Error states
   if (!seedId) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <ErrorState
           message="Missing seed ID. Please open the seed from the list and try again."
           onBack={handleBack}
@@ -369,7 +376,7 @@ export default function StaffSeedEdit() {
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <ErrorState
           message={
             (error as any)?.message ||
@@ -393,7 +400,7 @@ export default function StaffSeedEdit() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <View style={styles.headerContent}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={handleBack}
@@ -410,9 +417,15 @@ export default function StaffSeedEdit() {
               </Text>
             </View>
 
-            <View style={styles.headerRight} />
+            <TouchableOpacity
+              onPress={handleManageImages}
+              style={styles.headerAction}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="image" size={20} color={Colors.white} />
+            </TouchableOpacity>
           </View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
 
       {/* Form Content with Keyboard Handling */}
@@ -480,6 +493,7 @@ export default function StaffSeedEdit() {
                 helperText="Total seeds purchased"
                 testID="purchased-quantity-input"
               />
+
             </View>
 
             {/* Expiry Information Section */}
@@ -651,9 +665,18 @@ const styles = {
   headerRight: {
     width: 40,
   },
+  headerAction: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
 
   // Scroll Content
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: BOTTOM_NAV_HEIGHT + 80,
@@ -811,17 +834,13 @@ const styles = {
 
   // Footer
   footer: {
-    // position: "absolute" as const,
-    // bottom: 0,
-    // left: 0,
-    // right: 0,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    // paddingHorizontal: 20,
     paddingVertical: 16,
     gap: 12,
-    marginBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    marginTop: "auto" as const,
+    marginBottom: 0,
   },
   cancelButton: {
     flex: 1,

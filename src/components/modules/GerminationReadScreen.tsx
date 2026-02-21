@@ -17,6 +17,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GerminationService } from "../../services/germination.service";
 import { Colors } from "../../theme";
+import { toImageUrl } from "../../utils/image";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -72,6 +74,8 @@ type GerminationDetails = {
   inventoryUpdatedAt?: string;
   inventoryInitialQuantity: number;
   inventoryInStockQuantity: number;
+  thumbnail?: string;
+  sourceCount: number;
 };
 
 const formatDate = (dateString?: string) => {
@@ -201,7 +205,68 @@ const extractRecordDetails = (record: any): GerminationDetails => {
     inventoryInitialQuantity:
       Number(inventory?.initialQuantity ?? inventory?.quantity ?? 0) || 0,
     inventoryInStockQuantity: Number(inventory?.quantity ?? 0) || 0,
+    thumbnail: toImageUrl(
+      plantType?.imageUrl ??
+        (Array.isArray(plantType?.images) ? plantType.images[0]?.fileName : undefined) ??
+        seed?.imageUrl ??
+        (Array.isArray(seed?.images) ? seed.images[0]?.fileName : undefined),
+    ),
+    sourceCount: 1,
   };
+};
+
+const getGerminationMergeKey = (item: GerminationDetails) =>
+  [
+    item.seedName || "-",
+    item.plantName || "-",
+    item.variety || "-",
+    item.supplierName || "-",
+  ].join("|");
+
+const mergeGerminationDetails = (
+  rows: GerminationDetails[],
+): GerminationDetails[] => {
+  const grouped = new Map<string, GerminationDetails>();
+
+  for (const row of rows) {
+    const key = getGerminationMergeKey(row);
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, { ...row, id: key });
+      continue;
+    }
+
+    const latestDate = [existing.germinationDate, row.germinationDate]
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(b as string).getTime() - new Date(a as string).getTime(),
+      )[0];
+
+    existing.germinatedSeeds += row.germinatedSeeds;
+    existing.discardedSeeds += row.discardedSeeds;
+    existing.pendingSeeds += row.pendingSeeds;
+    existing.sownQuantity += row.sownQuantity;
+    existing.sourceCount += row.sourceCount;
+    existing.sowingGerminated += row.sowingGerminated;
+    existing.sowingPending += row.sowingPending;
+    existing.inventoryInitialQuantity += row.inventoryInitialQuantity;
+    existing.inventoryInStockQuantity += row.inventoryInStockQuantity;
+    existing.germinationDate = latestDate ?? existing.germinationDate;
+    existing.recordId = `Merged (${existing.sourceCount} records)`;
+    existing.sowingId = `Merged (${existing.sourceCount} sowings)`;
+    existing.performedBy =
+      existing.performedBy === row.performedBy
+        ? existing.performedBy
+        : "Multiple Staff";
+  }
+
+  return Array.from(grouped.values()).sort(
+    (a, b) =>
+      new Date(b.germinationDate ?? 0).getTime() -
+      new Date(a.germinationDate ?? 0).getTime(),
+  );
 };
 
 const getSuccessRate = (item: GerminationDetails) => {
@@ -482,10 +547,14 @@ export function GerminationReadScreen({
     () => records.map((record: any) => extractRecordDetails(record)),
     [records],
   );
+  const mergedDetails = useMemo(
+    () => mergeGerminationDetails(details),
+    [details],
+  );
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    return details.filter((item) => {
+    return mergedDetails.filter((item) => {
       const matchesSearch =
         !term ||
         [
@@ -523,14 +592,14 @@ export function GerminationReadScreen({
         matchesSearch && matchesDate && matchesInventory && matchesPerformance
       );
     });
-  }, [details, searchQuery, filters]);
+  }, [mergedDetails, searchQuery, filters]);
 
   const stats = useMemo(() => {
-    const totalGerminated = details.reduce(
+    const totalGerminated = mergedDetails.reduce(
       (sum, item) => sum + item.germinatedSeeds,
       0,
     );
-    const totalDiscarded = details.reduce(
+    const totalDiscarded = mergedDetails.reduce(
       (sum, item) => sum + item.discardedSeeds,
       0,
     );
@@ -540,12 +609,12 @@ export function GerminationReadScreen({
         ? ((totalGerminated / totalProcessed) * 100).toFixed(1)
         : "0";
     return {
-      totalRecords: details.length,
+      totalRecords: mergedDetails.length,
       totalGerminated,
       totalDiscarded,
       successRate,
     };
-  }, [details]);
+  }, [mergedDetails]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -597,18 +666,18 @@ export function GerminationReadScreen({
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.loadingCard}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading germination records...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.errorCard}>
           <MaterialIcons name="error-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
@@ -626,7 +695,7 @@ export function GerminationReadScreen({
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -638,7 +707,7 @@ export function GerminationReadScreen({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]}>
+        <SafeAreaView edges={[ "left", "right"]}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
               <MaterialIcons name="grass" size={24} color={Colors.white} />
@@ -839,6 +908,13 @@ export function GerminationReadScreen({
               ]}
             >
               <View style={styles.recordTitleRow}>
+                <EntityThumbnail
+                  uri={item.thumbnail}
+                  label={item.plantName}
+                  size={42}
+                  iconName="eco"
+                  style={styles.recordThumbnail}
+                />
                 <View style={styles.recordTitleBlock}>
                   <Text style={styles.recordTitle} numberOfLines={1}>
                     {item.plantName}
@@ -929,6 +1005,18 @@ export function GerminationReadScreen({
               </View>
 
               <View style={styles.recordFooter}>
+                {item.sourceCount > 1 && (
+                  <View style={styles.footerItem}>
+                    <MaterialIcons
+                      name="merge-type"
+                      size={12}
+                      color={Colors.primary}
+                    />
+                    <Text style={[styles.footerText, { color: Colors.primary }]}>
+                      Merged {item.sourceCount} entries
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.footerItem}>
                   <MaterialIcons
                     name="person"
@@ -1816,6 +1904,9 @@ const styles = {
     marginBottom: 10,
     gap: 8,
   },
+  recordThumbnail: {
+    borderRadius: 10,
+  },
   recordTitleBlock: {
     flex: 1,
   },
@@ -2044,7 +2135,6 @@ const styles = {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "80%",
-    marginBottom: BOTTOM_NAV_HEIGHT + 16,
   },
   detailsHandle: {
     alignSelf: "center" as const,

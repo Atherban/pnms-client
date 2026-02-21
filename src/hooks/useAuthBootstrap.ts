@@ -9,24 +9,42 @@ export const useAuthBootstrap = () => {
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
   useEffect(() => {
+    let isMounted = true;
+
     const init = async () => {
-      const token = await getToken();
+      try {
+        const token = await getToken();
 
-      if (!token || isTokenExpired(token)) {
+        if (!token || isTokenExpired(token)) {
+          clearAuth();
+          if (isMounted) setLoading(false);
+          return;
+        }
+
+        const decoded = decodeToken(token);
+
+        setAuth(
+          {
+            id: decoded.userId,
+            role: decoded.role,
+            name: "",
+            email: "",
+          },
+          token,
+        );
+      } catch {
         clearAuth();
-        setLoading(false);
-        return;
+      } finally {
+        if (isMounted) setLoading(false);
       }
-
-      const decoded = decodeToken(token);
-
-      setAuth({ id: decoded.userId, role: decoded.role }, token);
-
-      setLoading(false);
     };
 
-    init();
-  }, []);
+    void init();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [clearAuth, setAuth]);
 
   return { loading };
 };

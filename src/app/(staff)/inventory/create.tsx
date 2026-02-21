@@ -7,13 +7,14 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import EntityThumbnail from "../../../components/ui/EntityThumbnail";
 import { InventoryService } from "../../../services/inventory.service";
 import { PlantTypeService } from "../../../services/plant-type.service";
@@ -25,6 +26,7 @@ const BOTTOM_NAV_HEIGHT = 80;
 export default function StaffInventoryCreate() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const [plantType, setPlantType] = useState<string>("");
   const [quantity, setQuantity] = useState("");
   const [plantTypeOpen, setPlantTypeOpen] = useState(false);
@@ -109,7 +111,7 @@ export default function StaffInventoryCreate() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Fixed Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
@@ -410,13 +412,24 @@ export default function StaffInventoryCreate() {
       </ScrollView>
 
       {/* Plant Type Dropdown - Outside ScrollView */}
-      {plantTypeOpen && (
+      <Modal
+        visible={plantTypeOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPlantTypeOpen(false)}
+        statusBarTranslucent
+      >
         <View style={styles.dropdownOverlay}>
           <Pressable
             style={styles.dropdownBackdrop}
             onPress={() => setPlantTypeOpen(false)}
           />
-          <View style={styles.dropdownContainer}>
+          <View
+            style={[
+              styles.dropdownContainer,
+              { paddingBottom: Math.max(insets.bottom, Spacing.md) },
+            ]}
+          >
             <View style={styles.dropdownHeader}>
               <Text style={styles.dropdownTitle}>Select Plant Type</Text>
               <Pressable
@@ -472,7 +485,10 @@ export default function StaffInventoryCreate() {
                         <Text style={styles.dropdownDescription}>
                           {pt.category || "Uncategorized"} • ₹
                           {Number(
-                            pt.defaultCostPrice ?? pt.price ?? pt.sellingPrice ?? 0,
+                            pt.defaultCostPrice ??
+                              pt.price ??
+                              pt.sellingPrice ??
+                              0,
                           ).toLocaleString("en-IN")}
                           /unit
                         </Text>
@@ -491,7 +507,7 @@ export default function StaffInventoryCreate() {
             )}
           </View>
         </View>
-      )}
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -543,6 +559,7 @@ const styles = {
     width: 44,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.xl,
@@ -742,6 +759,7 @@ const styles = {
   actionsContainer: {
     flexDirection: "row" as const,
     gap: Spacing.md,
+    marginTop: "auto" as const,
     marginBottom: Spacing.md,
     alignItems: "center",
   },
@@ -832,27 +850,22 @@ const styles = {
   },
   // Dropdown overlay styles
   dropdownOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end" as const,
+  },
+  dropdownBackdrop: {
     position: "absolute" as const,
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 1000,
-  },
-  dropdownBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   dropdownContainer: {
-    position: "absolute" as const,
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: Colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
-    marginBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
   },
   dropdownHeader: {
     flexDirection: "row" as const,

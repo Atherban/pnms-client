@@ -12,7 +12,7 @@ export default function AdminSalesCreateInfo() {
 
   if (canWriteOperational(role)) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.card}>
           <Text style={styles.title}>Use Staff Sales Create</Text>
           <Text style={styles.text}>
@@ -30,7 +30,7 @@ export default function AdminSalesCreateInfo() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <View style={styles.card}>
         <MaterialIcons name="lock-outline" size={48} color={Colors.warning} />
         <Text style={styles.title}>Sales Creation Is Staff-Only</Text>

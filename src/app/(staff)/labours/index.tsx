@@ -4,7 +4,7 @@ import { Colors } from "../../../theme";
 
 export default function StaffLabours() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
       <LaboursModuleScreen title="Labours" canWrite={true} />
     </SafeAreaView>
   );

@@ -1,5 +1,6 @@
 import { Platform } from "react-native";
 import { ENV } from "../constants/env";
+import { normalizeError } from "../utils/error";
 import { getToken } from "../utils/storage";
 
 interface UploadFile {
@@ -34,8 +35,25 @@ const uploadImage = async (path: string, file: UploadFile) => {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Upload failed");
+    const rawText = await res.text();
+    let payload: any = null;
+
+    try {
+      payload = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      payload = null;
+    }
+
+    throw normalizeError({
+      code: res.status,
+      status: res.status,
+      message: typeof payload?.message === "string" ? payload.message : rawText || "Upload failed",
+      details: payload?.details ?? payload?.error?.details,
+      response: {
+        status: res.status,
+        data: payload ?? rawText,
+      },
+    });
   }
 
   return true;

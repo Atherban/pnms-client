@@ -3,20 +3,18 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
 import { Home, Leaf, Menu, Receipt, Users } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardVisible } from "../../hooks/useKeyboardVisible";
 import { Colors, Spacing } from "../../theme";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 
 // Define icon components
 const DashboardIcon = Home;
@@ -63,9 +61,12 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function CoolBottomNav() {
+export default function AdminBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const navItemWidth = width / NAV_ITEMS.length;
   const isKeyboardVisible = useKeyboardVisible();
   const [activeIndex, setActiveIndex] = useState(0);
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
@@ -76,23 +77,9 @@ export default function CoolBottomNav() {
   const bounceAnim = useRef(new Animated.Value(1)).current;
 
   // Find active index
-  useEffect(() => {
-    const index = NAV_ITEMS.reduce((bestIndex, item, idx) => {
-      if (!pathname.startsWith(item.path)) return bestIndex;
-      if (bestIndex === -1) return idx;
-      return item.path.length > NAV_ITEMS[bestIndex].path.length
-        ? idx
-        : bestIndex;
-    }, -1);
-
-    if (index !== -1 && index !== activeIndex) {
-      animateToIndex(index);
-    }
-  }, [pathname]);
-
-  const animateToIndex = (index: number) => {
+  const animateToIndex = useCallback((index: number) => {
     Animated.spring(indicatorAnim, {
-      toValue: index * NAV_ITEM_WIDTH,
+      toValue: index * navItemWidth,
       useNativeDriver: true,
       tension: 150,
       friction: 15,
@@ -121,7 +108,21 @@ export default function CoolBottomNav() {
     ]).start(() => {
       setActiveIndex(index);
     });
-  };
+  }, [bounceAnim, indicatorAnim, navItemWidth]);
+
+  useEffect(() => {
+    const index = NAV_ITEMS.reduce((bestIndex, item, idx) => {
+      if (!pathname.startsWith(item.path)) return bestIndex;
+      if (bestIndex === -1) return idx;
+      return item.path.length > NAV_ITEMS[bestIndex].path.length
+        ? idx
+        : bestIndex;
+    }, -1);
+
+    if (index !== -1 && index !== activeIndex) {
+      animateToIndex(index);
+    }
+  }, [activeIndex, animateToIndex, pathname]);
 
   const handleNavigation = (index: number, path: string) => {
     // Haptic feedback
@@ -156,10 +157,9 @@ export default function CoolBottomNav() {
   };
 
   // Active indicator translation
-  const indicatorTranslateX = indicatorAnim.interpolate({
-    inputRange: [0, SCREEN_WIDTH],
-    outputRange: [0, SCREEN_WIDTH],
-  });
+  useEffect(() => {
+    indicatorAnim.setValue(activeIndex * navItemWidth);
+  }, [activeIndex, indicatorAnim, navItemWidth]);
 
   if (isKeyboardVisible) return null;
 
@@ -172,7 +172,8 @@ export default function CoolBottomNav() {
           style={[
             styles.activeIndicator,
             {
-              transform: [{ translateX: indicatorTranslateX }],
+              transform: [{ translateX: indicatorAnim }],
+              width: navItemWidth - 24,
               backgroundColor: NAV_ITEMS[activeIndex]?.color + "20",
               borderColor: NAV_ITEMS[activeIndex]?.color + "40",
             },
@@ -188,7 +189,12 @@ export default function CoolBottomNav() {
         </Animated.View>
 
         {/* Navigation Items */}
-        <View style={styles.navItemsContainer}>
+        <View
+          style={[
+            styles.navItemsContainer,
+            { paddingBottom: Spacing.lg + Math.max(0, insets.bottom - 8) },
+          ]}
+        >
           {NAV_ITEMS.map((item, index) => {
             const isActive = activeIndex === index;
             const isPressed = pressedIndex === index;
@@ -306,11 +312,7 @@ export default function CoolBottomNav() {
 
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    bottom: -10,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
+    width: "100%",
   },
   blurBackground: {
     borderTopLeftRadius: 24,
@@ -391,7 +393,6 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: "absolute",
     top: 12,
-    width: NAV_ITEM_WIDTH - 24,
     height: 48,
     borderRadius: 24,
     borderWidth: 1,
@@ -419,9 +420,5 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
     opacity: 0.5,
-  },
-  safeArea: {
-    backgroundColor: Colors.surface,
-    height: 34,
   },
 });

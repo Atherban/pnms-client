@@ -8,7 +8,6 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -23,7 +22,6 @@ import { PlantTypeService } from "../../services/plant-type.service";
 import { Colors, Spacing } from "../../theme";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
 // ==================== CONSTANTS & TYPES ====================
@@ -55,12 +53,6 @@ const PRICE_RANGES = {
     icon: "workspace-premium",
     color: "#8B5CF6",
   },
-} as const;
-
-const FILTER_TYPES = {
-  LIFECYCLE: "lifecycle",
-  PRICE: "price",
-  CATEGORY: "category",
 } as const;
 
 const SORT_OPTIONS = [
@@ -109,7 +101,6 @@ const SORT_OPTIONS = [
 ] as const;
 
 type SortOptionId = (typeof SORT_OPTIONS)[number]["id"];
-type FilterType = keyof typeof FILTER_TYPES;
 type LifecycleCategory = keyof typeof LIFECYCLE_CATEGORIES;
 type PriceRange = keyof typeof PRICE_RANGES;
 type RoleGroup = "staff" | "admin" | "viewer";
@@ -143,63 +134,6 @@ const getPriceRange = (price: number): PriceRange | null => {
 const formatCurrency = (value: number) => {
   return `₹${value.toLocaleString("en-IN")}`;
 };
-
-const formatNumber = (value: number) => {
-  return value.toLocaleString("en-IN");
-};
-
-// ==================== FILTER CHIP COMPONENT ====================
-
-interface FilterChipProps {
-  label: string;
-  icon: string;
-  isSelected: boolean;
-  onPress: () => void;
-  count?: number;
-  color: string;
-}
-
-const FilterChip = ({
-  label,
-  icon,
-  isSelected,
-  onPress,
-  count,
-  color,
-}: FilterChipProps) => (
-  <Pressable
-    onPress={onPress}
-    style={({ pressed }) => [
-      styles.filterChip,
-      isSelected && [styles.filterChipSelected, { borderColor: color }],
-      pressed && styles.filterChipPressed,
-    ]}
-  >
-    <View style={styles.filterChipContent}>
-      <MaterialIcons
-        name={icon as any}
-        size={18}
-        color={isSelected ? color : Colors.textSecondary}
-      />
-      <Text
-        style={[
-          styles.filterChipText,
-          isSelected && { color, fontWeight: "600" },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      {count !== undefined && count > 0 && (
-        <View
-          style={[styles.filterChipBadge, { backgroundColor: `${color}20` }]}
-        >
-          <Text style={[styles.filterChipBadgeText, { color }]}>{count}</Text>
-        </View>
-      )}
-    </View>
-  </Pressable>
-);
 
 // ==================== FILTER SECTION COMPONENT ====================
 
@@ -611,63 +545,6 @@ const SortDropdown = ({ selectedSort, onSortChange }: SortDropdownProps) => {
     </View>
   );
 };
-
-// ==================== SEARCH BAR COMPONENT ====================
-
-interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  onClear: () => void;
-  onFilterPress: () => void;
-  activeFilterCount: number;
-}
-
-const SearchBar = ({
-  value,
-  onChangeText,
-  onClear,
-  onFilterPress,
-  activeFilterCount,
-}: SearchBarProps) => (
-  <View style={styles.searchContainer}>
-    <View style={styles.searchInputContainer}>
-      <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search by name, category, or variety..."
-        placeholderTextColor={Colors.textTertiary}
-        value={value}
-        onChangeText={onChangeText}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-      />
-      {value.length > 0 && (
-        <Pressable onPress={onClear} style={styles.searchClearButton}>
-          <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
-        </Pressable>
-      )}
-    </View>
-    <Pressable
-      onPress={onFilterPress}
-      style={({ pressed }) => [
-        styles.filterButton,
-        activeFilterCount > 0 && styles.filterButtonActive,
-        pressed && styles.filterButtonPressed,
-      ]}
-    >
-      <MaterialIcons
-        name="tune"
-        size={22}
-        color={activeFilterCount > 0 ? Colors.primary : Colors.textSecondary}
-      />
-      {activeFilterCount > 0 && (
-        <View style={styles.filterBadge}>
-          <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-        </View>
-      )}
-    </Pressable>
-  </View>
-);
 
 // ==================== STATS ROW COMPONENT ====================
 
@@ -1161,7 +1038,11 @@ export function PlantTypesViewScreen({
 
   // Extract unique categories
   const categories = useMemo(() => {
-    const cats = new Set(plantTypes.map((p) => p.category).filter(Boolean));
+    const cats = new Set(
+      plantTypes
+        .map((p) => p.category)
+        .filter((category): category is string => Boolean(category)),
+    );
     return Array.from(cats).sort();
   }, [plantTypes]);
 
@@ -1344,21 +1225,17 @@ export function PlantTypesViewScreen({
 
   const handleItemPress = useCallback((itemId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!canWrite) return;
-    router.push({
-      pathname: `/(${routeGroup})/plants/quantity`,
-      params: { id: itemId },
-    });
-  }, [canWrite, routeGroup, router]);
+    router.push(`/${`(${routeGroup})`}/plants/${itemId}` as any);
+  }, [routeGroup, router]);
 
   const handleCreatePress = useCallback(() => {
-    router.push(`/${`(${routeGroup})`}/plants/create`);
+    router.push(`/${`(${routeGroup})`}/plants/create` as any);
   }, [routeGroup, router]);
 
   const handleEditPress = useCallback(
     (itemId: string) => {
       router.push({
-        pathname: `/${`(${routeGroup})`}/plants/edit`,
+        pathname: `/${`(${routeGroup})`}/plants/edit` as any,
         params: { id: itemId },
       });
     },
@@ -1368,7 +1245,7 @@ export function PlantTypesViewScreen({
   const handleUploadImagePress = useCallback(
     (itemId: string) => {
       router.push({
-        pathname: `/${`(${routeGroup})`}/plants/upload-image`,
+        pathname: `/${`(${routeGroup})`}/plants/upload-image` as any,
         params: { id: itemId },
       });
     },
@@ -1431,7 +1308,7 @@ export function PlantTypesViewScreen({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -1439,14 +1316,14 @@ export function PlantTypesViewScreen({
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <ErrorState error={error} onRetry={handleRefresh} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <Header
         title={title}
         subtitle={`${filteredPlantTypes.length} ${

@@ -14,6 +14,7 @@ import {
 import { Button } from "../../../components";
 import { UploadService } from "../../../services/upload.service";
 import { Colors, Spacing } from "../../../theme";
+import { formatErrorMessage } from "../../../utils/error";
 
 export default function UploadPlantTypeImage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,7 +40,7 @@ export default function UploadPlantTypeImage() {
       router.back();
     },
     onError: (err: any) => {
-      Alert.alert("Upload failed", err?.message ?? "Something went wrong");
+      Alert.alert("Upload failed", formatErrorMessage(err));
     },
   });
 

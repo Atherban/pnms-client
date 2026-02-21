@@ -22,7 +22,6 @@ const CHART_HEIGHT = 200;
 const BOTTOM_NAV_HEIGHT = 80;
 
 export default function AdminReports() {
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<
     "week" | "month" | "year"
   >("month");
@@ -33,10 +32,8 @@ export default function AdminReports() {
   });
 
   const onRefresh = async () => {
-    setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await refetch();
-    setRefreshing(false);
   };
 
   // Calculate insights
@@ -158,7 +155,7 @@ export default function AdminReports() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -171,7 +168,7 @@ export default function AdminReports() {
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
           <View style={styles.errorCard}>
             <MaterialIcons
@@ -203,7 +200,7 @@ export default function AdminReports() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Enhanced Header with Glass Morphism Effect */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}

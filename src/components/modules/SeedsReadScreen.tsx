@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native
 import { SeedService } from "../../services/seed.service";
 import { Colors, Spacing } from "../../theme";
 import { useMemo, useState } from "react";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 export function SeedsReadScreen({ title }: { title: string }) {
   const [search, setSearch] = useState("");
@@ -22,6 +23,23 @@ export function SeedsReadScreen({ title }: { title: string }) {
       return name.includes(term) || plantType.includes(term) || supplier.includes(term);
     });
   }, [data, search]);
+
+  const getDiscardedSeeds = (seed: any) =>
+    Number(
+      seed?.discardedSeeds ??
+        seed?.discarded ??
+        seed?.discardedQuantity ??
+        seed?.wastedSeeds ??
+        0,
+    ) || 0;
+
+  const getAvailableStock = (seed: any) => {
+    if (seed?.quantityInStock != null) return Number(seed.quantityInStock) || 0;
+    if (seed?.availableStock != null) return Number(seed.availableStock) || 0;
+    const totalPurchased = Number(seed?.totalPurchased ?? 0) || 0;
+    const seedsUsed = Number(seed?.seedsUsed ?? 0) || 0;
+    return Math.max(0, totalPurchased - seedsUsed - getDiscardedSeeds(seed));
+  };
 
   if (isLoading) {
     return (
@@ -61,10 +79,25 @@ export function SeedsReadScreen({ title }: { title: string }) {
         ListEmptyComponent={<Text style={styles.meta}>No seeds found.</Text>}
         renderItem={({ item }: { item: any }) => (
           <View style={styles.card}>
-            <Text style={styles.name}>{item.name || "Unknown Seed"}</Text>
-            <Text style={styles.meta}>Plant: {item.plantType?.name || item.category || "—"}</Text>
-            <Text style={styles.meta}>In Stock: {Number(item.quantityInStock ?? item.availableStock ?? 0)}</Text>
-            {item.supplierName ? <Text style={styles.meta}>Supplier: {item.supplierName}</Text> : null}
+            <View style={styles.cardHeader}>
+              <EntityThumbnail
+                uri={item.imageUrl || item.plantType?.imageUrl}
+                label={item.name || item.plantType?.name}
+                size={42}
+                iconName="grass"
+                style={styles.thumbnail}
+              />
+              <View style={styles.cardInfo}>
+                <Text style={styles.name}>{item.name || "Unknown Seed"}</Text>
+                <Text style={styles.meta}>
+                  Plant: {item.plantType?.name || item.category || "—"}
+                </Text>
+                <Text style={styles.meta}>
+                  In Stock: {getAvailableStock(item)}
+                </Text>
+                {item.supplierName ? <Text style={styles.meta}>Supplier: {item.supplierName}</Text> : null}
+              </View>
+            </View>
           </View>
         )}
       />
@@ -95,6 +128,17 @@ const styles = {
     padding: Spacing.md,
     backgroundColor: Colors.surface,
     marginBottom: Spacing.sm,
+  },
+  cardHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing.sm,
+  },
+  thumbnail: {
+    borderRadius: 10,
+  },
+  cardInfo: {
+    flex: 1,
   },
   name: { color: Colors.text, fontSize: 16, fontWeight: "700" as const },
   meta: { color: Colors.textSecondary, marginTop: 2 },

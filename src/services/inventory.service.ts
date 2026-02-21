@@ -3,6 +3,7 @@ import type {
   CreatePurchasedInventoryPayload,
   Inventory,
 } from "../types/inventory.types";
+import { withResolvedImagesDeep } from "../utils/image";
 
 const normalizeList = (data: any) => {
   if (Array.isArray(data)) return data;
@@ -14,13 +15,13 @@ const normalizeList = (data: any) => {
 export const InventoryService = {
   async getAll(): Promise<Inventory[]> {
     const res = await api.get(apiPath("/inventory"));
-    return normalizeList(unwrap(res));
+    return withResolvedImagesDeep(normalizeList(unwrap(res)));
   },
 
   async getById(id: string): Promise<Inventory> {
     const res = await api.get(apiPath(`/inventory/${id}`));
     const data = unwrap(res);
-    return data?.data ?? data;
+    return withResolvedImagesDeep(data?.data ?? data);
   },
 
   async create(payload: { plantType: string; quantity?: number; minStockLevel?: number }) {

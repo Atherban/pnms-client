@@ -5,7 +5,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -15,14 +14,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import EntityThumbnail from "../ui/EntityThumbnail";
 import { SalesService } from "../../services/sales.service";
-import { Colors } from "../../theme";
+import { Colors, Spacing } from "../../theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface SaleDetailScreenProps {
   id?: string;
   title?: string;
+  routeGroup?: "staff" | "admin" | "viewer";
 }
 
 // ==================== CONSTANTS & TYPES ====================
@@ -277,7 +276,7 @@ const ErrorState = ({ error, onRetry, onBack, title }: ErrorStateProps) => (
       colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
       style={styles.errorHeaderGradient}
     >
-      <SafeAreaView edges={["top"]} style={styles.errorHeaderContent}>
+      <SafeAreaView edges={["left", "right"]} style={styles.errorHeaderContent}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.errorBackButton}
@@ -320,6 +319,7 @@ const ErrorState = ({ error, onRetry, onBack, title }: ErrorStateProps) => (
 export function SaleDetailScreen({
   id,
   title = "Sale Details",
+  routeGroup = "staff",
 }: SaleDetailScreenProps) {
   const router = useRouter();
 
@@ -339,9 +339,15 @@ export function SaleDetailScreen({
     refetch();
   };
 
+  const handleGenerateBill = () => {
+    if (!id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(`/(${routeGroup})/sales/bill/${id}` as any);
+  };
+
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -387,7 +393,7 @@ export function SaleDetailScreen({
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
         style={styles.headerGradient}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <SafeAreaView edges={["left", "right"]} style={styles.headerContent}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={handleBack}
@@ -480,6 +486,15 @@ export function SaleDetailScreen({
 
         {/* Sale Summary */}
         <View style={styles.summaryCard}>
+          <TouchableOpacity
+            onPress={handleGenerateBill}
+            style={styles.generateBillButton}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="receipt-long" size={16} color={Colors.white} />
+            <Text style={styles.generateBillText}>Generate Bill</Text>
+          </TouchableOpacity>
+
           <View style={styles.summaryHeader}>
             <View style={styles.summaryHeaderLeft}>
               <View
@@ -736,6 +751,22 @@ const styles = {
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  generateBillButton: {
+    alignSelf: "flex-start" as const,
+    marginBottom: Spacing.md,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  generateBillText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: "700" as const,
   },
   summaryHeader: {
     flexDirection: "row" as const,

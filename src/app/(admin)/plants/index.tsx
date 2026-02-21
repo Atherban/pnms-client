@@ -4,7 +4,7 @@ import { Colors } from "../../../theme";
 
 export default function AdminPlants() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
       <PlantTypesViewScreen title="Plant Types" canWrite routeGroup="admin" />
     </SafeAreaView>
   );

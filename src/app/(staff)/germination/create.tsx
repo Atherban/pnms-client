@@ -85,11 +85,17 @@ const getGerminatedSeeds = (sowing: Sowing): number => {
   return value;
 };
 
-const getPendingSeeds = (sowing: Sowing): Number => {
-  const value = Number((sowing as any).quantityPendingGermination ?? 0);
+const getDiscardedSeeds = (sowing: Sowing): number => {
+  const value = Number(
+    (sowing as any).discardedSeeds ??
+      (sowing as any).quantityDiscarded ??
+      (sowing as any).discarded ??
+      0,
+  );
   if (!Number.isFinite(value) || value < 0) return 0;
   return value;
 };
+
 const getGerminationRate = (sowing: Sowing): number => {
   const rate = Number((sowing as any).germinationRate);
   if (!isNaN(rate) && rate > 0) return rate;
@@ -186,7 +192,8 @@ const SowingCard = ({
   const plantName = getPlantName(sowing);
   const quantity = sowing.quantity || 0;
   const germinated = getGerminatedSeeds(sowing);
-  const remaining = Math.max(0, quantity - germinated);
+  const discarded = getDiscardedSeeds(sowing);
+  const remaining = Math.max(0, quantity - germinated - discarded);
   const rate = getGerminationRate(sowing);
   const hasGermination = germinated > 0;
   const isFullyGerminated = remaining <= 0;
@@ -194,7 +201,7 @@ const SowingCard = ({
 
   const progressPercent =
     quantity > 0
-      ? Math.min(100, Math.max(0, (germinated / quantity) * 100))
+      ? Math.min(100, Math.max(0, ((germinated + discarded) / quantity) * 100))
       : 0;
 
   return (
@@ -295,9 +302,9 @@ const SowingCard = ({
 
         <View style={styles.sowingCardProgress}>
           <View style={styles.sowingProgressHeader}>
-            <Text style={styles.sowingProgressLabel}>Germination</Text>
+            <Text style={styles.sowingProgressLabel}>Processed</Text>
             <Text style={styles.sowingProgressValue}>
-              {formatNumber(germinated)} / {formatNumber(quantity)}
+              {formatNumber(germinated + discarded)} / {formatNumber(quantity)}
             </Text>
           </View>
           <View style={styles.progressBarSmall}>
@@ -521,7 +528,7 @@ const ErrorState = ({ message, onRetry, onBack }: ErrorStateProps) => (
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
     >
-      <SafeAreaView edges={["top"]} style={styles.errorHeaderContent}>
+      <View style={styles.errorHeaderContent}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.errorBackButton}
@@ -531,7 +538,7 @@ const ErrorState = ({ message, onRetry, onBack }: ErrorStateProps) => (
         </TouchableOpacity>
         <Text style={styles.errorHeaderTitle}>Record Germination</Text>
         <View style={styles.errorHeaderSpacer} />
-      </SafeAreaView>
+      </View>
     </LinearGradient>
 
     <View style={styles.errorContainer}>
@@ -606,6 +613,7 @@ export default function StaffGerminationCreate() {
   // Form state
   const [selectedSowingId, setSelectedSowingId] = useState<string | null>(null);
   const [germinated, setGerminated] = useState("");
+  const [discarded, setDiscarded] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch sowing records
@@ -637,7 +645,11 @@ export default function StaffGerminationCreate() {
   const alreadyGerminated = selectedSowing
     ? getGerminatedSeeds(selectedSowing)
     : 0;
-  const remainingSeeds = Math.max(0, totalSeeds - alreadyGerminated);
+  const alreadyDiscarded = selectedSowing ? getDiscardedSeeds(selectedSowing) : 0;
+  const remainingSeeds = Math.max(
+    0,
+    totalSeeds - alreadyGerminated - alreadyDiscarded,
+  );
   const isFullyGerminated = remainingSeeds <= 0;
 
   // Get available sowings (not fully germinated)
@@ -645,7 +657,8 @@ export default function StaffGerminationCreate() {
     () =>
       sowings.filter((s) => {
         const germinated = getGerminatedSeeds(s);
-        return germinated < s.quantity;
+        const discarded = getDiscardedSeeds(s);
+        return germinated + discarded < s.quantity;
       }),
     [sowings],
   );
@@ -655,7 +668,8 @@ export default function StaffGerminationCreate() {
     () =>
       sowings.filter((s) => {
         const germinated = getGerminatedSeeds(s);
-        return germinated >= s.quantity;
+        const discarded = getDiscardedSeeds(s);
+        return germinated + discarded >= s.quantity;
       }),
     [sowings],
   );
@@ -663,14 +677,29 @@ export default function StaffGerminationCreate() {
   // Reset input when sowing changes
   useEffect(() => {
     setGerminated("");
+    setDiscarded("");
   }, [selectedSowingId]);
 
-  const numericValue = Number(germinated);
+  const numericGerminated = Number(germinated);
+  const numericDiscarded = Number(discarded);
+  const hasGerminatedInput = germinated.length > 0;
+  const hasDiscardedInput = discarded.length > 0;
+  const nextGerminated = hasGerminatedInput ? numericGerminated : 0;
+  const nextDiscarded = hasDiscardedInput ? numericDiscarded : 0;
+  const totalProcessedInput = nextGerminated + nextDiscarded;
+  const hasValidGerminated =
+    hasGerminatedInput &&
+    !isNaN(numericGerminated) &&
+    numericGerminated >= 1;
+  const hasValidDiscarded =
+    !hasDiscardedInput || (!isNaN(numericDiscarded) && numericDiscarded >= 0);
   const isNumericValid =
-    !isNaN(numericValue) && numericValue > 0 && numericValue <= remainingSeeds;
+    hasValidGerminated &&
+    hasValidDiscarded &&
+    totalProcessedInput <= remainingSeeds;
 
   const progressPercentage =
-    remainingSeeds > 0 ? (numericValue / remainingSeeds) * 100 : 0;
+    remainingSeeds > 0 ? (totalProcessedInput / remainingSeeds) * 100 : 0;
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -689,16 +718,23 @@ export default function StaffGerminationCreate() {
 
   // Validate before submission
   const validateGermination = useCallback(
-    async (sowingId: string, requestedQty: number, fallbackSowing?: Sowing) => {
+    async (
+      sowingId: string,
+      requestedGerminated: number,
+      requestedDiscarded: number,
+      fallbackSowing?: Sowing,
+    ) => {
       const computeValidationFromSowing = (sowing: Sowing) => {
         const germinated = getGerminatedSeeds(sowing);
+        const discarded = getDiscardedSeeds(sowing);
         const total = Number(sowing?.quantity ?? 0);
-        const remaining = Math.max(0, total - germinated);
+        const remaining = Math.max(0, total - germinated - discarded);
+        const requestedTotal = requestedGerminated + requestedDiscarded;
 
-        if (remaining < requestedQty) {
+        if (remaining < requestedTotal) {
           return {
             valid: false,
-            message: `Insufficient seeds remaining. Only ${formatNumber(remaining)} seeds left to germinate.`,
+            message: `Insufficient seeds remaining. Only ${formatNumber(remaining)} seeds left to process.`,
             remaining,
           };
         }
@@ -744,7 +780,8 @@ export default function StaffGerminationCreate() {
 
       const validation = await validateGermination(
         selectedSowingId,
-        numericValue,
+        nextGerminated,
+        nextDiscarded,
         selectedSowing,
       );
       if (!validation.valid) {
@@ -753,7 +790,8 @@ export default function StaffGerminationCreate() {
 
       return GerminationService.create({
         sowingId: selectedSowingId,
-        germinatedSeeds: numericValue,
+        germinatedSeeds: nextGerminated,
+        discardedSeeds: nextDiscarded > 0 ? nextDiscarded : undefined,
       });
     },
     onSuccess: async (response: any) => {
@@ -772,14 +810,17 @@ export default function StaffGerminationCreate() {
         queryClient.invalidateQueries({ queryKey: ["staff-dashboard"] }),
       ]);
 
-      const newRemaining = remainingSeeds - numericValue;
+      const newRemaining = remainingSeeds - totalProcessedInput;
       const successMessage = inventoryRef
         ? `✅ Germination recorded successfully!\n\n` +
-          `${formatNumber(numericValue)} seeds germinated from "${selectedSowing ? getSeedName(selectedSowing) : "Sowing"}"\n` +
+          `${formatNumber(nextGerminated)} seeds germinated` +
+          `${nextDiscarded > 0 ? `, ${formatNumber(nextDiscarded)} discarded` : ""}` +
+          ` from "${selectedSowing ? getSeedName(selectedSowing) : "Sowing"}"\n` +
           `${newRemaining > 0 ? `${formatNumber(newRemaining)} seeds remaining.` : "All seeds germinated!"}\n` +
           `Inventory batch: #${inventoryRef.slice(-6).toUpperCase()}`
         : `✅ Germination recorded successfully!\n\n` +
-          `${formatNumber(numericValue)} seeds germinated.\n` +
+          `${formatNumber(nextGerminated)} seeds germinated` +
+          `${nextDiscarded > 0 ? `, ${formatNumber(nextDiscarded)} discarded` : ""}.\n` +
           `${newRemaining > 0 ? `${formatNumber(newRemaining)} seeds remaining.` : "All seeds germinated!"}`;
 
       Alert.alert("Success", successMessage, [
@@ -803,6 +844,7 @@ export default function StaffGerminationCreate() {
             onPress: async () => {
               await refetch();
               setGerminated("");
+              setDiscarded("");
             },
           },
           {
@@ -835,7 +877,8 @@ export default function StaffGerminationCreate() {
 
     const validation = await validateGermination(
       selectedSowingId,
-      numericValue,
+      nextGerminated,
+      nextDiscarded,
       selectedSowing,
     );
     if (!validation.valid) {
@@ -845,6 +888,7 @@ export default function StaffGerminationCreate() {
           onPress: async () => {
             await refetch();
             setGerminated("");
+            setDiscarded("");
           },
         },
         {
@@ -857,9 +901,11 @@ export default function StaffGerminationCreate() {
 
     Alert.alert(
       "Confirm Germination",
-      `Are you sure you want to record ${formatNumber(numericValue)} germinated seeds for "${selectedSowing ? getSeedName(selectedSowing) : "this sowing"}"?\n\n` +
-        `This will create inventory for ${formatNumber(numericValue)} plants.\n` +
-        `${formatNumber(remainingSeeds - numericValue)} seeds will remain.`,
+      `Record update for "${selectedSowing ? getSeedName(selectedSowing) : "this sowing"}":\n\n` +
+        `Germinated: ${formatNumber(nextGerminated)}\n` +
+        `Discarded: ${formatNumber(nextDiscarded)}\n\n` +
+        `This will create inventory for ${formatNumber(nextGerminated)} plants.\n` +
+        `${formatNumber(remainingSeeds - totalProcessedInput)} seeds will remain.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -881,14 +927,30 @@ export default function StaffGerminationCreate() {
 
   // Validation
   const getQuantityError = useCallback(() => {
-    if (!germinated) return null;
-    if (isNaN(numericValue)) return "Please enter a valid number";
-    if (numericValue <= 0) return "Quantity must be greater than 0";
-    if (numericValue > remainingSeeds) {
+    if (!germinated && !discarded) return null;
+    if (!hasGerminatedInput) {
+      return "Enter germinated seeds (minimum 1)";
+    }
+    if (hasGerminatedInput && (isNaN(numericGerminated) || numericGerminated < 1)) {
+      return "Enter a valid germinated quantity";
+    }
+    if (hasDiscardedInput && (isNaN(numericDiscarded) || numericDiscarded < 0)) {
+      return "Enter a valid discarded quantity";
+    }
+    if (totalProcessedInput > remainingSeeds) {
       return `Maximum available is ${formatNumber(remainingSeeds)} seeds`;
     }
     return null;
-  }, [germinated, numericValue, remainingSeeds]);
+  }, [
+    discarded,
+    germinated,
+    hasDiscardedInput,
+    hasGerminatedInput,
+    numericDiscarded,
+    numericGerminated,
+    remainingSeeds,
+    totalProcessedInput,
+  ]);
 
   const quantityError = getQuantityError();
   const isValid = selectedSowingId && isNumericValid && !isFullyGerminated;
@@ -896,7 +958,7 @@ export default function StaffGerminationCreate() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -929,7 +991,7 @@ export default function StaffGerminationCreate() {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <View style={styles.headerContent}>
           <View style={styles.headerRow}>
             <TouchableOpacity
               onPress={handleBack}
@@ -949,7 +1011,7 @@ export default function StaffGerminationCreate() {
 
             <View style={styles.headerRight} />
           </View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
 
       {/* Stats Card */}
@@ -1076,6 +1138,12 @@ export default function StaffGerminationCreate() {
                         tone="success"
                       />
                       <GerminationMetric
+                        label="Already Discarded"
+                        value={`${formatNumber(alreadyDiscarded)} seeds`}
+                        icon="delete-outline"
+                        tone="warning"
+                      />
+                      <GerminationMetric
                         label="Remaining"
                         value={`${formatNumber(remainingSeeds)} seeds`}
                         icon="hourglass-bottom"
@@ -1089,7 +1157,7 @@ export default function StaffGerminationCreate() {
                         color={Colors.primary}
                       />
                       <Text style={styles.metricsHintText}>
-                        Enter only newly germinated seeds for this update.
+                        Enter newly processed seeds (germinated/discarded) for this update.
                       </Text>
                     </View>
                   </View>
@@ -1110,15 +1178,30 @@ export default function StaffGerminationCreate() {
                     suffix="seeds"
                   />
 
+                  <FormField
+                    label="Discarded Seeds"
+                    value={discarded}
+                    onChangeText={(text) =>
+                      setDiscarded(text.replace(/[^\d]/g, ""))
+                    }
+                    placeholder={`Enter quantity (optional)`}
+                    icon="delete-outline"
+                    keyboardType="numeric"
+                    error={quantityError || undefined}
+                    max={remainingSeeds}
+                    disabled={isPending}
+                    suffix="seeds"
+                  />
+
                   {/* Progress Indicator */}
-                  {germinated && !isNaN(numericValue) && (
+                  {(germinated || discarded) && !isNaN(totalProcessedInput) && (
                     <View style={styles.progressContainer}>
                       <View style={styles.progressHeader}>
                         <Text style={styles.progressLabel}>
-                          This Germination
+                          This Update
                         </Text>
                         <Text style={styles.progressValue}>
-                          {formatNumber(numericValue)} /{" "}
+                          {formatNumber(totalProcessedInput)} /{" "}
                           {formatNumber(remainingSeeds)} (
                           {Math.min(progressPercentage, 100).toFixed(0)}%)
                         </Text>
@@ -1139,7 +1222,7 @@ export default function StaffGerminationCreate() {
                       {isNumericValid && (
                         <Text style={styles.progressHint}>
                           After this,{" "}
-                          {formatNumber(remainingSeeds - numericValue)} seeds
+                          {formatNumber(remainingSeeds - totalProcessedInput)} seeds
                           will remain
                         </Text>
                       )}
@@ -1332,6 +1415,7 @@ const styles = {
 
   // List Content
   listContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: BOTTOM_NAV_HEIGHT + 20,

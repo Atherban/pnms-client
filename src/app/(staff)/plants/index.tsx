@@ -4,8 +4,8 @@ import { Colors } from "../../../theme";
 
 export default function StaffPlants() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-      <PlantTypesViewScreen title="Plant Types" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
+      <PlantTypesViewScreen title="Plant Types" routeGroup="staff" />
     </SafeAreaView>
   );
 }

@@ -3,20 +3,18 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter } from "expo-router";
 import { Bean, Home, Leaf, Receipt, Sprout } from "lucide-react-native";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardVisible } from "../../hooks/useKeyboardVisible";
 import { Colors, Spacing } from "../../theme";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const NAV_ITEM_WIDTH = SCREEN_WIDTH / 5;
 
 /* Icons */
 const DashboardIcon = Home;
@@ -62,6 +60,9 @@ const NAV_ITEMS = [
 export default function StaffBottomNav() {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const navItemWidth = width / NAV_ITEMS.length;
   const isKeyboardVisible = useKeyboardVisible();
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -72,18 +73,9 @@ export default function StaffBottomNav() {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const bounceAnim = useRef(new Animated.Value(1)).current;
 
-  /* Sync active tab with route */
-  useEffect(() => {
-    const index = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.path));
-
-    if (index !== -1 && index !== activeIndex) {
-      animateToIndex(index);
-    }
-  }, [pathname]);
-
-  const animateToIndex = (index: number) => {
+  const animateToIndex = useCallback((index: number) => {
     Animated.spring(indicatorAnim, {
-      toValue: index * NAV_ITEM_WIDTH,
+      toValue: index * navItemWidth,
       useNativeDriver: true,
       tension: 150,
       friction: 15,
@@ -109,7 +101,16 @@ export default function StaffBottomNav() {
         useNativeDriver: true,
       }),
     ]).start(() => setActiveIndex(index));
-  };
+  }, [bounceAnim, indicatorAnim, navItemWidth]);
+
+  /* Sync active tab with route */
+  useEffect(() => {
+    const index = NAV_ITEMS.findIndex((item) => pathname.startsWith(item.path));
+
+    if (index !== -1 && index !== activeIndex) {
+      animateToIndex(index);
+    }
+  }, [activeIndex, animateToIndex, pathname]);
 
   const handleNavigation = (index: number, path: string) => {
     if (pathname === path) return;
@@ -137,6 +138,10 @@ export default function StaffBottomNav() {
     }).start();
   };
 
+  useEffect(() => {
+    indicatorAnim.setValue(activeIndex * navItemWidth);
+  }, [activeIndex, indicatorAnim, navItemWidth]);
+
   if (isKeyboardVisible) return null;
 
   return (
@@ -148,6 +153,7 @@ export default function StaffBottomNav() {
             styles.activeIndicator,
             {
               transform: [{ translateX: indicatorAnim }],
+              width: navItemWidth - 24,
               backgroundColor: NAV_ITEMS[activeIndex]?.color + "20",
               borderColor: NAV_ITEMS[activeIndex]?.color + "40",
             },
@@ -164,7 +170,12 @@ export default function StaffBottomNav() {
         </Animated.View>
 
         {/* Tabs */}
-        <View style={styles.navItemsContainer}>
+        <View
+          style={[
+            styles.navItemsContainer,
+            { paddingBottom: Spacing.lg + Math.max(0, insets.bottom - 8) },
+          ]}
+        >
           {NAV_ITEMS.map((item, index) => {
             const IconComponent = item.icon;
             const isActive = activeIndex === index;
@@ -261,11 +272,7 @@ export default function StaffBottomNav() {
 }
 const styles = StyleSheet.create({
   container: {
-    position: "absolute",
-    bottom: -10,
-    left: 0,
-    right: 0,
-    zIndex: 1000,
+    width: "100%",
   },
   blurBackground: {
     borderTopLeftRadius: 24,
@@ -346,7 +353,6 @@ const styles = StyleSheet.create({
   activeIndicator: {
     position: "absolute",
     top: 12,
-    width: NAV_ITEM_WIDTH - 24,
     height: 48,
     borderRadius: 24,
     borderWidth: 1,
@@ -374,9 +380,5 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
     opacity: 0.5,
-  },
-  safeArea: {
-    backgroundColor: Colors.surface,
-    height: 34,
   },
 });

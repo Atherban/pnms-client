@@ -1,50 +1,51 @@
-# Welcome to your Expo app 👋
+# PNMS Client (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Mobile client for the Plant Nursery Management System (PNMS), built with Expo + React Native.
 
-## Get started
+## Tech Stack
+- Expo Router
+- React Query
+- Zustand
+- Axios
 
-1. Install dependencies
+## Prerequisites
+- Node.js 20+
+- npm 10+
+- Expo CLI (`npx expo` is enough)
+- Running PNMS backend API
 
-   ```bash
-   npm install
-   ```
+## Environment
+Create `.env` in project root:
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```env
+EXPO_PUBLIC_API_BASE_URL=http://localhost:5000
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+`EXPO_PUBLIC_API_BASE_URL` is required. The app will fail fast at startup if missing.
 
-## Learn more
+## Run
+```bash
+npm install
+npm run start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Other scripts:
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+- `npm run lint`
+- `npm test`
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Demo Data Seeding (Postman)
+Use the ready-to-import files under `postman/`:
+- `postman/PNMS-Demo-Seed.postman_collection.json`
+- `postman/PNMS-Local.postman_environment.json`
 
-## Join the community
+Quick steps:
+1. Import both files into Postman.
+2. Set valid `baseUrl`, `email`, `password` in the environment.
+3. Run collection folders top to bottom.
 
-Join our community of developers creating universal apps.
+This seeds 5 records each for plants, seeds, customers, expenses, inventory, and sales.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Detailed instructions: `postman/README.md`

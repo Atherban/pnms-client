@@ -1,13 +1,15 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
-import { Image, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Image, StyleProp, View, ViewStyle } from "react-native";
 import { Colors } from "../../theme";
+import { toImageUrl } from "../../utils/image";
 
 type EntityThumbnailProps = {
   uri?: string | null;
   label?: string | null;
   size?: number;
   iconName?: keyof typeof MaterialIcons.glyphMap;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function EntityThumbnail({
@@ -15,31 +17,35 @@ export default function EntityThumbnail({
   label,
   size = 40,
   iconName = "spa",
+  style,
 }: EntityThumbnailProps) {
   const [failed, setFailed] = useState(false);
+  const resolvedUri = useMemo(() => toImageUrl(uri), [uri]);
+  useEffect(() => {
+    setFailed(false);
+  }, [resolvedUri]);
   const validUri =
-    typeof uri === "string" && uri.trim().length > 0 && !failed
-      ? uri.trim()
+    typeof resolvedUri === "string" && resolvedUri.trim().length > 0 && !failed
+      ? resolvedUri.trim()
       : null;
-  const initial = useMemo(() => {
-    const text = (label ?? "").trim();
-    return text ? text.charAt(0).toUpperCase() : null;
-  }, [label]);
   const radius = Math.round(size / 2);
 
   return (
     <View
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        borderWidth: 1,
-        borderColor: Colors.borderLight,
-        backgroundColor: Colors.surface,
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+          borderWidth: 1,
+          borderColor: Colors.borderLight,
+          backgroundColor: Colors.surface,
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+        },
+        style,
+      ]}
     >
       {validUri ? (
         <Image
@@ -48,16 +54,6 @@ export default function EntityThumbnail({
           style={{ width: "100%", height: "100%" }}
           onError={() => setFailed(true)}
         />
-      ) : initial ? (
-        <Text
-          style={{
-            color: Colors.primary,
-            fontWeight: "700",
-            fontSize: Math.max(12, Math.round(size * 0.36)),
-          }}
-        >
-          {initial}
-        </Text>
       ) : (
         <MaterialIcons
           name={iconName}

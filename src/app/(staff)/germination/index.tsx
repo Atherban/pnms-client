@@ -7,7 +7,7 @@ export default function StaffGerminationIndex() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
       <GerminationReadScreen
         title="Germination"
         canCreate

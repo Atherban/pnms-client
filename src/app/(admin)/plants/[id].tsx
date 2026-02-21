@@ -1,0 +1,8 @@
+import { useLocalSearchParams } from "expo-router";
+import { PlantDetailScreen } from "../../../components/modules/PlantDetailScreen";
+
+export default function AdminPlantDetailRoute() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <PlantDetailScreen id={id} title="Plant Details" canUpload />;
+}
+

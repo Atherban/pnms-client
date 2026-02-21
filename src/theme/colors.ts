@@ -1,40 +1,42 @@
-// theme/Colors.ts - Minimal Version
+// theme/colors.ts - App icon aligned palette
 
 export const Colors = {
-  // Primary
-  primary: "#4A6FA5",
-  primaryLight: "#6B8CC9",
-  primaryDark: "#2E4A7A",
+  // Brand (aligned with AppIcons + adaptive icon background)
+  primary: "#1F5E8C",
+  primaryLight: "#4A87B5",
+  primaryDark: "#184A6D",
 
-  // Secondary
-  secondary: "#FF7E5F",
+  // Secondary accent
+  secondary: "#2E8B57",
 
   // Semantic
-  success: "#4CAF50",
-  warning: "#FF9800",
-  error: "#F44336",
-  info: "#2196F3",
+  success: "#2E9D5B",
+  warning: "#E69A24",
+  error: "#D64545",
+  info: "#2F7CC0",
 
   // Text
-  text: "#212121",
-  textSecondary: "#757575",
-  textTertiary: "#9E9E9E",
+  text: "#1C2733",
+  textPrimary: "#1C2733",
+  textSecondary: "#5C6B7A",
+  textTertiary: "#8A97A4",
   textInverse: "#FFFFFF",
 
   // Background
-  background: "#F5F7FA",
+  background: "#F5FAFF",
   surface: "#FFFFFF",
-  surfaceDark: "#F0F2F5",
+  surfaceLight: "#FFFFFF",
+  surfaceDark: "#EAF2FA",
 
-  shadow: "#1a1919a9",
+  shadow: "#0F2A4026",
 
   // Border
-  border: "#E0E0E0",
-  borderLight: "#EEEEEE",
+  border: "#D4E2F0",
+  borderLight: "#E7EEF6",
 
   // UI States
-  disabled: "#BDBDBD",
-  overlay: "rgba(0, 0, 0, 0.5)",
+  disabled: "#AEBECD",
+  overlay: "rgba(12, 26, 39, 0.5)",
 
   // Basic
   white: "#FFFFFF",
@@ -42,8 +44,8 @@ export const Colors = {
   transparent: "transparent",
 
   // Chart colors (for dashboard)
-  chart1: "#4A6FA5",
-  chart2: "#4CAF50",
-  chart3: "#FF9800",
-  chart4: "#9C27B0",
+  chart1: "#1F5E8C",
+  chart2: "#2E9D5B",
+  chart3: "#E69A24",
+  chart4: "#6B5CA5",
 } as const;

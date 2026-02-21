@@ -1,5 +1,6 @@
 // services/sowing.service.ts
 import { api, apiPath, unwrap } from "./api";
+import { withResolvedImagesDeep } from "../utils/image";
 
 export interface Sowing {
   _id: string;
@@ -18,45 +19,54 @@ export interface Sowing {
 }
 
 const normalizeSowing = (s: any): Sowing => {
+  const normalized = withResolvedImagesDeep(s);
+  const { seed, seedId: rawSeedId, ...rest } = normalized;
   const seedObj =
-    typeof s.seedId === "object"
-      ? s.seedId
-      : typeof s.seed === "object"
-        ? s.seed
+    typeof rawSeedId === "object"
+      ? rawSeedId
+      : typeof seed === "object"
+        ? seed
         : undefined;
 
   const plantTypeObj =
     seedObj?.plantType ??
-    s.plantType ??
-    s.plantTypeId ??
-    s.plantTypeRef ??
+    normalized.plantType ??
+    normalized.plantTypeId ??
+    normalized.plantTypeRef ??
     undefined;
 
   const quantity =
     Number(
-      s.quantity ??
-        s.totalSeeds ??
-        s.seedsSown ??
-        s.quantitySown ??
-        s.seedQuantity ??
+      rest.quantity ??
+        rest.totalSeeds ??
+        rest.seedsSown ??
+        rest.quantitySown ??
+        rest.seedQuantity ??
         0,
     ) || 0;
 
   const seedName =
-    seedObj?.name ?? s.seedName ?? s.seed?.name ?? s.seedLabel ?? "Unknown Seed";
+    seedObj?.name ??
+    rest.seedName ??
+    seed?.name ??
+    rest.seedLabel ??
+    "Unknown Seed";
 
   const plantTypeName =
-    plantTypeObj?.name ?? s.plantTypeName ?? s.plantTypeLabel ?? "Unknown Plant";
+    plantTypeObj?.name ??
+    rest.plantTypeName ??
+    rest.plantTypeLabel ??
+    "Unknown Plant";
 
   return {
-    ...s,
+    ...rest,
     quantity,
     seedId:
       seedObj ||
-      (typeof s.seedId === "string"
-        ? { _id: s.seedId, name: seedName, plantType: plantTypeObj }
+      (typeof rawSeedId === "string"
+        ? { _id: rawSeedId, name: seedName, plantType: plantTypeObj }
         : seedName
-          ? { _id: s.seedId ?? "", name: seedName, plantType: plantTypeObj }
+          ? { _id: rawSeedId ?? "", name: seedName, plantType: plantTypeObj }
           : undefined),
     plantType: plantTypeObj ?? (plantTypeName ? { name: plantTypeName } : undefined),
   };

@@ -3,5 +3,5 @@ import { SaleDetailScreen } from "../../../components/modules/SaleDetailScreen";
 
 export default function AdminSaleDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  return <SaleDetailScreen id={id} title="Sale" />;
+  return <SaleDetailScreen id={id} title="Sale" routeGroup="admin" />;
 }

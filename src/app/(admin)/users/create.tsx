@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
-  Dimensions,
   Pressable,
   ScrollView,
   Text,
@@ -16,8 +15,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserService } from "../../../services/user.service";
 import { Colors, Spacing } from "../../../theme";
+import { formatErrorMessage } from "../../../utils/error";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
 export default function CreateUser() {
@@ -44,7 +43,7 @@ export default function CreateUser() {
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", err?.message || "Failed to create user");
+      Alert.alert("Error", formatErrorMessage(err));
     },
   });
 
@@ -131,7 +130,7 @@ export default function CreateUser() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Fixed Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}

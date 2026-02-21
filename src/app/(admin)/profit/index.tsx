@@ -112,10 +112,10 @@ export default function AdminProfit() {
   /* -------------------- Normalize Response -------------------- */
 
   const result = mutation.data ?? {
-      totalSales: 0,
-      totalExpenses: 0,
-      profit: 0,
-    };
+    totalSales: 0,
+    totalExpenses: 0,
+    profit: 0,
+  };
 
   const totalSales = Number(result.totalSales) || 0;
   const totalExpenses = Number(result.totalExpenses) || 0;
@@ -137,7 +137,7 @@ export default function AdminProfit() {
   /* -------------------- UI -------------------- */
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Fixed Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
@@ -547,7 +547,6 @@ export default function AdminProfit() {
     </SafeAreaView>
   );
 }
-
 
 const styles = {
   container: {

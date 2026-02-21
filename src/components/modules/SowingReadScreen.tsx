@@ -15,8 +15,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { GerminationService } from "../../services/germination.service";
 import { SowingService } from "../../services/sowing.service";
 import { Colors } from "../../theme";
+import { toImageUrl } from "../../utils/image";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -38,10 +41,19 @@ type SowingDetails = {
   category: string;
   quantitySown: number;
   quantityGerminated: number;
+  quantityDiscarded: number;
   quantityPendingGermination: number;
   performedBy: string;
   performerRole: "ADMIN" | "STAFF";
+  performerRoles: ("ADMIN" | "STAFF")[];
   sowingDate?: string;
+  thumbnail?: string;
+  sourceCount: number;
+};
+
+type GerminationSummary = {
+  germinated: number;
+  discarded: number;
 };
 
 const formatDate = (dateString?: string) => {
@@ -64,6 +76,60 @@ const formatDate = (dateString?: string) => {
 };
 
 const formatNumber = (value: number) => value.toLocaleString("en-IN");
+
+const firstNumber = (...values: unknown[]): number | null => {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const sumFromGerminations = (
+  item: any,
+  selector: (entry: any) => unknown,
+): number => {
+  if (!Array.isArray(item?.germinations)) return 0;
+  return item.germinations.reduce((sum: number, entry: any) => {
+    const parsed = Number(selector(entry));
+    return Number.isFinite(parsed) ? sum + parsed : sum;
+  }, 0);
+};
+
+const getQuantityGerminated = (item: any): number => {
+  const direct = firstNumber(
+    item?.quantityGerminated,
+    item?.germinatedSeeds,
+    item?.totalGerminated,
+    item?.germinationSummary?.germinatedSeeds,
+    item?.summary?.germinatedSeeds,
+    item?.latestGermination?.germinatedSeeds,
+  );
+  if (direct != null) return Math.max(0, direct);
+  return Math.max(
+    0,
+    sumFromGerminations(item, (entry) => entry?.germinatedSeeds),
+  );
+};
+
+const getQuantityDiscarded = (item: any): number => {
+  // console.log(item);
+
+  const direct = firstNumber(
+    item?.quantityDiscarded,
+    item?.discardedSeeds,
+    item?.discarded,
+    item?.totalDiscarded,
+    item?.germinationSummary?.discardedSeeds,
+    item?.summary?.discardedSeeds,
+    item?.latestGermination?.discardedSeeds,
+  );
+  if (direct != null) return Math.max(0, direct);
+  return Math.max(
+    0,
+    sumFromGerminations(item, (entry) => entry?.discardedSeeds),
+  );
+};
 
 const isInDateRange = (dateString: string | undefined, range: DateFilter) => {
   if (range === "ALL") return true;
@@ -95,7 +161,10 @@ const isInDateRange = (dateString: string | undefined, range: DateFilter) => {
   return true;
 };
 
-const extractSowingDetails = (item: any): SowingDetails => {
+const extractSowingDetails = (
+  item: any,
+  germinationSummary?: GerminationSummary,
+): SowingDetails => {
   const seedObj =
     (typeof item?.seedId === "object" && item.seedId) ||
     (typeof item?.seed === "object" && item.seed) ||
@@ -105,11 +174,15 @@ const extractSowingDetails = (item: any): SowingDetails => {
     seedObj?.plantType ?? item?.plantType ?? item?.plantTypeId ?? null;
 
   const quantitySown = Number(item?.quantitySown ?? item?.quantity ?? 0) || 0;
-  const quantityGerminated = Number(item?.quantityGerminated ?? 0) || 0;
-  const quantityPendingGermination = Number(
-    item?.quantityPendingGermination ??
-      Math.max(0, quantitySown - quantityGerminated),
+  const quantityGerminated =
+    germinationSummary?.germinated ?? getQuantityGerminated(item);
+  const quantityDiscarded =
+    germinationSummary?.discarded ?? getQuantityDiscarded(item);
+  const quantityPendingGermination = Math.max(
+    0,
+    quantitySown - quantityGerminated - quantityDiscarded,
   );
+  const performerRole = item?.roleAtTime === "ADMIN" ? "ADMIN" : "STAFF";
 
   return {
     id: String(item?._id ?? item?.id ?? ""),
@@ -120,28 +193,105 @@ const extractSowingDetails = (item: any): SowingDetails => {
     category: plantObj?.category ?? item?.category ?? "",
     quantitySown,
     quantityGerminated,
+    quantityDiscarded,
     quantityPendingGermination,
     performedBy: item?.performedBy?.name ?? "Unknown Staff",
-    performerRole: item?.roleAtTime === "ADMIN" ? "ADMIN" : "STAFF",
+    performerRole,
+    performerRoles: [performerRole],
     sowingDate: item?.sowingDate ?? item?.createdAt,
+    thumbnail: toImageUrl(
+      plantObj?.imageUrl ??
+        (Array.isArray(plantObj?.images)
+          ? plantObj.images[0]?.fileName
+          : undefined) ??
+        seedObj?.imageUrl ??
+        (Array.isArray(seedObj?.images)
+          ? seedObj.images[0]?.fileName
+          : undefined),
+    ),
+    sourceCount: 1,
   };
+};
+
+const getSowingMergeKey = (item: SowingDetails) =>
+  [
+    item.seedName || "-",
+    item.plantName || "-",
+    item.variety || "-",
+    item.supplierName || "-",
+  ].join("|");
+
+const mergeSowingDetails = (rows: SowingDetails[]): SowingDetails[] => {
+  const grouped = new Map<string, SowingDetails>();
+
+  for (const row of rows) {
+    const key = getSowingMergeKey(row);
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, { ...row });
+      continue;
+    }
+
+    const mergedRoles = Array.from(
+      new Set([...existing.performerRoles, ...row.performerRoles]),
+    ) as ("ADMIN" | "STAFF")[];
+    const latestDate = [existing.sowingDate, row.sowingDate]
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(b as string).getTime() - new Date(a as string).getTime(),
+      )[0];
+
+    existing.quantitySown += row.quantitySown;
+    existing.quantityGerminated += row.quantityGerminated;
+    existing.quantityDiscarded += row.quantityDiscarded;
+    existing.quantityPendingGermination = Math.max(
+      0,
+      existing.quantitySown -
+        existing.quantityGerminated -
+        existing.quantityDiscarded,
+    );
+    existing.sourceCount += row.sourceCount;
+    existing.performerRoles = mergedRoles;
+    existing.performerRole =
+      mergedRoles.length === 1 ? mergedRoles[0] : existing.performerRole;
+    existing.performedBy =
+      existing.performedBy === row.performedBy
+        ? existing.performedBy
+        : "Multiple Staff";
+    existing.sowingDate = latestDate ?? existing.sowingDate;
+    existing.id = key;
+  }
+
+  return Array.from(grouped.values()).sort(
+    (a, b) =>
+      new Date(b.sowingDate ?? 0).getTime() -
+      new Date(a.sowingDate ?? 0).getTime(),
+  );
 };
 
 interface StatsCardProps {
   totalSowings: number;
   totalSeeds: number;
+  totalDiscarded: number;
   uniquePlants: number;
 }
 
 const StatsCard = ({
   totalSowings,
   totalSeeds,
+  totalDiscarded,
   uniquePlants,
 }: StatsCardProps) => (
   <View style={styles.statsCard}>
     <View style={styles.statsRow}>
       <View style={styles.statItem}>
-        <MaterialIcons name="format-list-bulleted" size={16} color={Colors.white} />
+        <MaterialIcons
+          name="format-list-bulleted"
+          size={16}
+          color={Colors.white}
+        />
         <Text style={styles.statNumber}>{formatNumber(totalSowings)}</Text>
         <Text style={styles.statLabel}>Records</Text>
       </View>
@@ -150,6 +300,12 @@ const StatsCard = ({
         <MaterialIcons name="spa" size={16} color={Colors.white} />
         <Text style={styles.statNumber}>{formatNumber(totalSeeds)}</Text>
         <Text style={styles.statLabel}>Seeds Sown</Text>
+      </View>
+      <View style={styles.statDivider} />
+      <View style={styles.statItem}>
+        <MaterialIcons name="delete-outline" size={16} color={Colors.white} />
+        <Text style={styles.statNumber}>{formatNumber(totalDiscarded)}</Text>
+        <Text style={styles.statLabel}>Discarded</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
@@ -192,7 +348,11 @@ const SearchBar = ({
         />
         {value.length > 0 && (
           <TouchableOpacity onPress={onClear} style={styles.searchClearButton}>
-            <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.8)" />
+            <MaterialIcons
+              name="close"
+              size={16}
+              color="rgba(255,255,255,0.8)"
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -233,9 +393,13 @@ const SowingCard = ({ details }: { details: SowingDetails }) => {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <View style={styles.plantIcon}>
-            <MaterialIcons name="spa" size={20} color={Colors.primary} />
-          </View>
+          <EntityThumbnail
+            uri={details.thumbnail}
+            label={details.plantName}
+            size={40}
+            iconName="spa"
+            style={styles.plantIcon}
+          />
           <View style={styles.titleBlock}>
             <Text style={styles.plantName} numberOfLines={1}>
               {details.plantName}
@@ -277,6 +441,13 @@ const SowingCard = ({ details }: { details: SowingDetails }) => {
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metricBlock}>
+          <Text style={styles.metricLabel}>Discarded</Text>
+          <Text style={styles.metricValue}>
+            {formatNumber(details.quantityDiscarded)}
+          </Text>
+        </View>
+        <View style={styles.metricDivider} />
+        <View style={styles.metricBlock}>
           <Text style={styles.metricLabel}>Pending</Text>
           <Text style={styles.metricValue}>
             {formatNumber(details.quantityPendingGermination)}
@@ -285,6 +456,14 @@ const SowingCard = ({ details }: { details: SowingDetails }) => {
       </View>
 
       <View style={styles.footerRow}>
+        {details.sourceCount > 1 && (
+          <View style={styles.footerItem}>
+            <MaterialIcons name="merge-type" size={12} color={Colors.primary} />
+            <Text style={[styles.footerText, { color: Colors.primary }]}>
+              Merged {details.sourceCount} entries
+            </Text>
+          </View>
+        )}
         <View style={styles.footerItem}>
           <MaterialIcons
             name="category"
@@ -542,35 +721,79 @@ export function SowingReadScreen({
     category: "ALL",
   });
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const {
+    data: sowingData,
+    isLoading: isLoadingSowing,
+    error: sowingError,
+    refetch,
+  } = useQuery({
     queryKey: ["sowings"],
     queryFn: SowingService.getAll,
     staleTime: 60_000,
     retry: 2,
   });
 
-  const sowings = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const { data: germinationData } = useQuery({
+    queryKey: ["germination"],
+    queryFn: GerminationService.getAll,
+    staleTime: 60_000,
+    retry: 2,
+  });
+
+  const sowings = useMemo(
+    () => (Array.isArray(sowingData) ? sowingData : []),
+    [sowingData],
+  );
+
+  const germinationBySowingId = useMemo(() => {
+    const map = new Map<string, GerminationSummary>();
+    const records = Array.isArray(germinationData) ? germinationData : [];
+
+    for (const record of records as any[]) {
+      const sowingId = String(
+        record?.sowingId?._id ?? record?.sowingId?.id ?? record?.sowingId ?? "",
+      );
+      if (!sowingId) continue;
+
+      const germinated = Number(record?.germinatedSeeds ?? 0) || 0;
+      const discarded = Number(record?.discardedSeeds ?? 0) || 0;
+      const current = map.get(sowingId) ?? { germinated: 0, discarded: 0 };
+      current.germinated += germinated;
+      current.discarded += discarded;
+      map.set(sowingId, current);
+    }
+
+    return map;
+  }, [germinationData]);
 
   const detailedRecords = useMemo(
-    () => sowings.map((item: any) => extractSowingDetails(item)),
-    [sowings],
+    () =>
+      sowings.map((item: any) => {
+        const sowingId = String(item?._id ?? item?.id ?? "");
+        return extractSowingDetails(item, germinationBySowingId.get(sowingId));
+      }),
+    [germinationBySowingId, sowings],
+  );
+  const mergedRecords = useMemo(
+    () => mergeSowingDetails(detailedRecords),
+    [detailedRecords],
   );
 
   const categories = useMemo(
     () =>
       Array.from(
         new Set(
-          detailedRecords
+          mergedRecords
             .map((item) => item.category)
             .filter((item) => Boolean(item)),
         ),
       ).sort(),
-    [detailedRecords],
+    [mergedRecords],
   );
 
   const filtered = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
-    return detailedRecords.filter((item) => {
+    return mergedRecords.filter((item) => {
       const matchesSearch =
         !term ||
         [
@@ -587,25 +810,29 @@ export function SowingReadScreen({
 
       const matchesDate = isInDateRange(item.sowingDate, filters.dateRange);
       const matchesRole =
-        filters.role === "ALL" || item.performerRole === filters.role;
+        filters.role === "ALL" || item.performerRoles.includes(filters.role);
       const matchesCategory =
         filters.category === "ALL" || item.category === filters.category;
 
       return matchesSearch && matchesDate && matchesRole && matchesCategory;
     });
-  }, [detailedRecords, searchQuery, filters]);
+  }, [mergedRecords, searchQuery, filters]);
 
   const stats = useMemo(() => {
-    const totalSowings = detailedRecords.length;
-    const totalSeeds = detailedRecords.reduce(
+    const totalSowings = mergedRecords.length;
+    const totalSeeds = mergedRecords.reduce(
       (sum, item) => sum + item.quantitySown,
       0,
     );
+    const totalDiscarded = mergedRecords.reduce(
+      (sum, item) => sum + item.quantityDiscarded,
+      0,
+    );
     const uniquePlants = new Set(
-      detailedRecords.map((item) => item.plantName).filter(Boolean),
+      mergedRecords.map((item) => item.plantName).filter(Boolean),
     ).size;
-    return { totalSowings, totalSeeds, uniquePlants };
-  }, [detailedRecords]);
+    return { totalSowings, totalSeeds, totalDiscarded, uniquePlants };
+  }, [mergedRecords]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -629,9 +856,9 @@ export function SowingReadScreen({
     setSearchQuery("");
   }, []);
 
-  if (isLoading) {
+  if (isLoadingSowing) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading sowing records...</Text>
@@ -640,14 +867,14 @@ export function SowingReadScreen({
     );
   }
 
-  if (error) {
+  if (sowingError) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
           <MaterialIcons name="error-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTitle}>Failed to Load Records</Text>
           <Text style={styles.errorMessage}>
-            {(error as any)?.message || "Please try again"}
+            {(sowingError as any)?.message || "Please try again"}
           </Text>
           <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
             <Text style={styles.retryButtonText}>Try Again</Text>
@@ -665,7 +892,7 @@ export function SowingReadScreen({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <SafeAreaView edges={["left", "right"]} style={styles.headerContent}>
           <View style={styles.headerRow}>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>{title}</Text>
@@ -705,10 +932,11 @@ export function SowingReadScreen({
               </Pressable>
             </View>
           )}
-          {detailedRecords.length > 0 && (
+          {mergedRecords.length > 0 && (
             <StatsCard
               totalSowings={stats.totalSowings}
               totalSeeds={stats.totalSeeds}
+              totalDiscarded={stats.totalDiscarded}
               uniquePlants={stats.uniquePlants}
             />
           )}

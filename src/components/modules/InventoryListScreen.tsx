@@ -6,7 +6,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   FlatList,
   Pressable,
   RefreshControl,
@@ -20,7 +19,6 @@ import EntityThumbnail from "../ui/EntityThumbnail";
 import { InventoryService } from "../../services/inventory.service";
 import { Colors, Spacing } from "../../theme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 type RoleGroup = "staff" | "admin" | "viewer";
 
@@ -105,10 +103,6 @@ const formatCurrency = (value: number) => {
   return `₹${value.toLocaleString("en-IN")}`;
 };
 
-const formatNumber = (value: number) => {
-  return value.toLocaleString("en-IN");
-};
-
 // Filter Chip Component - Fixed dimensions
 const FilterChip = ({
   label,
@@ -156,74 +150,6 @@ const FilterChip = ({
       )}
     </View>
   </Pressable>
-);
-
-// Search Bar Component
-const SearchBar = ({
-  value,
-  onChangeText,
-  onClear,
-}: {
-  value: string;
-  onChangeText: (text: string) => void;
-  onClear: () => void;
-}) => (
-  <View style={styles.searchContainer}>
-    <View style={styles.searchInputContainer}>
-      <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search by plant name or category..."
-        placeholderTextColor={Colors.textTertiary}
-        value={value}
-        onChangeText={onChangeText}
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-      />
-      {value.length > 0 && (
-        <Pressable onPress={onClear} style={styles.searchClearButton}>
-          <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
-        </Pressable>
-      )}
-    </View>
-  </View>
-);
-
-// Stats Card - Redesigned
-const StatCard = ({
-  icon,
-  value,
-  label,
-  color,
-  trend,
-}: {
-  icon: string;
-  value: number | string;
-  label: string;
-  color: string;
-  trend?: { value: number; label: string };
-}) => (
-  <View style={styles.statsCard}>
-    <View style={[styles.statIconContainer, { backgroundColor: color + "15" }]}>
-      <MaterialIcons name={icon as any} size={24} color={color} />
-    </View>
-    <View style={styles.statInfo}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-      {trend && (
-        <View style={styles.statTrend}>
-          <MaterialIcons 
-            name={trend.value > 0 ? "arrow-upward" : "arrow-downward"} 
-            size={12} 
-            color={trend.value > 0 ? Colors.success : Colors.error} 
-          />
-          <Text style={[styles.statTrendText, { color: trend.value > 0 ? Colors.success : Colors.error }]}>
-            {Math.abs(trend.value)}% {trend.label}
-          </Text>
-        </View>
-      )}
-    </View>
-  </View>
 );
 
 // Compact Stats Row for Header
@@ -756,7 +682,7 @@ export function InventoryListScreen({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -764,14 +690,14 @@ export function InventoryListScreen({
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <ErrorState error={error} onRetry={handleRefresh} onBack={handleBack} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <Header
         title={title}
         subtitle={`${filteredInventory.length} ${

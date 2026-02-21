@@ -18,6 +18,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Seed, SeedService } from "../../services/seed.service";
 import { Colors } from "../../theme";
+import { formatErrorMessage } from "../../utils/error";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
 type RoleGroup = "staff" | "admin" | "viewer";
@@ -55,11 +57,20 @@ const formatNumber = (num: number): string => {
   return num.toLocaleString("en-IN");
 };
 
+const getDiscardedSeeds = (seed: Seed) => Number(seed.discardedSeeds ?? 0);
+
 const getSeedStock = (seed: Seed) => {
-  return Number((seed.totalPurchased ?? 0) - (seed.seedsUsed ?? 0));
+  return Math.max(
+    0,
+    Number(
+      (seed.totalPurchased ?? 0) -
+        (seed.seedsUsed ?? 0) -
+        getDiscardedSeeds(seed),
+    ),
+  );
 };
 
-const getMinStock = (seed: Seed) => Number(seed.plantType.minStockLevel ?? 10);
+const getMinStock = (seed: Seed) => Number(seed.plantType?.minStockLevel ?? 10);
 
 const getExpiryStatus = (expiryDate: string) => {
   const expiry = new Date(expiryDate);
@@ -152,35 +163,40 @@ const SearchBar = ({
 
 interface SeedCardProps {
   seed: Seed;
+  onPress: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (seed: Seed) => void;
   canWrite: boolean;
 }
 
-const SeedCard = ({ seed, onEdit, onDelete, canWrite }: SeedCardProps) => {
+const SeedCard = ({ seed, onPress, onEdit, onDelete, canWrite }: SeedCardProps) => {
   const expiryStatus = getExpiryStatus(seed.expiryDate ?? "");
   const totalStock = seed.totalPurchased ?? 0;
-  const availableStock = (seed.totalPurchased ?? 0) - (seed.seedsUsed ?? 0);
+  const availableStock = getSeedStock(seed);
   const minStock = getMinStock(seed);
   const isLowStock = availableStock < minStock;
   const stockPercentage = Math.min(
     (availableStock / (totalStock || 1)) * 100,
     100,
   );
+  const imageUri = seed.imageUrl || seed.plantType?.imageUrl;
 
   return (
-    <View style={styles.seedCard}>
+    <TouchableOpacity
+      style={styles.seedCard}
+      activeOpacity={0.92}
+      onPress={() => onPress(seed._id)}
+    >
       {/* Header */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <View
-            style={[
-              styles.seedIcon,
-              { backgroundColor: `${Colors.primary}10` },
-            ]}
-          >
-            <MaterialIcons name="grass" size={20} color={Colors.primary} />
-          </View>
+          <EntityThumbnail
+            uri={imageUri}
+            label={seed.name || seed.plantType?.name}
+            size={44}
+            iconName="grass"
+            style={styles.seedIcon}
+          />
           <View style={styles.seedInfo}>
             <Text style={styles.seedName} numberOfLines={1}>
               {seed.name}
@@ -297,7 +313,7 @@ const SeedCard = ({ seed, onEdit, onDelete, canWrite }: SeedCardProps) => {
               color={Colors.textSecondary}
             />
             <Text style={styles.detailValue}>
-              {formatDate(seed.expiryDate)}
+              {formatDate(seed.expiryDate ?? "")}
             </Text>
           </View>
         </View>
@@ -330,7 +346,7 @@ const SeedCard = ({ seed, onEdit, onDelete, canWrite }: SeedCardProps) => {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -433,6 +449,7 @@ export function SeedsListScreen({
   const stats = useMemo(() => {
     const totalSeeds = seeds.length;
     const expiredSeeds = seeds.filter((s) => {
+      if (!s.expiryDate) return false;
       const d = new Date(s.expiryDate);
       return !isNaN(d.getTime()) && d < new Date();
     }).length;
@@ -467,7 +484,7 @@ export function SeedsListScreen({
                 Haptics.notificationAsync(
                   Haptics.NotificationFeedbackType.Error,
                 );
-                Alert.alert("Error", e?.message || "Failed to delete seed");
+                Alert.alert("Error", formatErrorMessage(e));
               }
             },
           },
@@ -499,35 +516,47 @@ export function SeedsListScreen({
   const handleCreatePress = useCallback(() => {
     if (!canWrite) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push(`/${`(${routeGroup})`}/seeds/create`);
+    router.push(`/${`(${routeGroup})`}/seeds/create` as any);
   }, [canWrite, routeGroup, router]);
 
   const handleEditPress = useCallback(
     (id: string) => {
       if (!canWrite) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      router.push({ pathname: `/${`(${routeGroup})`}/seeds/edit`, params: { id } });
+      router.push({
+        pathname: `/${`(${routeGroup})`}/seeds/edit` as any,
+        params: { id },
+      });
     },
     [canWrite, routeGroup, router],
+  );
+
+  const handleDetailPress = useCallback(
+    (id: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.push(`/${`(${routeGroup})`}/seeds/${id}` as any);
+    },
+    [routeGroup, router],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: Seed }) => (
       <SeedCard
         seed={item}
+        onPress={handleDetailPress}
         onEdit={handleEditPress}
         onDelete={handleDelete}
         canWrite={canWrite}
       />
     ),
-    [canWrite, handleEditPress, handleDelete],
+    [canWrite, handleDetailPress, handleEditPress, handleDelete],
   );
 
   const keyExtractor = useCallback((item: Seed) => item._id, []);
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -545,7 +574,7 @@ export function SeedsListScreen({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <SafeAreaView edges={[ "left", "right"]} style={styles.headerContent}>
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.headerTitle}>{title}</Text>

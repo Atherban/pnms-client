@@ -1,6 +1,7 @@
 // services/plant-type.service.ts
 import { api, apiPath, unwrap } from "./api";
 import type { PlantType } from "../types/plant.types";
+import { withResolvedImage } from "../utils/image";
 
 export interface PlantTypePayload {
   name: string;
@@ -35,14 +36,28 @@ export const PlantTypeService = {
       candidates.find((candidate) => Array.isArray(candidate)) ?? [];
 
     return (list as PlantType[]).map((pt: any) => ({
-      ...pt,
+      ...withResolvedImage(pt),
       id: pt?._id ?? pt?.id,
     }));
   },
 
   async getById(id: string) {
     const res = await api.get(apiPath(`/plant-types/${id}`));
-    return unwrap(res);
+    const data = unwrap(res);
+    const payload =
+      data && typeof data === "object" && data.data && typeof data.data === "object"
+        ? data.data
+        : data;
+
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    const resolved = withResolvedImage(payload);
+    if (data && typeof data === "object" && data.data && typeof data.data === "object") {
+      return { ...data, data: resolved };
+    }
+    return resolved;
   },
 
   async create(payload: PlantTypePayload) {

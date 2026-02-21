@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native
 import { useMemo, useState } from "react";
 import { SalesService } from "../../services/sales.service";
 import { Colors, Spacing } from "../../theme";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const getAmount = (sale: any) =>
   Number(
@@ -76,15 +77,34 @@ export function SalesReadScreen({ title }: { title: string }) {
         renderItem={({ item }: { item: any }) => {
           const amount = getAmount(item);
           const profit = Number(item.totalProfit ?? 0);
+          const firstItem = Array.isArray(item?.items) ? item.items[0] : null;
+          const plantObj =
+            (typeof firstItem?.inventory?.plantType === "object" &&
+              firstItem.inventory.plantType) ||
+            (typeof firstItem?.inventoryId?.plantType === "object" &&
+              firstItem.inventoryId.plantType) ||
+            (typeof firstItem?.plantType === "object" && firstItem.plantType) ||
+            null;
           return (
             <View style={styles.card}>
-              <Text style={styles.name}>Sale #{String(item._id ?? "").slice(-6) || "—"}</Text>
-              <Text style={styles.meta}>Amount: ₹ {amount.toLocaleString("en-IN")}</Text>
-              <Text style={[styles.meta, { color: profit >= 0 ? Colors.success : Colors.error }]}>
-                Profit: ₹ {profit.toLocaleString("en-IN")}
-              </Text>
-              <Text style={styles.meta}>Mode: {item.paymentMode || "—"}</Text>
-              <Text style={styles.meta}>Date: {item.createdAt ? String(item.createdAt).slice(0, 10) : "—"}</Text>
+              <View style={styles.cardHeader}>
+                <EntityThumbnail
+                  uri={plantObj?.imageUrl}
+                  label={plantObj?.name}
+                  size={42}
+                  iconName="local-florist"
+                  style={styles.thumbnail}
+                />
+                <View style={styles.cardInfo}>
+                  <Text style={styles.name}>Sale #{String(item._id ?? "").slice(-6) || "—"}</Text>
+                  <Text style={styles.meta}>Amount: ₹ {amount.toLocaleString("en-IN")}</Text>
+                  <Text style={[styles.meta, { color: profit >= 0 ? Colors.success : Colors.error }]}>
+                    Profit: ₹ {profit.toLocaleString("en-IN")}
+                  </Text>
+                  <Text style={styles.meta}>Mode: {item.paymentMode || "—"}</Text>
+                  <Text style={styles.meta}>Date: {item.createdAt ? String(item.createdAt).slice(0, 10) : "—"}</Text>
+                </View>
+              </View>
             </View>
           );
         }}
@@ -116,6 +136,17 @@ const styles = {
     padding: Spacing.md,
     backgroundColor: Colors.surface,
     marginBottom: Spacing.sm,
+  },
+  cardHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: Spacing.sm,
+  },
+  thumbnail: {
+    borderRadius: 10,
+  },
+  cardInfo: {
+    flex: 1,
   },
   name: { color: Colors.text, fontSize: 16, fontWeight: "700" as const },
   meta: { color: Colors.textSecondary, marginTop: 2 },

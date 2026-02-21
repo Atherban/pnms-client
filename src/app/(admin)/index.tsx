@@ -7,14 +7,14 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import KpiCard from "../../components/admin/KpiCard";
 import { AuthService } from "../../services/auth.service";
@@ -23,11 +23,15 @@ import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { getUser } from "../../utils/storage";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BOTTOM_NAV_HEIGHT = 90;
+const NAV_HEIGHT = 90;
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const actionCardWidth = (width - Spacing.lg * 2 - Spacing.md) / 2;
+  const headerPaddingTop = Spacing.lg;
+  const bottomContentPadding = NAV_HEIGHT + insets.bottom + Spacing.lg;
 
   // Get user from auth store
   const storeUser = useAuthStore((state) => state.user);
@@ -98,10 +102,10 @@ export default function AdminDashboard() {
   /* Loading */
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
+          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
@@ -121,7 +125,9 @@ export default function AdminDashboard() {
           </View>
         </LinearGradient>
         <View style={styles.contentArea}>
-          <View style={styles.loadingContainer}>
+          <View
+            style={[styles.loadingContainer, { paddingBottom: bottomContentPadding }]}
+          >
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.loadingText}>Loading dashboard...</Text>
           </View>
@@ -133,10 +139,10 @@ export default function AdminDashboard() {
   /* Error */
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
+          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
@@ -159,7 +165,9 @@ export default function AdminDashboard() {
           </View>
         </LinearGradient>
         <View style={styles.contentArea}>
-          <View style={styles.errorContainer}>
+          <View
+            style={[styles.errorContainer, { paddingBottom: bottomContentPadding }]}
+          >
             <MaterialIcons
               name="error-outline"
               size={64}
@@ -273,11 +281,11 @@ export default function AdminDashboard() {
   const totalInventory = data.totalInventory || 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Fixed Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.fixedHeader}
+        style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
@@ -402,7 +410,10 @@ export default function AdminDashboard() {
             tintColor={Colors.primary}
           />
         }
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: bottomContentPadding },
+        ]}
       >
         {/* KPI Cards */}
         <View style={styles.section}>
@@ -449,6 +460,7 @@ export default function AdminDashboard() {
                 }}
                 style={({ pressed }) => [
                   styles.actionCard,
+                  { width: actionCardWidth },
                   pressed && styles.actionCardPressed,
                 ]}
               >
@@ -503,7 +515,7 @@ const styles = {
   },
   fixedHeader: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
@@ -653,7 +665,7 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     padding: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT,
+    paddingBottom: NAV_HEIGHT,
   },
   loadingText: {
     marginTop: Spacing.md,
@@ -666,7 +678,7 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     padding: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT,
+    paddingBottom: NAV_HEIGHT,
   },
   errorTitle: {
     fontSize: 20,
@@ -700,7 +712,7 @@ const styles = {
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingBottom: NAV_HEIGHT + Spacing.xl,
   },
   section: {
     marginBottom: Spacing.xl,
@@ -746,7 +758,6 @@ const styles = {
     gap: Spacing.md,
   },
   actionCard: {
-    width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md) / 2,
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: Spacing.lg,

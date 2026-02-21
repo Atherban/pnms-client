@@ -4,7 +4,7 @@ import { Colors } from "../../../theme";
 
 export default function AdminExpenses() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
       <ExpensesModuleScreen title="Expenses" canWrite={false} />
     </SafeAreaView>
   );

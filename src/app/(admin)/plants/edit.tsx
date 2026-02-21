@@ -166,7 +166,7 @@ export default function EditPlantType() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
           style={styles.headerGradient}
@@ -191,7 +191,7 @@ export default function EditPlantType() {
 
   if (error || !plantType) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
           style={styles.headerGradient}
@@ -230,7 +230,7 @@ export default function EditPlantType() {
     !mutation.isPending;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
         style={styles.headerGradient}

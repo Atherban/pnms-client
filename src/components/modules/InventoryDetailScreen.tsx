@@ -11,9 +11,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import EntityThumbnail from "../ui/EntityThumbnail";
 import { InventoryService } from "../../services/inventory.service";
 import { Colors, Spacing } from "../../theme";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -69,7 +69,7 @@ export function InventoryDetailScreen({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
           style={styles.headerGradient}
@@ -104,7 +104,7 @@ export function InventoryDetailScreen({
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
           style={styles.headerGradient}
@@ -164,7 +164,7 @@ export function InventoryDetailScreen({
   const totalValue = (data.quantity || 0) * (data.unitCost || 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Header */}
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}

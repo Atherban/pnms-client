@@ -1,8 +1,7 @@
 // components/AuthInitializer.tsx
+import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
 import { useAuthStore } from "../stores/auth.store";
-import { Colors } from "../theme";
 
 export default function AuthInitializer({
   children,
@@ -14,27 +13,30 @@ export default function AuthInitializer({
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const initializeAuth = async () => {
-      await loadFromStorage();
-      setInitialized(true);
+      try {
+        await loadFromStorage();
+        if (isMounted) {
+          setInitialized(true);
+        }
+      } finally {
+        await SplashScreen.hideAsync().catch(() => {
+          // Ignore if splash is already hidden during fast refresh.
+        });
+      }
     };
 
-    initializeAuth();
-  }, []);
+    void initializeAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loadFromStorage]);
 
   if (!initialized || isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: Colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+    return null;
   }
 
   return <>{children}</>;

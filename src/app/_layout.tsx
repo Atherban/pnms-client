@@ -1,40 +1,51 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
-import { StatusBar } from "react-native";
-import { Loader } from "../components";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import AuthInitializer from "../components/AuthInitializer";
-import { useAuthBootstrap } from "../hooks/useAuthBootstrap";
 import { useUIStore } from "../stores/ui.store";
 import { Colors } from "../theme";
-const queryClient = new QueryClient();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { loading } = useAuthBootstrap();
   const hydrateUI = useUIStore((s) => s.hydrate);
 
   useEffect(() => {
-    hydrateUI();
-  }, []);
-
-  if (loading) return <Loader />;
+    void hydrateUI();
+  }, [hydrateUI]);
 
   return (
-    <AuthInitializer>
-      <QueryClientProvider client={queryClient}>
-        <StatusBar
-          backgroundColor={Colors.primary}
-          barStyle="light-content"
-          animated={true}
-        />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            gestureEnabled: true,
-            animation: "slide_from_right",
-          }}
-        />
-      </QueryClientProvider>
-    </AuthInitializer>
+    <SafeAreaProvider>
+      <AuthInitializer>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar
+            style="light"
+            backgroundColor={Colors.primary}
+            translucent={false}
+            animated
+          />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              gestureEnabled: true,
+              animation: "slide_from_right",
+            }}
+          />
+        </QueryClientProvider>
+      </AuthInitializer>
+    </SafeAreaProvider>
   );
 }

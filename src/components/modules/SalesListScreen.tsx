@@ -4,7 +4,7 @@ import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -22,6 +22,8 @@ import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SalesService } from "../../services/sales.service";
 import { Colors, Spacing } from "../../theme";
+import { toImageUrl } from "../../utils/image";
+import EntityThumbnail from "../ui/EntityThumbnail";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
@@ -171,6 +173,52 @@ const getItemPlantNames = (sale: any): string[] => {
     })
     .filter((name: string): name is string => Boolean(name));
   return Array.from(new Set<string>(names));
+};
+
+const resolveEntityImage = (entity: any): string | undefined => {
+  if (!entity || typeof entity !== "object") return undefined;
+
+  const direct = toImageUrl(
+    entity.imageUrl ??
+      entity.image ??
+      entity.fileUrl ??
+      entity.url ??
+      entity.path ??
+      entity.fileName,
+  );
+  if (direct) return direct;
+
+  const images = Array.isArray(entity.images) ? entity.images : [];
+  for (const img of images) {
+    const uri = toImageUrl(
+      img?.imageUrl ?? img?.fileUrl ?? img?.url ?? img?.path ?? img?.fileName,
+    );
+    if (uri) return uri;
+  }
+
+  return undefined;
+};
+
+const getSaleThumbnail = (sale: any): string | undefined => {
+  if (Array.isArray(sale?.items)) {
+    for (const item of sale.items) {
+      const candidates = [
+        item?.inventory?.plantType,
+        item?.inventoryId?.plantType,
+        item?.plantType,
+        item?.inventory,
+        item?.inventoryId,
+        item,
+      ];
+
+      for (const candidate of candidates) {
+        const uri = resolveEntityImage(candidate);
+        if (uri) return uri;
+      }
+    }
+  }
+
+  return resolveEntityImage(sale?.plantType) ?? resolveEntityImage(sale);
 };
 
 const getPaymentInfo = (mode?: string) => {
@@ -355,7 +403,7 @@ const FilterModal = ({
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType="slide"
       transparent={true}
       onRequestClose={onClose}
       statusBarTranslucent
@@ -637,110 +685,6 @@ const FilterModal = ({
   );
 };
 
-// ==================== SORT PICKER COMPONENT ====================
-
-interface SortPickerProps {
-  selectedSort: SortOptionId;
-  onSortChange: (sort: SortOptionId) => void;
-}
-
-const SortPicker = ({ selectedSort, onSortChange }: SortPickerProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const sortButtonRef = useRef(null);
-
-  const selectedOption =
-    SORT_OPTIONS.find((opt) => opt.id === selectedSort) || SORT_OPTIONS[0];
-
-  return (
-    <View style={styles.sortContainer}>
-      <TouchableOpacity
-        ref={sortButtonRef}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setIsOpen(!isOpen);
-        }}
-        style={styles.sortButton}
-        activeOpacity={0.7}
-      >
-        <MaterialIcons name="sort" size={20} color={Colors.textSecondary} />
-        <Text style={styles.sortButtonText} numberOfLines={1}>
-          {selectedOption.label}
-        </Text>
-        <MaterialIcons
-          name={isOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"}
-          size={20}
-          color={Colors.textSecondary}
-        />
-      </TouchableOpacity>
-
-      {isOpen && (
-        <View style={styles.sortDropdown}>
-          <BlurView intensity={80} tint="light" style={styles.sortDropdownBlur}>
-            <View style={styles.sortDropdownHeader}>
-              <Text style={styles.sortDropdownTitle}>Sort by</Text>
-              <TouchableOpacity
-                onPress={() => setIsOpen(false)}
-                style={styles.sortDropdownClose}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="close"
-                  size={20}
-                  color={Colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {SORT_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.sortOption,
-                  selectedSort === option.id && styles.sortOptionSelected,
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  onSortChange(option.id);
-                  setIsOpen(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.sortOptionContent}>
-                  <MaterialIcons
-                    name={option.icon as any}
-                    size={18}
-                    color={
-                      selectedSort === option.id
-                        ? Colors.primary
-                        : Colors.textSecondary
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.sortOptionText,
-                      selectedSort === option.id &&
-                        styles.sortOptionTextSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </View>
-                {selectedSort === option.id && (
-                  <MaterialIcons
-                    name="check"
-                    size={18}
-                    color={Colors.primary}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </BlurView>
-        </View>
-      )}
-    </View>
-  );
-};
-
 // ==================== STATS CARD COMPONENT ====================
 
 interface StatsCardProps {
@@ -853,6 +797,7 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
   const saleDate = getSaleDateValue(item);
   const seller = getSellerName(item);
   const plantNames = getItemPlantNames(item);
+  const thumbnailUri = getSaleThumbnail(item);
   const itemSummary =
     plantNames.length > 0
       ? `${plantNames.slice(0, 2).join(", ")}${plantNames.length > 2 ? ` +${plantNames.length - 2}` : ""}`
@@ -881,60 +826,69 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
         >
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
-              <View style={styles.idContainer}>
-                <MaterialIcons
-                  name="person"
-                  size={14}
-                  color={Colors.primary}
-                />
-                <Text style={styles.saleId}>{seller}</Text>
-              </View>
-              <Text style={styles.saleMetaText}>Sale {saleId}</Text>
-              <Text style={styles.itemSummaryText} numberOfLines={1}>
-                {itemSummary}
-              </Text>
-
-              <View style={styles.badgeContainer}>
-                <View
-                  style={[
-                    styles.paymentBadge,
-                    { backgroundColor: paymentInfo.bg },
-                  ]}
-                >
+              <EntityThumbnail
+                uri={thumbnailUri}
+                label={plantNames[0] || seller}
+                size={44}
+                borderRadius={12}
+                iconName="local-florist"
+              />
+              <View style={styles.cardHeaderMeta}>
+                <View style={styles.idContainer}>
                   <MaterialIcons
-                    name={paymentInfo.icon as any}
-                    size={11}
-                    color={paymentInfo.color}
+                    name="person"
+                    size={14}
+                    color={Colors.primary}
                   />
-                  <Text
-                    style={[
-                      styles.paymentBadgeText,
-                      { color: paymentInfo.color },
-                    ]}
-                  >
-                    {paymentInfo.label}
-                  </Text>
+                  <Text style={styles.saleId}>{seller}</Text>
                 </View>
+                <Text style={styles.saleMetaText}>Sale {saleId}</Text>
+                <Text style={styles.itemSummaryText} numberOfLines={1}>
+                  {itemSummary}
+                </Text>
 
-                <View
-                  style={[
-                    styles.statusBadge,
-                    { backgroundColor: statusInfo.bg },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={statusInfo.icon as any}
-                    size={11}
-                    color={statusInfo.color}
-                  />
-                  <Text
+                <View style={styles.badgeContainer}>
+                  <View
                     style={[
-                      styles.statusBadgeText,
-                      { color: statusInfo.color },
+                      styles.paymentBadge,
+                      { backgroundColor: paymentInfo.bg },
                     ]}
                   >
-                    {statusInfo.label}
-                  </Text>
+                    <MaterialIcons
+                      name={paymentInfo.icon as any}
+                      size={11}
+                      color={paymentInfo.color}
+                    />
+                    <Text
+                      style={[
+                        styles.paymentBadgeText,
+                        { color: paymentInfo.color },
+                      ]}
+                    >
+                      {paymentInfo.label}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: statusInfo.bg },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={statusInfo.icon as any}
+                      size={11}
+                      color={statusInfo.color}
+                    />
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        { color: statusInfo.color },
+                      ]}
+                    >
+                      {statusInfo.label}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -1119,7 +1073,7 @@ const ErrorState = ({ error, onRetry, onBack }: ErrorStateProps) => (
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
     >
-      <SafeAreaView edges={["top"]} style={styles.errorHeaderContent}>
+      <SafeAreaView edges={["left", "right"]} style={styles.errorHeaderContent}>
         <TouchableOpacity
           onPress={onBack}
           style={styles.errorBackButton}
@@ -1390,10 +1344,6 @@ export function SalesListScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  const handleSortChange = useCallback((sort: SortOptionId) => {
-    setFilters((prev) => ({ ...prev, sort }));
-  }, []);
-
   const handleApplyFilters = useCallback((newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1450,7 +1400,7 @@ export function SalesListScreen({
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LoadingState />
       </SafeAreaView>
     );
@@ -1475,7 +1425,7 @@ export function SalesListScreen({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+        <SafeAreaView edges={["left", "right"]} style={styles.headerContent}>
           {/* Title and Create Button */}
           <View style={styles.headerTopRow}>
             <View>
@@ -2068,15 +2018,15 @@ const styles = {
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
+    justifyContent: "flex-end" as const,
     backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalContent: {
-    width: SCREEN_WIDTH - 32,
-    maxHeight: "80%",
+    width: "100%",
+    maxHeight: "88%",
     backgroundColor: Colors.white,
-    borderRadius: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: "hidden" as const,
   },
   modalHeader: {
@@ -2448,6 +2398,13 @@ const styles = {
   },
   cardHeaderLeft: {
     flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: Spacing.sm,
+  },
+  cardHeaderMeta: {
+    flex: 1,
+    minWidth: 0,
   },
   idContainer: {
     flexDirection: "row" as const,

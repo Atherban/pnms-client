@@ -5,6 +5,7 @@ export interface Plant {
   price: number;
   quantityAvailable: number;
   imageUrl?: string;
+  images?: { fileName?: string; url?: string; path?: string }[];
   createdBy?: string;
 }
 
@@ -24,8 +25,10 @@ export interface PlantType {
   sellingPrice?: number;
   minStockLevel?: number;
   defaultCostPrice?: number;
+  description?: string;
   growthStages?: string[] | PlantTypeGrowthStage[];
   imageUrl?: string;
+  images?: { fileName?: string; url?: string; path?: string }[];
   createdAt?: string;
   updatedAt?: string;
 }

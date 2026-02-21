@@ -1,18 +1,67 @@
 // services/seed.service.ts
 import type { CreateSeedPayload, Seed } from "../types/seed.types";
 import { api, apiPath, unwrap } from "./api";
+import { withResolvedImage } from "../utils/image";
 
 export type { CreateSeedPayload, Seed };
+
+const getDiscardedSeeds = (seed: any) => {
+  const value =
+    seed?.discardedSeeds ??
+    seed?.discarded ??
+    seed?.discardedQuantity ??
+    seed?.wastedSeeds ??
+    0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, numeric) : 0;
+};
+
+const normalizeSeed = (seed: any) => ({
+  ...withResolvedImage(seed),
+  discardedSeeds: getDiscardedSeeds(seed),
+  plantType: seed?.plantType ? withResolvedImage(seed.plantType) : seed?.plantType,
+});
 
 export const SeedService = {
   async getAll() {
     const res = await api.get(apiPath("/seeds"));
-    return unwrap(res) ?? [];
+    const data = unwrap(res);
+
+    if (Array.isArray(data)) {
+      return data.map((seed: any) => normalizeSeed(seed));
+    }
+
+    if (data && typeof data === "object" && Array.isArray((data as any).data)) {
+      return {
+        ...(data as any),
+        data: (data as any).data.map((seed: any) => normalizeSeed(seed)),
+      };
+    }
+
+    return data ?? [];
   },
 
   async getById(id: string) {
     const res = await api.get(apiPath(`/seeds/${id}`));
-    return unwrap(res);
+    const data = unwrap(res);
+    const payloadCandidates = [
+      data,
+      (data as any)?.data,
+      (data as any)?.seed,
+      (data as any)?.item,
+      (data as any)?.result,
+    ];
+    const payload =
+      payloadCandidates.find(
+        (candidate) =>
+          candidate && typeof candidate === "object" && !Array.isArray(candidate),
+      ) ?? data;
+
+    if (!payload || typeof payload !== "object") {
+      return payload;
+    }
+
+    return normalizeSeed(payload);
   },
 
   async create(payload: CreateSeedPayload) {

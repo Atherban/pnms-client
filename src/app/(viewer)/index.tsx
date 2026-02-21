@@ -13,17 +13,20 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import KpiCard from "../../components/admin/KpiCard";
 import { AuthService } from "../../services/auth.service";
 import { ViewerDashboardService } from "../../services/viewer-dashboard.service";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 
-const BOTTOM_NAV_HEIGHT = 90;
+const NAV_HEIGHT = 90;
 
 export default function ViewerDashboard() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const headerPaddingTop = Spacing.lg;
+  const bottomContentPadding = NAV_HEIGHT + insets.bottom + Spacing.lg;
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const userName = user?.name || "Viewer";
@@ -173,10 +176,10 @@ export default function ViewerDashboard() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
+          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
         >
           <View style={styles.headerContent}>
             <Text style={styles.title}>Dashboard</Text>
@@ -195,7 +198,9 @@ export default function ViewerDashboard() {
             </View>
           </View>
         </LinearGradient>
-        <View style={styles.loadingContainer}>
+        <View
+          style={[styles.loadingContainer, { paddingBottom: bottomContentPadding }]}
+        >
           <ActivityIndicator size="large" color={Colors.info} />
           <Text style={styles.loadingText}>Loading dashboard...</Text>
         </View>
@@ -205,16 +210,18 @@ export default function ViewerDashboard() {
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <LinearGradient
           colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.fixedHeader}
+          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
         >
           <View style={styles.headerContent}>
             <Text style={styles.title}>Dashboard</Text>
           </View>
         </LinearGradient>
-        <View style={styles.errorContainer}>
+        <View
+          style={[styles.errorContainer, { paddingBottom: bottomContentPadding }]}
+        >
           <MaterialIcons name="error-outline" size={64} color={Colors.error} />
           <Text style={styles.errorTitle}>Unable to load dashboard</Text>
           <Text style={styles.errorMessage}>Please try again.</Text>
@@ -227,10 +234,10 @@ export default function ViewerDashboard() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.fixedHeader}
+        style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
       >
         <View style={styles.headerContent}>
           <Text style={styles.title}>Dashboard</Text>
@@ -300,7 +307,10 @@ export default function ViewerDashboard() {
             tintColor={Colors.info}
           />
         }
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: bottomContentPadding },
+        ]}
       >
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -365,7 +375,7 @@ const styles = {
   container: { flex: 1, backgroundColor: Colors.background },
   fixedHeader: {
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing.lg,
     paddingBottom: Spacing.lg,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
@@ -466,7 +476,7 @@ const styles = {
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingBottom: NAV_HEIGHT + Spacing.lg,
   },
   section: { marginBottom: Spacing.xl },
   sectionHeader: {

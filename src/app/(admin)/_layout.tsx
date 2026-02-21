@@ -1,5 +1,5 @@
 // src/app/(admin)/_layout.tsx
-import CoolBottomNav from "@/src/components/admin/BottomNavigation";
+import AdminBottomNav from "@/src/components/admin/BottomNavigation";
 import { Colors } from "@/src/theme/colors";
 import { Redirect, Slot } from "expo-router";
 import { View } from "react-native";
@@ -13,13 +13,22 @@ export default function AdminLayout() {
   if (user?.role !== "ADMIN") return <Redirect href="/unauthorized" />;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
-      <View style={{ flexDirection: "column", flex: 1 }}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: Colors.primary }}
+      edges={["top", "left", "right"]}
+    >
+      <View
+        style={{
+          flexDirection: "column",
+          flex: 1,
+          backgroundColor: Colors.background,
+        }}
+      >
         {/* Main Content Area */}
         <View style={{ flex: 1 }}>
           <Slot />
         </View>
-        <CoolBottomNav />
+        <AdminBottomNav />
       </View>
     </SafeAreaView>
   );

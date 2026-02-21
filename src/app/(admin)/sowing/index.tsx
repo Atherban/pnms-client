@@ -4,7 +4,7 @@ import { Colors } from "../../../theme";
 
 export default function AdminSowing() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
       <SowingReadScreen title="Sowing" />
     </SafeAreaView>
   );

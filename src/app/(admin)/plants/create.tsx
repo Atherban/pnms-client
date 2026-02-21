@@ -156,7 +156,7 @@ export default function CreatePlantType() {
     !isSubmitting;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <LinearGradient
         colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
         style={styles.headerGradient}
