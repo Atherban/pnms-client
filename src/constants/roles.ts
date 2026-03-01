@@ -1,7 +1,8 @@
 import { Role } from "../types/role.types";
 
 export const ROLES: Record<Role, Role> = {
-  ADMIN: "ADMIN",
+  NURSERY_ADMIN: "NURSERY_ADMIN",
   STAFF: "STAFF",
-  VIEWER: "VIEWER",
+  CUSTOMER: "CUSTOMER",
+  SUPER_ADMIN: "SUPER_ADMIN",
 };

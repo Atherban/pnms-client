@@ -1,7 +1,7 @@
 import { Role } from "../types/role.types";
 
 export const PERMISSIONS: Record<Role, string[]> = {
-  ADMIN: [
+  NURSERY_ADMIN: [
     "MANAGE_USERS",
     "MANAGE_PLANT_TYPES",
     "READ_SEEDS",
@@ -13,6 +13,21 @@ export const PERMISSIONS: Record<Role, string[]> = {
     "READ_EXPENSES",
     "READ_LABOURS",
     "VIEW_PROFIT",
+  ],
+  SUPER_ADMIN: [
+    "MANAGE_USERS",
+    "MANAGE_PLANT_TYPES",
+    "READ_SEEDS",
+    "READ_SOWING",
+    "READ_GERMINATION",
+    "READ_INVENTORY",
+    "READ_SALES",
+    "READ_CUSTOMERS",
+    "READ_EXPENSES",
+    "READ_LABOURS",
+    "VIEW_PROFIT",
+    "MANAGE_NURSERIES",
+    "VIEW_GLOBAL_REPORTS",
   ],
   STAFF: [
     "MANAGE_SEEDS",
@@ -33,15 +48,12 @@ export const PERMISSIONS: Record<Role, string[]> = {
     "READ_LABOURS",
     "READ_PLANT_TYPES",
   ],
-  VIEWER: [
-    "READ_PLANT_TYPES",
-    "READ_SEEDS",
-    "READ_SOWING",
-    "READ_GERMINATION",
-    "READ_INVENTORY",
+  CUSTOMER: [
     "READ_SALES",
     "READ_CUSTOMERS",
-    "READ_EXPENSES",
-    "READ_LABOURS",
+    "READ_NOTIFICATIONS",
+    "READ_DUES",
+    "READ_PRODUCTS",
+    "UPLOAD_PAYMENT_PROOFS",
   ],
 };
