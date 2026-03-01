@@ -38,14 +38,21 @@ Other scripts:
 
 ## Demo Data Seeding (Postman)
 Use the ready-to-import files under `postman/`:
-- `postman/PNMS-Demo-Seed.postman_collection.json`
-- `postman/PNMS-Local.postman_environment.json`
+- `postman/PNMS-Frontend-QA.postman_collection.json`
+- `postman/PNMS-Frontend-QA.postman_environment.json`
 
 Quick steps:
-1. Import both files into Postman.
-2. Set valid `baseUrl`, `email`, `password` in the environment.
-3. Run collection folders top to bottom.
+1. In backend (`pnms/`), run:
+```bash
+npm run qa:reset-seed
+npm run postman:build
+npm run postman:env:template
+```
+2. Run `npm run postman:sync` in this client project.
+3. Import both files into Postman.
+4. Set valid `baseUrl` in the environment.
+5. Run collection folders top to bottom.
 
-This seeds 5 records each for plants, seeds, customers, expenses, inventory, and sales.
+This creates end-to-end dependency data and exercises all backend endpoints in flow order.
 
 Detailed instructions: `postman/README.md`
