@@ -1,5 +1,6 @@
 // services/sowing.service.ts
 import { api, apiPath, unwrap } from "./api";
+import { extractServiceParams, withScopedParams } from "./access-scope.service";
 import { withResolvedImagesDeep } from "../utils/image";
 
 export interface Sowing {
@@ -78,8 +79,15 @@ export const SowingService = {
     return unwrap(res);
   },
 
-  async getAll() {
-    const res = await api.get(apiPath("/sowing"));
+  async getAll(params?: any) {
+    const parsed = extractServiceParams<{
+      nurseryId?: string;
+      customerId?: string;
+      customerPhone?: string;
+    }>(params);
+    const res = await api.get(apiPath("/sowing"), {
+      params: withScopedParams(parsed, { includeCustomerIdentity: true }),
+    });
     const data = unwrap(res);
     const list = Array.isArray(data) ? data : data?.data ?? [];
     return list.map(normalizeSowing);

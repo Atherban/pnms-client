@@ -11,6 +11,8 @@ export interface PlantTypePayload {
   sellingPrice: number;
   minStockLevel?: number;
   defaultCostPrice?: number;
+  expectedSeedQtyPerBatch?: number;
+  expectedSeedUnit?: string;
   growthStages?: PlantTypeGrowthStage[];
 }
 

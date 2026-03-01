@@ -1,7 +1,9 @@
 // services/seed.service.ts
 import type { CreateSeedPayload, Seed } from "../types/seed.types";
 import { api, apiPath, unwrap } from "./api";
+import { extractServiceParams, withScopedParams } from "./access-scope.service";
 import { withResolvedImage } from "../utils/image";
+import { normalizeQuantityUnit } from "../utils/units";
 
 export type { CreateSeedPayload, Seed };
 
@@ -18,13 +20,24 @@ const getDiscardedSeeds = (seed: any) => {
 
 const normalizeSeed = (seed: any) => ({
   ...withResolvedImage(seed),
+  quantityUnit: normalizeQuantityUnit(
+    seed?.quantityUnit ?? seed?.plantType?.expectedSeedUnit,
+    "SEEDS",
+  ),
   discardedSeeds: getDiscardedSeeds(seed),
   plantType: seed?.plantType ? withResolvedImage(seed.plantType) : seed?.plantType,
 });
 
 export const SeedService = {
-  async getAll() {
-    const res = await api.get(apiPath("/seeds"));
+  async getAll(params?: any) {
+    const parsed = extractServiceParams<{
+      nurseryId?: string;
+      customerId?: string;
+      customerPhone?: string;
+    }>(params);
+    const res = await api.get(apiPath("/seeds"), {
+      params: withScopedParams(parsed, { includeCustomerIdentity: true }),
+    });
     const data = unwrap(res);
 
     if (Array.isArray(data)) {

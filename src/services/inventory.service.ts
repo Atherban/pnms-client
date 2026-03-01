@@ -1,9 +1,11 @@
 import { api, apiPath, unwrap } from "./api";
+import { extractServiceParams, withScopedParams } from "./access-scope.service";
 import type {
   CreatePurchasedInventoryPayload,
   Inventory,
 } from "../types/inventory.types";
 import { withResolvedImagesDeep } from "../utils/image";
+import { normalizeQuantityUnit } from "../utils/units";
 
 const normalizeList = (data: any) => {
   if (Array.isArray(data)) return data;
@@ -20,6 +22,10 @@ const normalizeInventoryItem = (item: any): Inventory => {
     quantity: Number.isFinite(Number(normalized?.quantity))
       ? Number(normalized.quantity)
       : 0,
+    quantityUnit: normalizeQuantityUnit(
+      normalized?.quantityUnit ?? normalized?.plantType?.expectedSeedUnit,
+      "UNITS",
+    ),
     unitCost: Number.isFinite(Number(normalized?.unitCost))
       ? Number(normalized.unitCost)
       : Number.isFinite(Number(normalized?.costPrice))
@@ -36,8 +42,15 @@ const normalizeInventoryItem = (item: any): Inventory => {
 };
 
 export const InventoryService = {
-  async getAll(): Promise<Inventory[]> {
-    const res = await api.get(apiPath("/inventory"));
+  async getAll(params?: any): Promise<Inventory[]> {
+    const parsed = extractServiceParams<{
+      nurseryId?: string;
+      customerId?: string;
+      customerPhone?: string;
+    }>(params);
+    const res = await api.get(apiPath("/inventory"), {
+      params: withScopedParams(parsed, { includeCustomerIdentity: true }),
+    });
     return normalizeList(unwrap(res)).map(normalizeInventoryItem);
   },
 

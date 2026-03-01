@@ -19,6 +19,8 @@ export const ReportService = {
       UPI: 0,
       ONLINE: 0,
     };
+    let totalDue = 0;
+    let totalCollected = 0;
 
     for (const sale of sales) {
       const dateKey = new Date(sale.saleDate || sale.createdAt)
@@ -28,25 +30,19 @@ export const ReportService = {
       let saleTotal = Number(sale.totalAmount) || 0;
 
       for (const item of sale.items || []) {
-        const unitPrice =
-          item.priceAtSale ??
-          item.unitPrice ??
-          item.price ??
-          item.priceSnapshot ??
-          0;
+        const unitPrice = item.priceAtSale ?? item.unitPrice ?? item.price ?? 0;
         const amount = (Number(unitPrice) || 0) * (item.quantity || 0);
         if (!Number(sale.totalAmount)) saleTotal += amount;
 
         const plantName =
-          item.inventory?.plantType?.name ||
-          item.plantType?.name ||
-          item.inventoryId?.plantType?.name ||
-          "Unknown";
+          item.inventory?.plantType?.name || "Unknown";
 
         salesByPlant[plantName] = (salesByPlant[plantName] || 0) + amount;
       }
 
       salesByDate[dateKey] = (salesByDate[dateKey] || 0) + saleTotal;
+      totalDue += Number(sale?.dueAmount ?? 0) || 0;
+      totalCollected += Number(sale?.paidAmount ?? sale?.amountPaid ?? 0) || 0;
 
       const mode = sale.paymentMode || "CASH";
       if (!paymentSplit[mode]) paymentSplit[mode] = 0;
@@ -61,6 +57,8 @@ export const ReportService = {
       salesByDate,
       salesByPlant,
       paymentSplit,
+      totalDue,
+      totalCollected,
       inventoryCount: inventory.length,
       lowStock,
     };

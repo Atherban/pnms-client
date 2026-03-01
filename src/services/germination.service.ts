@@ -1,4 +1,5 @@
 import { api, apiPath, unwrap } from "./api";
+import { extractServiceParams, withScopedParams } from "./access-scope.service";
 import type { Inventory } from "../types/inventory.types";
 import { withResolvedImagesDeep } from "../utils/image";
 
@@ -26,8 +27,15 @@ export interface Germination {
 }
 
 export const GerminationService = {
-  async getAll(): Promise<Germination[]> {
-    const res = await api.get(apiPath("/germination"));
+  async getAll(params?: any): Promise<Germination[]> {
+    const parsed = extractServiceParams<{
+      nurseryId?: string;
+      customerId?: string;
+      customerPhone?: string;
+    }>(params);
+    const res = await api.get(apiPath("/germination"), {
+      params: withScopedParams(parsed, { includeCustomerIdentity: true }),
+    });
     const data = unwrap(res);
     if (Array.isArray(data)) return withResolvedImagesDeep(data);
     if (Array.isArray(data?.data)) return withResolvedImagesDeep(data.data);

@@ -1,6 +1,7 @@
 import axios from "axios";
 import { ENV } from "../constants/env";
 import { useAuthStore } from "../stores/auth.store";
+import { getAccessScope } from "./access-scope.service";
 import { normalizeError } from "../utils/error";
 import { getToken, removeToken, removeUser } from "../utils/storage";
 
@@ -28,10 +29,14 @@ api.interceptors.request.use(async (config) => {
   const storeToken = useAuthStore.getState().token;
   const token = storeToken || (await getToken());
   const hasAuthorizationHeader = Boolean(config.headers?.Authorization);
+  const scope = getAccessScope();
 
   if (token && !hasAuthorizationHeader) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (scope.role) config.headers["x-user-role"] = scope.role;
+  if (scope.userId) config.headers["x-user-id"] = scope.userId;
+  if (scope.nurseryId) config.headers["x-nursery-id"] = scope.nurseryId;
   return config;
 });
 

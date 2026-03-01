@@ -1,23 +1,20 @@
 import type { Expense, ExpensePayload } from "../types/expense.types";
 import { api, apiPath, unwrap } from "./api";
-
-const listFrom = (res: any): Expense[] => {
-  if (Array.isArray(res)) return res;
-  if (Array.isArray(res?.data)) return res.data;
-  if (Array.isArray(res?.items)) return res.items;
-  return [];
-};
+import { extractServiceParams, withScopedParams } from "./access-scope.service";
+import { getApiList, getApiPayload } from "./api-contract.service";
 
 export const ExpenseService = {
-  async getAll(): Promise<Expense[]> {
-    const res = await api.get(apiPath("/expenses"));
-    return listFrom(unwrap(res));
+  async getAll(params?: any): Promise<Expense[]> {
+    const parsed = extractServiceParams<{ nurseryId?: string }>(params);
+    const res = await api.get(apiPath("/expenses"), {
+      params: withScopedParams(parsed),
+    });
+    return getApiList<Expense>(unwrap(res));
   },
 
   async getById(id: string): Promise<Expense> {
     const res = await api.get(apiPath(`/expenses/${id}`));
-    const data = unwrap(res);
-    return data?.data ?? data;
+    return getApiPayload<Expense>(unwrap(res));
   },
 
   async create(payload: ExpensePayload) {
