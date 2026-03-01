@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/AppIcons/appstore.png"
+      "icon": "./assets/AppIcons/appstore.png",
+      "bundleIdentifier": "com.mhlp.pnms"
     },
     "android": {
       "icon": "./assets/AppIcons/appstore.png",
@@ -24,7 +25,9 @@
         "foregroundImage": "./assets/AppIcons/playstore.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.mhlp.pnms",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -41,6 +44,13 @@
       "expo-secure-store",
       "@react-native-community/datetimepicker",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/AppIcons/appstore.png",
+          "color": "#2563EB"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/AppIcons/appstore.png",
@@ -56,6 +66,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cf152d02-2aac-4d5e-8d3b-e1a48522e879"
+      }
+    },
+    "owner": "atherban"
   }
 }
