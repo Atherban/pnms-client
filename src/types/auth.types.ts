@@ -1,5 +1,6 @@
 export interface LoginPayload {
-  email: string;
+  email?: string;
+  phoneNumber?: string;
   password: string;
 }
 
@@ -9,9 +10,12 @@ export interface LoginApiResponse {
     token: string;
     user: {
       _id: string;
-      role: "ADMIN" | "STAFF" | "VIEWER";
-      email: string;
+      role: "NURSERY_ADMIN" | "STAFF" | "CUSTOMER" | "SUPER_ADMIN";
+      email?: string;
       name: string;
+      phoneNumber?: string;
+      nurseryId?: string;
+      allowedNurseryIds?: string[];
       isActive: boolean;
     };
   };

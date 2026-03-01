@@ -6,9 +6,17 @@ export default function AuthLayout() {
   const role = useAuthStore((s) => s.user?.role);
 
   if (isAuthenticated && role) {
-    if (role === "ADMIN") return <Redirect href="/(admin)" />;
+    if (role === "SUPER_ADMIN") {
+      return <Redirect href={"/(super-admin)" as any} />;
+    }
+    if (role === "NURSERY_ADMIN") {
+      return <Redirect href="/(admin)" />;
+    }
     if (role === "STAFF") return <Redirect href="/(staff)" />;
-    return <Redirect href="/(viewer)" />;
+    if (role === "CUSTOMER") {
+      return <Redirect href={"/(customer)" as any} />;
+    }
+    return <Redirect href="/unauthorized" />;
   }
 
   return <Stack screenOptions={{ headerShown: false }} />;

@@ -1,6 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { Link, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,70 +14,137 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Loader } from "../../components";
 import { AuthService } from "../../services/auth.service";
+import { PushNotificationService } from "../../services/push-notification.service";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Radius, Spacing } from "../../theme";
 import { getLastEmail, saveLastEmail } from "../../utils/login.storage";
 import { saveUser } from "../../utils/storage";
 
+type LoginMode = "phone" | "password";
+type PhoneStep = "enter-phone" | "enter-otp";
+
+const OTP_LENGTH = 6;
+const RESEND_INTERVAL_SEC = 30;
+
+const normalizePhone = (value: string) => value.replace(/[^\d]/g, "");
+
+const resolveLandingRoute = (role?: string) => {
+  if (role === "SUPER_ADMIN") return "/(super-admin)";
+  if (role === "NURSERY_ADMIN") return "/(admin)";
+  if (role === "STAFF") return "/(staff)";
+  if (role === "CUSTOMER") return "/(customer)";
+  return "/unauthorized";
+};
+
 export default function Login() {
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
 
-  const [email, setEmail] = useState("");
+  const [mode, setMode] = useState<LoginMode>("phone");
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter-phone");
+  const [identifier, setIdentifier] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSessionId, setOtpSessionId] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /* Load last email */
   useEffect(() => {
     getLastEmail().then((stored) => {
-      if (stored) setEmail(stored);
+      if (stored) setIdentifier(stored);
     });
   }, []);
 
-  const isFormValid = email.trim().length > 0 && password.length > 0;
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setResendSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendSeconds]);
 
-  const handleLogin = async () => {
-    if (!isFormValid || loading) return;
+  const normalizedPhone = useMemo(() => normalizePhone(phone), [phone]);
+  const normalizedOtp = useMemo(() => normalizePhone(otp).slice(0, OTP_LENGTH), [otp]);
 
-    setLoading(true);
+  const canRequestOtp = normalizedPhone.length >= 10 && !loading;
+  const canVerifyOtp = normalizedOtp.length === OTP_LENGTH && otpSessionId.length > 0 && !loading;
+  const canPasswordLogin = identifier.trim().length > 0 && password.length > 0 && !loading;
+
+  const completeAuth = async (res: any, usedIdentifier: string) => {
+    await saveUser(res.user);
+    await saveLastEmail(usedIdentifier);
+
+    setAuth(
+      {
+        id: res.user._id,
+        name: res.user.name,
+        email: res.user.email || "",
+        role: res.user.role,
+        phoneNumber: res.user.phoneNumber,
+        nurseryId: res.user.nurseryId,
+        allowedNurseryIds: res.user.allowedNurseryIds,
+      },
+      res.token,
+    );
+
+    await PushNotificationService.registerForPushNotificationsAsync(res.user._id);
+    router.replace(resolveLandingRoute(res.user.role) as any);
+  };
+
+  const requestOtp = async () => {
+    if (!canRequestOtp) return;
     setError(null);
-
+    setLoading(true);
     try {
-      const res = await AuthService.login({
-        email,
+      const response = await AuthService.requestOtp(normalizedPhone);
+      setOtpSessionId(response.otpSessionId || "");
+      setPhoneStep("enter-otp");
+      setResendSeconds(RESEND_INTERVAL_SEC);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Unable to send OTP right now. Use password sign in.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (!canVerifyOtp) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await AuthService.verifyOtp({
+        phoneNumber: normalizedPhone,
+        otp: normalizedOtp,
+        otpSessionId,
+      });
+      await completeAuth(response, normalizedPhone);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || "Invalid OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithPassword = async () => {
+    if (!canPasswordLogin) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const trimmed = identifier.trim();
+      const isPhone = /^\+?[\d\s-]{10,}$/.test(trimmed);
+      const response = await AuthService.login({
+        email: isPhone ? undefined : trimmed,
+        phoneNumber: isPhone ? normalizePhone(trimmed) : undefined,
         password,
       });
-
-      if (!res || !res.token || !res.user) {
-        throw new Error("Invalid login response");
-      }
-
-      // Save user to SecureStore
-      await saveUser(res.user);
-      await saveLastEmail(email);
-
-      //Pass ALL user fields to setAuth including name
-      setAuth(
-        {
-          id: res.user._id,
-          name: res.user.name,
-          email: res.user.email,
-          role: res.user.role,
-        },
-        res.token,
-      );
-
-      if (res.user.role === "ADMIN") {
-        router.replace("/(admin)");
-      } else if (res.user.role === "STAFF") {
-        router.replace("/(staff)");
-      } else {
-        router.replace("/(viewer)");
-      }
+      await completeAuth(response, trimmed);
     } catch (err: any) {
-      // console.error("Login error:", err);
       setError(
         err?.response?.data?.message || err?.message || "Invalid credentials",
       );
@@ -94,97 +161,213 @@ export default function Login() {
       >
         <View style={styles.card}>
           <View style={styles.logoContainer}>
-            <MaterialIcons name="spa" size={48} color={Colors.primary} />
+            <MaterialIcons name="spa" size={44} color={Colors.primary} />
             <Text style={styles.logoText}>PNMS</Text>
           </View>
 
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>
-            Sign in to continue to Plant Nursery Management System
-          </Text>
+          <Text style={styles.title}>Sign in</Text>
+          <Text style={styles.subtitle}>Fast login for customers and staff</Text>
 
-          {/* Email */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons
-              name="email"
-              size={20}
-              color={Colors.textSecondary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              placeholder="Email"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.input}
-              placeholderTextColor={Colors.textTertiary}
-            />
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons
-              name="lock"
-              size={20}
-              color={Colors.textSecondary}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              placeholder="Password"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              style={styles.input}
-              placeholderTextColor={Colors.textTertiary}
-            />
+          <View style={styles.modeSwitch}>
             <Pressable
-              onPress={() => setShowPassword((v) => !v)}
-              style={styles.passwordToggle}
+              onPress={() => {
+                setMode("phone");
+                setError(null);
+              }}
+              style={[styles.modeChip, mode === "phone" && styles.modeChipActive]}
             >
-              <MaterialIcons
-                name={showPassword ? "visibility-off" : "visibility"}
-                size={22}
-                color={Colors.textSecondary}
-              />
+              <Text
+                style={[styles.modeChipText, mode === "phone" && styles.modeChipTextActive]}
+              >
+                Phone OTP
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setMode("password");
+                setError(null);
+              }}
+              style={[styles.modeChip, mode === "password" && styles.modeChipActive]}
+            >
+              <Text
+                style={[
+                  styles.modeChipText,
+                  mode === "password" && styles.modeChipTextActive,
+                ]}
+              >
+                Password
+              </Text>
             </Pressable>
           </View>
 
-          {error && (
-            <View style={styles.errorContainer}>
-              <MaterialIcons
-                name="error-outline"
-                size={18}
-                color={Colors.error}
-              />
-              <Text style={styles.error}>{error}</Text>
-            </View>
-          )}
+          {mode === "phone" && phoneStep === "enter-phone" ? (
+            <>
+              <View style={styles.inputContainer}>
+                <MaterialIcons
+                  name="phone"
+                  size={20}
+                  color={Colors.textSecondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  placeholder="Phone number"
+                  keyboardType="phone-pad"
+                  value={phone}
+                  onChangeText={setPhone}
+                  style={styles.input}
+                  placeholderTextColor={Colors.textTertiary}
+                  maxLength={15}
+                />
+              </View>
+
+              <Pressable
+                onPress={requestOtp}
+                disabled={!canRequestOtp}
+                style={({ pressed }) => [
+                  styles.loginButton,
+                  !canRequestOtp && styles.loginButtonDisabled,
+                  pressed && styles.loginButtonPressed,
+                ]}
+              >
+                <Text style={styles.loginButtonText}>Send OTP</Text>
+              </Pressable>
+            </>
+          ) : null}
+
+          {mode === "phone" && phoneStep === "enter-otp" ? (
+            <>
+              <View style={styles.inputContainer}>
+                <MaterialIcons
+                  name="verified-user"
+                  size={20}
+                  color={Colors.textSecondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  placeholder="Enter 6-digit OTP"
+                  keyboardType="number-pad"
+                  value={normalizedOtp}
+                  onChangeText={setOtp}
+                  style={styles.input}
+                  placeholderTextColor={Colors.textTertiary}
+                  maxLength={OTP_LENGTH}
+                />
+              </View>
+
+              <Pressable
+                onPress={verifyOtp}
+                disabled={!canVerifyOtp}
+                style={({ pressed }) => [
+                  styles.loginButton,
+                  !canVerifyOtp && styles.loginButtonDisabled,
+                  pressed && styles.loginButtonPressed,
+                ]}
+              >
+                <Text style={styles.loginButtonText}>Verify OTP</Text>
+              </Pressable>
+
+              <View style={styles.secondaryRow}>
+                <Pressable
+                  onPress={() => {
+                    setPhoneStep("enter-phone");
+                    setOtp("");
+                    setOtpSessionId("");
+                    setError(null);
+                  }}
+                >
+                  <Text style={styles.secondaryLink}>Change number</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={requestOtp}
+                  disabled={resendSeconds > 0 || loading}
+                >
+                  <Text
+                    style={[
+                      styles.secondaryLink,
+                      (resendSeconds > 0 || loading) && styles.secondaryLinkDisabled,
+                    ]}
+                  >
+                    {resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend OTP"}
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+
+          {mode === "password" ? (
+            <>
+              <View style={styles.inputContainer}>
+                <MaterialIcons
+                  name="person"
+                  size={20}
+                  color={Colors.textSecondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  placeholder="Email or phone"
+                  autoCapitalize="none"
+                  value={identifier}
+                  onChangeText={setIdentifier}
+                  style={styles.input}
+                  placeholderTextColor={Colors.textTertiary}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <MaterialIcons
+                  name="lock"
+                  size={20}
+                  color={Colors.textSecondary}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  placeholder="Password"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  style={styles.input}
+                  placeholderTextColor={Colors.textTertiary}
+                />
+              </View>
+
+              <Pressable
+                onPress={loginWithPassword}
+                disabled={!canPasswordLogin}
+                style={({ pressed }) => [
+                  styles.loginButton,
+                  !canPasswordLogin && styles.loginButtonDisabled,
+                  pressed && styles.loginButtonPressed,
+                ]}
+              >
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              </Pressable>
+              <View style={styles.authLinks}>
+                <Link href="/(auth)/forgot-password" style={styles.secondaryLink}>
+                  Forgot password?
+                </Link>
+                <Link href="/(auth)/request-otp" style={styles.secondaryLink}>
+                  Use OTP screen
+                </Link>
+              </View>
+            </>
+          ) : null}
 
           {loading ? (
             <View style={styles.loaderContainer}>
               <Loader />
             </View>
-          ) : (
-            <Pressable
-              onPress={handleLogin}
-              disabled={!isFormValid || loading}
-              style={({ pressed }) => [
-                styles.loginButton,
-                (!isFormValid || loading) && styles.loginButtonDisabled,
-                pressed && styles.loginButtonPressed,
-              ]}
-            >
-              <Text style={styles.loginButtonText}>
-                {loading ? "Signing in..." : "Sign In"}
-              </Text>
-            </Pressable>
-          )}
+          ) : null}
+
+          {error ? (
+            <View style={styles.errorContainer}>
+              <MaterialIcons name="error-outline" size={18} color={Colors.error} />
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : null}
         </View>
 
-        <Text style={styles.footerText}>
-          Plant Nursery Management System • v1.0.0
-        </Text>
+        <Text style={styles.footerText}>Plant Nursery Management System • v1.0.0</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -206,36 +389,53 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     gap: Spacing.sm,
   },
   logoText: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: "700",
     color: Colors.primary,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
     color: Colors.text,
-    marginBottom: Spacing.xs,
     textAlign: "center",
   },
   subtitle: {
     color: Colors.textSecondary,
-    marginBottom: Spacing.xl,
+    marginTop: 4,
+    marginBottom: Spacing.lg,
     textAlign: "center",
-    lineHeight: 20,
+  },
+  modeSwitch: {
+    flexDirection: "row",
+    backgroundColor: Colors.surfaceDark,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: Spacing.md,
+  },
+  modeChip: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+  },
+  modeChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  modeChipText: {
+    color: Colors.textSecondary,
+    fontWeight: "600",
+  },
+  modeChipTextActive: {
+    color: Colors.white,
   },
   inputContainer: {
     flexDirection: "row",
@@ -256,34 +456,13 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 16,
   },
-  passwordToggle: {
-    padding: Spacing.md,
-  },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.error + "10",
-    padding: Spacing.md,
-    borderRadius: Radius.md,
-    marginBottom: Spacing.md,
-    gap: Spacing.sm,
-  },
-  error: {
-    color: Colors.error,
-    flex: 1,
-    fontSize: 14,
-  },
-  loaderContainer: {
-    alignItems: "center",
-    padding: Spacing.md,
-  },
   loginButton: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.lg,
     paddingVertical: Spacing.lg,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   loginButtonDisabled: {
     backgroundColor: Colors.disabled,
@@ -297,6 +476,41 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 16,
     fontWeight: "600",
+  },
+  secondaryRow: {
+    marginTop: Spacing.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  authLinks: {
+    marginTop: Spacing.sm,
+    gap: 6,
+  },
+  secondaryLink: {
+    color: Colors.primary,
+    fontWeight: "600",
+  },
+  secondaryLinkDisabled: {
+    color: Colors.textTertiary,
+  },
+  loaderContainer: {
+    alignItems: "center",
+    paddingTop: Spacing.md,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.error + "10",
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  error: {
+    color: Colors.error,
+    flex: 1,
+    fontSize: 14,
   },
   footerText: {
     marginTop: Spacing.xl,
