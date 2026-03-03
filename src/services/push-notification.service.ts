@@ -4,6 +4,13 @@ let registeredUserId: string | null = null;
 let unavailableEnvironmentKey: string | null = null;
 let handlersConfigured = false;
 
+const normalizeDataValue = (value: unknown) => String(value || "").trim();
+
+const normalizeNotificationData = (rawData: unknown) => {
+  if (!rawData || typeof rawData !== "object") return {};
+  return rawData as Record<string, unknown>;
+};
+
 const getRuntimeEnvironment = () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Constants = require("expo-constants");
@@ -124,5 +131,34 @@ export const PushNotificationService = {
       registeredUserId,
       unavailableEnvironmentKey,
     };
+  },
+
+  resolveRouteFromNotificationData(
+    rawData: unknown,
+    role?: "SUPER_ADMIN" | "NURSERY_ADMIN" | "STAFF" | "CUSTOMER",
+  ) {
+    const data = normalizeNotificationData(rawData);
+    const explicitPath = normalizeDataValue(data.path);
+    if (explicitPath.startsWith("/")) return explicitPath;
+
+    const screen = normalizeDataValue(data.screen).toUpperCase();
+    const action = normalizeDataValue(data.action).toUpperCase();
+    const type = normalizeDataValue(data.type).toUpperCase();
+
+    const isPaymentVerificationTarget =
+      screen === "PAYMENT_VERIFICATION" ||
+      action === "VERIFY_PAYMENT" ||
+      type === "PAYMENT_VERIFICATION_REQUIRED";
+
+    if (!isPaymentVerificationTarget) return null;
+
+    if (role === "SUPER_ADMIN") {
+      return "/(super-admin)/payments/verification";
+    }
+    if (role === "NURSERY_ADMIN") {
+      return "/(admin)/payments/verification";
+    }
+
+    return null;
   },
 };

@@ -24,13 +24,25 @@ export const SalesService = {
   },
 
   async create(payload: {
+    saleKind?: "PRODUCT" | "SERVICE" | "SERVICE_SALE";
     customer?: string;
+    customerSeedBatchId?: string;
     items: {
       inventoryId: string;
       quantity: number;
       priceAtSale?: number;
     }[];
-    paymentMode: "CASH" | "UPI" | "ONLINE";
+    serviceInvoice?: {
+      sowingCharge?: number;
+      germinationCharge?: number;
+      labourCharge?: number;
+      soilCharge?: number;
+      trayCharge?: number;
+      maintenanceCharge?: number;
+      otherCharge?: number;
+      notes?: string;
+    };
+    paymentMode: "CASH" | "UPI" | "ONLINE" | "BANK_TRANSFER" | "BANK";
     amountPaid?: number;
     discountAmount?: number;
     utrNumber?: string;
@@ -47,7 +59,7 @@ export const SalesService = {
           items: {
             saleItemId: string;
             quantityReturned: number;
-            inventoryAction?: "RESTOCK" | "DISCARD";
+            inventoryAction?: "RESTOCK" | "SCRAP";
           }[];
           reason?: string;
         }
@@ -70,5 +82,32 @@ export const SalesService = {
           : payload;
     const res = await api.post(apiPath(`/sales/${id}/returns`), requestPayload);
     return unwrap(res);
+  },
+
+  async getReturns(params?: { saleId?: string; status?: "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED" }) {
+    const res = await api.get(apiPath("/sales/returns"), {
+      params: withScopedParams(extractServiceParams(params)),
+    });
+    return getApiList<any>(unwrap(res));
+  },
+
+  async getReturnById(returnId: string) {
+    const res = await api.get(apiPath(`/sales/returns/${returnId}`));
+    return getApiPayload<any>(unwrap(res));
+  },
+
+  async approveReturn(returnId: string) {
+    const res = await api.post(apiPath(`/sales/returns/${returnId}/approve`), {});
+    return getApiPayload<any>(unwrap(res));
+  },
+
+  async rejectReturn(returnId: string, reason: string) {
+    const res = await api.post(apiPath(`/sales/returns/${returnId}/reject`), { reason });
+    return getApiPayload<any>(unwrap(res));
+  },
+
+  async completeReturn(returnId: string) {
+    const res = await api.post(apiPath(`/sales/returns/${returnId}/complete`), {});
+    return getApiPayload<any>(unwrap(res));
   },
 };

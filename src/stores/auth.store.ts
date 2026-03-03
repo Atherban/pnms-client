@@ -2,13 +2,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import type { Role } from "../types/role.types";
+import { normalizeRole } from "../utils/role";
 import { getToken, getUser } from "../utils/storage";
 
 interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "STAFF" | "VIEWER";
+  role: Role;
+  phoneNumber?: string;
+  nurseryId?: string;
+  allowedNurseryIds?: string[];
 }
 
 interface AuthState {
@@ -37,20 +42,31 @@ export const useAuthStore = create<AuthState>()(
             id: user.id,
             name: user.name,
             email: user.email,
-            role: user.role,
+            role: normalizeRole(user.role),
+            phoneNumber: user.phoneNumber,
+            nurseryId: user.nurseryId,
+            allowedNurseryIds: user.allowedNurseryIds,
           },
           token,
           isAuthenticated: true,
           isLoading: false,
         }),
 
-      clearAuth: () =>
+      clearAuth: () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { PushNotificationService } = require("../services/push-notification.service");
+          PushNotificationService.resetRegistrationState();
+        } catch {
+          // Push module may not be available in all environments.
+        }
         set({
           user: null,
           token: null,
           isAuthenticated: false,
           isLoading: false,
-        }),
+        });
+      },
 
       updateUser: (userData) =>
         set((state) => ({
@@ -71,8 +87,11 @@ export const useAuthStore = create<AuthState>()(
             const user: AuthUser = {
               id: userData._id || userData.id,
               name: userData.name,
-              email: userData.email,
-              role: userData.role,
+              email: userData.email || "",
+              role: normalizeRole(userData.role),
+              phoneNumber: userData.phoneNumber || userData.phone,
+              nurseryId: userData.nurseryId,
+              allowedNurseryIds: userData.allowedNurseryIds,
             };
 
             set({

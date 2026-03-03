@@ -71,17 +71,23 @@ export const ProfitService = {
         "grossSales",
         "totalRevenue",
       ]);
+      const grossSales = pickFirstNumber(payload, ["totalGrossSales", "grossSales"]);
+      const discount = pickFirstNumber(payload, ["totalDiscount", "discountAmount"]);
+      const collected = pickFirstNumber(payload, ["totalCollected", "collectionsAmount"]);
+      const due = pickFirstNumber(payload, ["totalDue", "pendingDue"]);
       const expenses = pickFirstNumber(payload, [
         "totalExpenses",
-        "totalCost",
         "expenses",
         "expenseAmount",
       ]);
+      const labourCost = pickFirstNumber(payload, ["totalLabourCost"]);
+      const totalCost = pickFirstNumber(payload, ["totalCost"]);
       const profitValue = pickFirstNumber(payload, [
         "netProfit",
         "totalProfit",
         "profit",
       ]);
+      const accruedProfit = pickFirstNumber(payload, ["accruedProfit"]);
 
       const totalSales = sales ?? 0;
       const totalExpenses = expenses ?? 0;
@@ -92,8 +98,16 @@ export const ProfitService = {
       }
 
       return {
+        totalGrossSales: grossSales ?? totalSales,
+        totalDiscount: discount ?? 0,
         totalSales,
+        totalCollected: collected ?? totalSales,
+        totalDue: due ?? 0,
         totalExpenses,
+        totalLabourCost: labourCost ?? 0,
+        totalCost: totalCost ?? totalExpenses,
+        accruedProfit: accruedProfit ?? totalSales - (totalCost ?? totalExpenses),
+        netProfit: profit,
         profit,
       };
     };

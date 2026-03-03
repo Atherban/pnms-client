@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native";
 import { SeedService } from "../../services/seed.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { useMemo, useState } from "react";
 import { resolveEntityImage } from "../../utils/image";
+import { canViewSourcingDetails } from "../../utils/rbac";
+import { formatQuantityUnit } from "../../utils/units";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 export function SeedsReadScreen({ title }: { title: string }) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSourcingDetails = canViewSourcingDetails(role);
   const [search, setSearch] = useState("");
   const { data, isLoading, error } = useQuery({
     queryKey: ["seeds"],
@@ -20,10 +25,10 @@ export function SeedsReadScreen({ title }: { title: string }) {
     return seeds.filter((seed: any) => {
       const name = (seed.name ?? "").toLowerCase();
       const plantType = (seed.plantType?.name ?? seed.category ?? "").toLowerCase();
-      const supplier = (seed.supplierName ?? "").toLowerCase();
+      const supplier = showSourcingDetails ? (seed.supplierName ?? "").toLowerCase() : "";
       return name.includes(term) || plantType.includes(term) || supplier.includes(term);
     });
-  }, [data, search]);
+  }, [data, search, showSourcingDetails]);
 
   const getDiscardedSeeds = (seed: any) =>
     Number(
@@ -68,7 +73,9 @@ export function SeedsReadScreen({ title }: { title: string }) {
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search seeds..."
+          placeholder={
+            showSourcingDetails ? "Search seeds, plants, suppliers..." : "Search seeds, plants..."
+          }
           placeholderTextColor={Colors.textTertiary}
           style={styles.search}
         />
@@ -94,9 +101,15 @@ export function SeedsReadScreen({ title }: { title: string }) {
                   Plant: {item.plantType?.name || item.category || "—"}
                 </Text>
                 <Text style={styles.meta}>
-                  In Stock: {getAvailableStock(item)}
+                  In Stock: {getAvailableStock(item)}{" "}
+                  {formatQuantityUnit(
+                    item?.quantityUnit ?? item?.plantType?.expectedSeedUnit,
+                    "SEEDS",
+                  )}
                 </Text>
-                {item.supplierName ? <Text style={styles.meta}>Supplier: {item.supplierName}</Text> : null}
+                {showSourcingDetails && item.supplierName ? (
+                  <Text style={styles.meta}>Supplier: {item.supplierName}</Text>
+                ) : null}
               </View>
             </View>
           </View>

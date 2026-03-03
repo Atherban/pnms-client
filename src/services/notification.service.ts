@@ -21,7 +21,9 @@ const normalizeNotification = (item: any): AppNotification => ({
   body: item?.body || item?.message || "",
   audience: (item?.audience || item?.targetRole || "ALL") as NotificationAudience,
   createdAt: item?.createdAt || new Date().toISOString(),
-  isRead: Boolean(item?.isRead ?? item?.read ?? false),
+  isRead:
+    Boolean(item?.isRead ?? item?.read ?? false) ||
+    String(item?.status || "").toUpperCase() === "READ",
   nurseryId: item?.nurseryId,
   createdBy: item?.createdBy?.name || item?.createdBy,
   customerId: item?.customerId,
@@ -157,6 +159,19 @@ export const NotificationService = {
     if (idx !== -1) {
       cached[idx] = { ...cached[idx], isRead: true };
       await saveFallback(cached);
+    }
+  },
+
+  async clearAll() {
+    let requestError: unknown = null;
+    try {
+      await api.delete(apiPath("/notifications/clear-all"));
+    } catch (err) {
+      requestError = err;
+    }
+    await saveFallback([]);
+    if (requestError) {
+      throw requestError;
     }
   },
 

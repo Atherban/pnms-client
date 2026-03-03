@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,11 @@ import { PlantTypeService } from "../../../services/plant-type.service";
 import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 import { resolveEntityImage } from "../../../utils/image";
+import {
+  QUANTITY_UNITS,
+  formatQuantityUnit,
+  normalizeQuantityUnit,
+} from "../../../utils/units";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -30,6 +35,7 @@ export default function StaffInventoryCreate() {
   const insets = useSafeAreaInsets();
   const [plantType, setPlantType] = useState<string>("");
   const [quantity, setQuantity] = useState("");
+  const [quantityUnit, setQuantityUnit] = useState("UNITS");
   const [plantTypeOpen, setPlantTypeOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -43,10 +49,18 @@ export default function StaffInventoryCreate() {
     [plantTypes, plantType],
   );
 
+  useEffect(() => {
+    if (!selectedPlant) {
+      return;
+    }
+    setQuantityUnit(
+      normalizeQuantityUnit(selectedPlant.expectedSeedUnit, "UNITS"),
+    );
+  }, [selectedPlant]);
+
   const parsedQuantity = Number(quantity);
   const parsedUnitCost = Number(
     selectedPlant?.defaultCostPrice ??
-      selectedPlant?.price ??
       selectedPlant?.sellingPrice,
   );
   const isValid =
@@ -61,6 +75,7 @@ export default function StaffInventoryCreate() {
       InventoryService.createPurchased({
         plantType,
         quantity: parsedQuantity,
+        quantityUnit: normalizeQuantityUnit(quantityUnit, "UNITS"),
         unitCost: parsedUnitCost,
       }),
     onSuccess: async () => {
@@ -90,7 +105,7 @@ export default function StaffInventoryCreate() {
     mutation.mutate();
   };
 
-  const getCategoryIcon = (category: string) => {
+  const getCategoryIcon = (category?: string) => {
     switch (category?.toUpperCase()) {
       case "FLOWER":
         return "local-florist";
@@ -264,11 +279,49 @@ export default function StaffInventoryCreate() {
                       color={Colors.success}
                     />
                     <Text style={styles.previewText}>
-                      Quantity: {Number(quantity).toLocaleString("en-IN")} units
+                      Quantity: {Number(quantity).toLocaleString("en-IN")}{" "}
+                      {formatQuantityUnit(quantityUnit, "UNITS")}
                     </Text>
                   </LinearGradient>
                 </View>
               )}
+            </View>
+
+            <View style={styles.inputContainer}>
+              <View style={styles.inputLabel}>
+                <MaterialIcons name="straighten" size={18} color={Colors.text} />
+                <Text style={styles.inputLabelText}>Quantity Unit</Text>
+              </View>
+              <View style={styles.unitPills}>
+                {QUANTITY_UNITS.map((unit) => {
+                  const isSelected = quantityUnit === unit;
+                  return (
+                    <Pressable
+                      key={unit}
+                      onPress={() => setQuantityUnit(unit)}
+                      style={[
+                        styles.unitPill,
+                        isSelected && styles.unitPillSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.unitPillText,
+                          isSelected && styles.unitPillTextSelected,
+                        ]}
+                      >
+                        {formatQuantityUnit(unit, "UNITS")}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {selectedPlant?.expectedSeedUnit ? (
+                <Text style={styles.unitHint}>
+                  Plant default:{" "}
+                  {formatQuantityUnit(selectedPlant.expectedSeedUnit, "UNITS")}
+                </Text>
+              ) : null}
             </View>
 
             {selectedPlant && (
@@ -281,45 +334,51 @@ export default function StaffInventoryCreate() {
                 >
                   <MaterialIcons name="info" size={16} color={Colors.info} />
                   <Text style={[styles.previewText, { color: Colors.info }]}>
-                    Auto Unit Cost: ₹
-                    {Number.isFinite(parsedUnitCost)
-                      ? parsedUnitCost.toLocaleString("en-IN")
-                      : "Not configured"}
+                    Pricing is auto-applied from plant configuration.
                   </Text>
                 </LinearGradient>
               </View>
             )}
+            {selectedPlant?.expectedSeedQtyPerBatch ? (
+              <View style={styles.preview}>
+                <LinearGradient
+                  colors={[Colors.primary + "18", Colors.primary + "0F"]}
+                  style={styles.previewGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <MaterialIcons
+                    name="format-list-numbered"
+                    size={16}
+                    color={Colors.primary}
+                  />
+                  <Text style={[styles.previewText, { color: Colors.primary }]}>
+                    Plant setup: {selectedPlant.expectedSeedQtyPerBatch}{" "}
+                    {formatQuantityUnit(selectedPlant.expectedSeedUnit, "UNITS")}{" "}
+                    per batch
+                  </Text>
+                </LinearGradient>
+              </View>
+            ) : null}
           </View>
 
-          {/* Cost Summary Preview */}
+          {/* Summary Preview */}
           {isValid && (
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
                 <MaterialIcons
-                  name="calculate"
+                  name="check-circle"
                   size={20}
-                  color={Colors.textSecondary}
+                  color={Colors.success}
                 />
-                <Text style={styles.summaryTitle}>Cost Summary</Text>
+                <Text style={styles.summaryTitle}>Entry Summary</Text>
               </View>
               <View style={styles.summaryContent}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Unit Cost:</Text>
-                  <Text style={styles.summaryValue}>
-                    ₹{parsedUnitCost.toLocaleString("en-IN")}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Quantity:</Text>
                   <Text style={styles.summaryValue}>
-                    {Number(quantity).toLocaleString("en-IN")} units
-                  </Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryRow}>
-                  <Text style={styles.totalLabel}>Total Cost:</Text>
-                  <Text style={styles.totalValue}>
-                    ₹{(parsedQuantity * parsedUnitCost).toLocaleString("en-IN")}
+                    {Number(quantity).toLocaleString("en-IN")}{" "}
+                    {formatQuantityUnit(quantityUnit, "UNITS")}
                   </Text>
                 </View>
               </View>
@@ -405,8 +464,8 @@ export default function StaffInventoryCreate() {
             <Text style={styles.helpTitle}>About Purchased Inventory</Text>
             <Text style={styles.helpText}>
               • Select the plant type you&apos;re adding stock for{"\n"}•
-              Quantity must be greater than 0{"\n"}• Unit cost is auto-filled
-              from plant type pricing
+              Quantity must be greater than 0{"\n"}• Pricing is configured by
+              admin and applied automatically
             </Text>
           </View>
         </View>
@@ -484,14 +543,7 @@ export default function StaffInventoryCreate() {
                           {pt.name}
                         </Text>
                         <Text style={styles.dropdownDescription}>
-                          {pt.category || "Uncategorized"} • ₹
-                          {Number(
-                            pt.defaultCostPrice ??
-                              pt.price ??
-                              pt.sellingPrice ??
-                              0,
-                          ).toLocaleString("en-IN")}
-                          /unit
+                          {pt.category || "Uncategorized"}
                         </Text>
                       </View>
                       {plantType === pt._id && (
@@ -643,6 +695,39 @@ const styles = {
     color: Colors.error,
     fontWeight: "500" as const,
     flex: 1,
+  },
+  unitPills: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: Spacing.sm,
+  },
+  unitPill: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.surface,
+  },
+  unitPillSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}12`,
+  },
+  unitPillText: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "500" as const,
+    textTransform: "capitalize" as const,
+  },
+  unitPillTextSelected: {
+    color: Colors.primary,
+    fontWeight: "700" as const,
+  },
+  unitHint: {
+    marginTop: Spacing.xs,
+    color: Colors.textSecondary,
+    fontSize: 12,
+    textTransform: "capitalize" as const,
   },
   // Selector Styles
   selector: {

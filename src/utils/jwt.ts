@@ -2,7 +2,7 @@ import { jwtDecode } from "jwt-decode";
 
 export interface DecodedToken {
   userId: string;
-  role: "ADMIN" | "STAFF" | "VIEWER";
+  role: "NURSERY_ADMIN" | "STAFF" | "CUSTOMER" | "SUPER_ADMIN";
   exp: number;
 }
 

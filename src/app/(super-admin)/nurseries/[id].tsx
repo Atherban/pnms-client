@@ -266,6 +266,7 @@ const AdminSelector = ({
         style={styles.adminList}
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {admins.length === 0 ? (
           <View style={styles.emptyAdminContainer}>
@@ -401,6 +402,7 @@ const CreateAdminCard = ({
   onCreate,
   isPending,
 }: CreateAdminCardProps) => {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const isValid = Boolean(
     name.trim() &&
       password.trim().length >= 8 &&
@@ -438,15 +440,28 @@ const CreateAdminCard = ({
           placeholderTextColor="#9CA3AF"
           keyboardType="phone-pad"
         />
-        <TextInput
-          value={password}
-          onChangeText={onPasswordChange}
-          style={styles.input}
-          placeholder="Admin password (min 8 chars) *"
-          placeholderTextColor="#9CA3AF"
-          secureTextEntry
-          autoCapitalize="none"
-        />
+        <View style={styles.passwordField}>
+          <TextInput
+            value={password}
+            onChangeText={onPasswordChange}
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Admin password (min 8 chars) *"
+            placeholderTextColor="#9CA3AF"
+            secureTextEntry={!isPasswordVisible}
+            autoCapitalize="none"
+          />
+          <Pressable
+            onPress={() => setIsPasswordVisible((prev) => !prev)}
+            hitSlop={8}
+            style={styles.passwordToggle}
+          >
+            <MaterialIcons
+              name={isPasswordVisible ? "visibility-off" : "visibility"}
+              size={18}
+              color="#6B7280"
+            />
+          </Pressable>
+        </View>
       </View>
 
       <Pressable
@@ -918,7 +933,7 @@ export default function SuperAdminNurseryDetailScreen() {
           <MaterialIcons name="error-outline" size={48} color={Colors.error} />
           <Text style={styles.errorTitle}>Nursery Not Found</Text>
           <Text style={styles.errorMessage}>
-            The nursery you're looking for doesn't exist.
+            The nursery you&apos;re looking for doesn&apos;t exist.
           </Text>
           <Pressable onPress={handleBack} style={styles.backButton}>
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -951,6 +966,7 @@ export default function SuperAdminNurseryDetailScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1421,6 +1437,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#111827",
     backgroundColor: "#F9FAFB",
+  },
+  passwordField: {
+    position: "relative",
+  },
+  passwordInput: {
+    paddingRight: 42,
+  },
+  passwordToggle: {
+    position: "absolute",
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // Assigned Section

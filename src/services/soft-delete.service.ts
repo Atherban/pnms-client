@@ -39,6 +39,17 @@ const toText = (value: any): string | undefined => {
   return undefined;
 };
 
+const isLikelyObjectId = (value?: string) =>
+  Boolean(value && /^[a-fA-F0-9]{24}$/.test(value));
+
+const pickFirstText = (...values: any[]) => {
+  for (const value of values) {
+    const text = toText(value);
+    if (text) return text;
+  }
+  return undefined;
+};
+
 const toRefId = (value: any): string | undefined => {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "string" || typeof value === "number") return String(value);
@@ -49,23 +60,68 @@ const toRefId = (value: any): string | undefined => {
   return undefined;
 };
 
-const normalize = (row: any): SoftDeletedAuditRow => ({
-  id: String(row?._id || row?.id || ""),
-  entityType: String(row?.entityType || row?.model || row?.collection || "UNKNOWN"),
-  entityId: String(row?.entityId || row?.recordId || row?.documentId || ""),
-  entityName: toText(row?.entityName) || toText(row?.name) || toText(row?.title),
-  nurseryId: toRefId(row?.nurseryId),
-  deletedBy:
-    toText(row?.deletedBy?.name) ||
-    toText(row?.actorUserId?.name) ||
-    toText(row?.deletedBy) ||
-    toText(row?.actor?.name) ||
-    toText(row?.actor),
-  deletedAt: row?.deletedAt || row?.occurredAt || row?.createdAt || new Date().toISOString(),
-  purgeAt: row?.purgeAt || row?.autoDeleteAt,
-  metadata:
-    row?.metadata && typeof row.metadata === "object" ? row.metadata : undefined,
-});
+const normalize = (row: any): SoftDeletedAuditRow => {
+  const actorName = pickFirstText(
+    row?.deletedBy?.name,
+    row?.actorUserId?.name,
+    row?.actor?.name,
+    row?.actorName,
+    row?.metadata?.actorName,
+    row?.metadata?.deletedByName,
+  );
+
+  const rawActorText = pickFirstText(
+    row?.deletedBy,
+    row?.actorUserId,
+    row?.actor,
+    row?.metadata?.deletedBy,
+    row?.metadata?.actorUserId,
+  );
+
+  const deletedBy = actorName || (isLikelyObjectId(rawActorText) ? undefined : rawActorText);
+
+  const entityName = pickFirstText(
+    row?.entityName,
+    row?.name,
+    row?.title,
+    row?.before?.name,
+    row?.before?.title,
+    row?.before?.email,
+    row?.after?.name,
+    row?.after?.title,
+    row?.after?.email,
+    row?.metadata?.entityName,
+    row?.metadata?.label,
+    row?.metadata?.targetName,
+  );
+
+  const baseMetadata =
+    row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+
+  return {
+    id: String(row?._id || row?.id || ""),
+    entityType: String(row?.entityType || row?.model || row?.collection || "UNKNOWN"),
+    entityId: String(row?.entityId || row?.recordId || row?.documentId || ""),
+    entityName,
+    nurseryId: toRefId(row?.nurseryId),
+    deletedBy,
+    deletedAt: row?.deletedAt || row?.occurredAt || row?.createdAt || new Date().toISOString(),
+    purgeAt: row?.purgeAt || row?.autoDeleteAt,
+    metadata: {
+      ...baseMetadata,
+      action: toText(row?.action) || toText(baseMetadata?.action),
+      actorName: deletedBy,
+      actorRole:
+        toText(row?.actorUserId?.role) ||
+        toText(baseMetadata?.actorRole) ||
+        undefined,
+      actorEmail:
+        toText(row?.actorUserId?.email) ||
+        toText(baseMetadata?.actorEmail) ||
+        undefined,
+    },
+  };
+};
 
 const normalizeCollectionItem = (row: any): SoftDeletedCollectionItem => ({
   id: String(row?._id || row?.id || ""),
@@ -94,6 +150,18 @@ export const SoftDeleteService = {
     const data = unwrap<any>(res);
     const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
     return list.map(normalize);
+  },
+
+  async clearAuditLogs(params?: {
+    nurseryId?: string;
+    entityType?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const res = await api.delete(apiPath("/audit-logs/soft-deletes"), {
+      params: withScopedParams(params),
+    });
+    return unwrap<any>(res);
   },
 
   async purgeExpired(params?: { nurseryId?: string; retentionDays?: number }) {

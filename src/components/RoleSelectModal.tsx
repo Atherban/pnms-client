@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-const ROLES: User["role"][] = ["ADMIN", "STAFF", "VIEWER"];
+const ROLES: User["role"][] = ["NURSERY_ADMIN", "STAFF", "CUSTOMER"];
 
 export function RoleSelectModal({
   visible,

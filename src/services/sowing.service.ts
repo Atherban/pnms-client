@@ -13,7 +13,27 @@ export interface Sowing {
       }
     | string;
   plantType?: { _id?: string; name?: string };
+  customerId?:
+    | {
+        _id?: string;
+        name?: string;
+        mobileNumber?: string;
+      }
+    | string;
+  customerSeedBatch?:
+    | string
+    | {
+        _id?: string;
+        seedQuantity?: number;
+        seedsSown?: number;
+        seedsGerminated?: number;
+        seedsDiscarded?: number;
+        status?: string;
+        estimatedPickupDate?: string;
+      };
   quantity: number;
+  quantityGerminated?: number;
+  quantityDiscarded?: number;
   performedBy?: { _id: string; name: string; role: "ADMIN" | "STAFF" };
   roleAtTime?: "ADMIN" | "STAFF";
   createdAt: string;
@@ -31,6 +51,7 @@ const normalizeSowing = (s: any): Sowing => {
 
   const plantTypeObj =
     seedObj?.plantType ??
+    normalized?.customerSeedBatch?.plantTypeId ??
     normalized.plantType ??
     normalized.plantTypeId ??
     normalized.plantTypeRef ??
@@ -74,7 +95,12 @@ const normalizeSowing = (s: any): Sowing => {
 };
 
 export const SowingService = {
-  async create(payload: { seedId: string; quantity: number }) {
+  async create(payload: {
+    seedId?: string;
+    customerSeedBatchId?: string;
+    quantity: number;
+    customerId?: string;
+  }) {
     const res = await api.post(apiPath("/sowing"), payload);
     return unwrap(res);
   },

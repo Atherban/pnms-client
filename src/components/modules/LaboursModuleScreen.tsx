@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LabourService } from "../../services/labour.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import type { Labour } from "../../types/labour.types";
 import { formatErrorMessage } from "../../utils/error";
@@ -47,6 +48,8 @@ export function LaboursModuleScreen({
   canWrite,
 }: LaboursModuleScreenProps) {
   const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const canDeleteLabours = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [workType, setWorkType] = useState<WorkType | "">("");
@@ -199,6 +202,13 @@ export function LaboursModuleScreen({
   };
 
   const onDelete = (labour: Labour) => {
+    if (!canDeleteLabours) {
+      Alert.alert(
+        "Not Allowed",
+        "Staff can create and update labour records, but only admin can delete them.",
+      );
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       "Delete Labour Record",
@@ -932,21 +942,23 @@ export function LaboursModuleScreen({
                     />
                     <Text style={styles.editActionText}>Edit</Text>
                   </Pressable>
-                  <Pressable
-                    onPress={() => onDelete(item)}
-                    style={({ pressed }) => [
-                      styles.actionButton,
-                      styles.deleteAction,
-                      pressed && styles.actionButtonPressed,
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="delete-outline"
-                      size={14}
-                      color={Colors.error}
-                    />
-                    <Text style={styles.deleteActionText}>Delete</Text>
-                  </Pressable>
+                  {canDeleteLabours && (
+                    <Pressable
+                      onPress={() => onDelete(item)}
+                      style={({ pressed }) => [
+                        styles.actionButton,
+                        styles.deleteAction,
+                        pressed && styles.actionButtonPressed,
+                      ]}
+                    >
+                      <MaterialIcons
+                        name="delete-outline"
+                        size={14}
+                        color={Colors.error}
+                      />
+                      <Text style={styles.deleteActionText}>Delete</Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
             </View>

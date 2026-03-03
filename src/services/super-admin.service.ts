@@ -6,13 +6,25 @@ const toNumber = (value: unknown) => {
 };
 
 const getAmount = (sale: any) => {
-  const direct = toNumber(sale?.totalAmount);
+  const direct = toNumber(sale?.netAmount ?? sale?.totalAmount);
   if (direct > 0) return direct;
   return (Array.isArray(sale?.items) ? sale.items : []).reduce(
     (sum: number, item: any) =>
       sum + toNumber(item?.quantity) * toNumber(item?.priceAtSale ?? item?.unitPrice ?? item?.price),
     0,
   );
+};
+
+const resolveNurseryRef = (sale: any) => {
+  const raw = sale?.nurseryId;
+  if (!raw) return { nurseryId: "default", nurseryName: "Default Nursery" };
+  if (typeof raw === "string") return { nurseryId: raw, nurseryName: sale?.nurseryName || "Nursery" };
+  const nurseryId = String(raw?._id || raw?.id || raw);
+  const nurseryName = String(raw?.name || sale?.nurseryName || "Nursery");
+  return {
+    nurseryId: nurseryId && nurseryId !== "[object Object]" ? nurseryId : "default",
+    nurseryName,
+  };
 };
 
 export interface NurserySummary {
@@ -28,8 +40,7 @@ export const SuperAdminService = {
     const rows = new Map<string, NurserySummary>();
 
     for (const sale of Array.isArray(sales) ? sales : []) {
-      const nurseryId = String((sale as any)?.nurseryId || "default");
-      const nurseryName = String((sale as any)?.nurseryName || "Default Nursery");
+      const { nurseryId, nurseryName } = resolveNurseryRef(sale);
       if (!rows.has(nurseryId)) {
         rows.set(nurseryId, {
           nurseryId,

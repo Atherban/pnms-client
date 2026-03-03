@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -17,10 +17,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { CustomerService } from "../../../services/customer.service";
+import { CustomerSeedBatchService } from "../../../services/customer-seed-batch.service";
 import { Seed, SeedService } from "../../../services/seed.service";
 import { SowingService } from "../../../services/sowing.service";
 import { Colors } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
+import { formatQuantityUnit } from "../../../utils/units";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -41,6 +44,10 @@ const SeedCard = ({ seed, isSelected, onSelect }: SeedCardProps) => {
   };
 
   const stock = getSeedStock(seed);
+  const quantityUnit = formatQuantityUnit(
+    seed?.quantityUnit ?? seed?.plantType?.expectedSeedUnit,
+    "SEEDS",
+  );
   const isLowStock = stock <= 10 && stock > 0;
   const isOutOfStock = stock <= 0;
 
@@ -120,7 +127,7 @@ const SeedCard = ({ seed, isSelected, onSelect }: SeedCardProps) => {
                 isLowStock && !isOutOfStock && { color: Colors.warning },
               ]}
             >
-              Stock: {stock} units
+              Stock: {stock} {quantityUnit}
             </Text>
           </View>
 
@@ -168,6 +175,7 @@ interface FormFieldProps {
   helperText?: string;
   error?: string;
   max?: number;
+  unitLabel?: string;
 }
 
 const FormField = ({
@@ -181,6 +189,7 @@ const FormField = ({
   helperText,
   error,
   max,
+  unitLabel,
 }: FormFieldProps) => {
   return (
     <View style={styles.formField}>
@@ -217,7 +226,9 @@ const FormField = ({
       ) : max && value ? (
         <View style={styles.hintContainer}>
           <MaterialIcons name="info" size={14} color={Colors.textTertiary} />
-          <Text style={styles.hintText}>Maximum available: {max} units</Text>
+          <Text style={styles.hintText}>
+            Maximum available: {max} {unitLabel || "units"}
+          </Text>
         </View>
       ) : null}
     </View>
@@ -295,6 +306,10 @@ export default function StaffSowingCreate() {
 
   // Form state
   const [selectedSeedId, setSelectedSeedId] = useState<string | null>(null);
+  const [selectedCustomerSeedBatchId, setSelectedCustomerSeedBatchId] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [quantity, setQuantity] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -310,15 +325,75 @@ export default function StaffSowingCreate() {
     staleTime: 60000,
     retry: 2,
   });
+  const { data: customersData } = useQuery({
+    queryKey: ["customers"],
+    queryFn: CustomerService.getAll,
+    staleTime: 60000,
+    retry: 1,
+  });
+  const { data: customerSeedBatchesData } = useQuery({
+    queryKey: ["customer-seed-batches"],
+    queryFn: CustomerSeedBatchService.getAll,
+    staleTime: 30000,
+    retry: 1
+  });
 
   const seeds = useMemo<Seed[]>(() => {
     if (!seedsData) return [];
     return Array.isArray(seedsData) ? seedsData : (seedsData.data ?? []);
   }, [seedsData]);
+  const customers = useMemo(
+    () => (Array.isArray(customersData) ? customersData : []),
+    [customersData],
+  );
+  const selectedCustomer = useMemo(
+    () => customers.find((c: any) => c?._id === selectedCustomerId),
+    [customers, selectedCustomerId],
+  );
+  const customerSeedBatches = useMemo(
+    () => (Array.isArray(customerSeedBatchesData) ? customerSeedBatchesData : []),
+    [customerSeedBatchesData]
+  );
+  const farmerSeedBatches = useMemo(
+    () =>
+      customerSeedBatches.filter((batch: any) => {
+        if (!selectedCustomerId) return false;
+        const ownerId =
+          typeof batch?.customerId === "object" ? batch.customerId?._id : batch?.customerId;
+        const status = String(batch?.status || "").toUpperCase();
+        return (
+          String(ownerId || "") === String(selectedCustomerId) &&
+          !["COLLECTED", "DISCARDED"].includes(status)
+        );
+      }),
+    [customerSeedBatches, selectedCustomerId]
+  );
+  const selectedFarmerSeedBatch = useMemo(
+    () => farmerSeedBatches.find((batch: any) => batch?._id === selectedCustomerSeedBatchId),
+    [farmerSeedBatches, selectedCustomerSeedBatchId]
+  );
+  const filteredCustomers = useMemo(() => {
+    const term = customerSearch.trim().toLowerCase();
+    if (!term) return customers.slice(0, 20);
+    return customers
+      .filter((customer: any) => {
+        const name = String(customer?.name || "").toLowerCase();
+        const mobile = String(customer?.mobileNumber || "").toLowerCase();
+        return name.includes(term) || mobile.includes(term);
+      })
+      .slice(0, 30);
+  }, [customerSearch, customers]);
 
   const selectedSeed = useMemo(
     () => seeds?.find((s) => s._id === selectedSeedId),
     [seeds, selectedSeedId],
+  );
+  const isFarmerSeedMode = !!selectedCustomerSeedBatchId;
+  const selectedSeedUnit = formatQuantityUnit(
+    selectedSeed?.quantityUnit ??
+      selectedSeed?.plantType?.expectedSeedUnit ??
+      undefined,
+    "SEEDS",
   );
 
   // Get seed stock
@@ -329,27 +404,34 @@ export default function StaffSowingCreate() {
     return Math.max(0, totalPurchased - seedsUsed - discardedSeeds);
   };
 
-  const maxQuantity = getSeedStock(selectedSeed);
+  const farmerBatchRemaining = useMemo(() => {
+    if (!selectedFarmerSeedBatch) return 0;
+    return Math.max(
+      Number(selectedFarmerSeedBatch?.seedQuantity || 0) -
+        Number(selectedFarmerSeedBatch?.seedsSown || 0),
+      0
+    );
+  }, [selectedFarmerSeedBatch]);
+
+  const maxQuantity = isFarmerSeedMode ? farmerBatchRemaining : getSeedStock(selectedSeed);
   const numericQuantity = Number(quantity);
+  const hasSourceSelected = isFarmerSeedMode || !!selectedSeedId;
   const isQuantityValid =
     !isNaN(numericQuantity) &&
     numericQuantity > 0 &&
     numericQuantity <= maxQuantity;
 
-  // Reset quantity when seed changes
-  useEffect(() => {
-    setQuantity("");
-  }, [selectedSeedId]);
-
   // Create sowing mutation
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSeedId || !isQuantityValid) {
+      if (!hasSourceSelected || !isQuantityValid) {
         throw new Error("Invalid sowing data");
       }
       return SowingService.create({
-        seedId: selectedSeedId,
+        seedId: selectedSeedId || undefined,
+        customerSeedBatchId: selectedCustomerSeedBatchId || undefined,
         quantity: numericQuantity,
+        customerId: selectedCustomerId || undefined,
       });
     },
     onSuccess: async () => {
@@ -357,12 +439,15 @@ export default function StaffSowingCreate() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["staff-seeds"] }),
         queryClient.invalidateQueries({ queryKey: ["staff-sowings"] }),
+        queryClient.invalidateQueries({ queryKey: ["customer-seed-batches"] }),
         queryClient.invalidateQueries({ queryKey: ["staff-dashboard"] }),
       ]);
 
       Alert.alert(
         "Success",
-        "Sowing recorded successfully. Inventory will be created after germination.",
+        selectedCustomerId
+          ? "Sowing recorded for selected farmer. Inventory will be created after germination."
+          : "Sowing recorded successfully. Inventory will be created after germination.",
         [
           {
             text: "OK",
@@ -390,10 +475,18 @@ export default function StaffSowingCreate() {
   const handleSeedSelect = (seed: Seed) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedSeedId(seed._id);
+    setSelectedCustomerSeedBatchId(null);
+    const expected = Number(seed?.plantType?.expectedSeedQtyPerBatch);
+    const stock = getSeedStock(seed);
+    if (Number.isFinite(expected) && expected > 0 && stock > 0) {
+      setQuantity(String(Math.min(Math.max(1, Math.round(expected)), stock)));
+      return;
+    }
+    setQuantity("");
   };
 
   const handleSubmit = () => {
-    if (!selectedSeedId || !isQuantityValid || isSubmitting) return;
+    if (!hasSourceSelected || !isQuantityValid || isSubmitting) return;
 
     setIsSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -405,12 +498,12 @@ export default function StaffSowingCreate() {
     if (!quantity) return null;
     if (numericQuantity <= 0) return "Quantity must be greater than 0";
     if (numericQuantity > maxQuantity)
-      return `Maximum available is ${maxQuantity} units`;
+      return `Maximum available is ${maxQuantity} ${selectedSeedUnit}`;
     return null;
   };
 
   const quantityError = getQuantityError();
-  const isValid = selectedSeedId && isQuantityValid;
+  const isValid = hasSourceSelected && isQuantityValid;
   const isPending = mutation.isPending || isSubmitting;
 
   // Loading state
@@ -543,8 +636,189 @@ export default function StaffSowingCreate() {
               </View>
             </View>
 
+            {/* Farmer Selection Section */}
+            <View style={styles.formSection}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionHeaderLeft}>
+                  <MaterialIcons
+                    name="person"
+                    size={20}
+                    color={Colors.primary}
+                  />
+                  <Text style={styles.sectionTitle}>Farmer (Optional)</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowCustomerPicker((prev) => !prev)}
+                activeOpacity={0.7}
+                style={styles.customerSelector}
+              >
+                <View style={styles.customerSelectorContent}>
+                  <Text style={styles.customerSelectorLabel}>
+                    {selectedCustomer?.name || "Walk-in / Nursery Sowing"}
+                  </Text>
+                  <Text style={styles.customerSelectorMeta}>
+                    {selectedCustomer?.mobileNumber || "No farmer selected"}
+                  </Text>
+                </View>
+                <MaterialIcons
+                  name={showCustomerPicker ? "expand-less" : "expand-more"}
+                  size={22}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+
+              {showCustomerPicker && (
+                <View style={styles.customerPickerCard}>
+                  <View style={styles.customerSearchWrap}>
+                    <MaterialIcons name="search" size={16} color={Colors.textSecondary} />
+                    <TextInput
+                      value={customerSearch}
+                      onChangeText={setCustomerSearch}
+                      placeholder="Search farmer by name or mobile"
+                      placeholderTextColor={Colors.textTertiary}
+                      style={styles.customerSearchInput}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCustomerId("");
+                      setSelectedCustomerSeedBatchId(null);
+                      setShowCustomerPicker(false);
+                    }}
+                    activeOpacity={0.7}
+                    style={styles.customerOption}
+                  >
+                    <MaterialIcons
+                      name={!selectedCustomerId ? "check-circle" : "radio-button-unchecked"}
+                      size={16}
+                      color={!selectedCustomerId ? Colors.success : Colors.textSecondary}
+                    />
+                    <Text style={styles.customerOptionText}>Walk-in / Nursery Sowing</Text>
+                  </TouchableOpacity>
+
+                  <ScrollView
+                    style={styles.customerListScroll}
+                    nestedScrollEnabled
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {filteredCustomers.map((customer: any) => {
+                      const isSelected = selectedCustomerId === customer._id;
+                      return (
+                        <TouchableOpacity
+                          key={customer._id}
+                          onPress={() => {
+                            setSelectedCustomerId(customer._id);
+                            setSelectedCustomerSeedBatchId(null);
+                            setShowCustomerPicker(false);
+                          }}
+                          activeOpacity={0.7}
+                          style={styles.customerOption}
+                        >
+                          <MaterialIcons
+                            name={isSelected ? "check-circle" : "radio-button-unchecked"}
+                            size={16}
+                            color={isSelected ? Colors.success : Colors.textSecondary}
+                          />
+                          <View style={styles.customerOptionContent}>
+                            <Text style={styles.customerOptionText}>{customer?.name || "Unnamed Farmer"}</Text>
+                            {customer?.mobileNumber ? (
+                              <Text style={styles.customerOptionMeta}>{customer.mobileNumber}</Text>
+                            ) : null}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {selectedCustomerId && (
+              <View style={styles.formSection}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionHeaderLeft}>
+                    <MaterialIcons name="grain" size={20} color={Colors.primary} />
+                    <Text style={styles.sectionTitle}>Farmer Seed Batch (Optional)</Text>
+                  </View>
+                </View>
+
+                <View style={styles.customerPickerCard}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCustomerSeedBatchId(null);
+                    }}
+                    activeOpacity={0.7}
+                    style={styles.customerOption}
+                  >
+                    <MaterialIcons
+                      name={!selectedCustomerSeedBatchId ? "check-circle" : "radio-button-unchecked"}
+                      size={16}
+                      color={!selectedCustomerSeedBatchId ? Colors.success : Colors.textSecondary}
+                    />
+                    <Text style={styles.customerOptionText}>Use Nursery Seed Inventory</Text>
+                  </TouchableOpacity>
+
+                  {farmerSeedBatches.length === 0 ? (
+                    <Text style={styles.customerOptionMeta}>
+                      No active farmer seed batches found for selected farmer.
+                    </Text>
+                  ) : (
+                    farmerSeedBatches.map((batch: any) => {
+                      const isSelected = selectedCustomerSeedBatchId === batch._id;
+                      const plantName =
+                        typeof batch?.plantTypeId === "object"
+                          ? batch.plantTypeId?.name
+                          : "Plant";
+                      const remaining = Math.max(
+                        Number(batch?.seedQuantity || 0) - Number(batch?.seedsSown || 0),
+                        0
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={batch._id}
+                          onPress={() => {
+                            setSelectedCustomerSeedBatchId(batch._id);
+                            setSelectedSeedId(null);
+                            const expected = Number(
+                              typeof batch?.plantTypeId === "object"
+                                ? batch.plantTypeId?.expectedSeedQtyPerBatch
+                                : 0
+                            );
+                            if (Number.isFinite(expected) && expected > 0 && remaining > 0) {
+                              setQuantity(String(Math.min(Math.max(1, Math.round(expected)), remaining)));
+                            } else {
+                              setQuantity("");
+                            }
+                          }}
+                          activeOpacity={0.7}
+                          style={styles.customerOption}
+                        >
+                          <MaterialIcons
+                            name={isSelected ? "check-circle" : "radio-button-unchecked"}
+                            size={16}
+                            color={isSelected ? Colors.success : Colors.textSecondary}
+                          />
+                          <View style={styles.customerOptionContent}>
+                            <Text style={styles.customerOptionText}>
+                              {plantName || "Plant"} • Remaining {remaining}
+                            </Text>
+                            <Text style={styles.customerOptionMeta}>
+                              Status: {batch?.status || "RECEIVED"}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* Quantity Section */}
-            {selectedSeed && (
+            {(selectedSeed || selectedFarmerSeedBatch) && (
               <View style={styles.formSection}>
                 <View style={styles.sectionHeader}>
                   <View style={styles.sectionHeaderLeft}>
@@ -564,15 +838,26 @@ export default function StaffSowingCreate() {
                   onChangeText={(text) =>
                     setQuantity(text.replace(/[^\d]/g, ""))
                   }
-                  placeholder={`Enter quantity (max ${maxQuantity})`}
+                  placeholder={`Enter quantity (max ${maxQuantity} ${selectedSeedUnit})`}
                   icon="inventory"
                   keyboardType="numeric"
                   required
                   error={quantityError || undefined}
                   max={maxQuantity}
+                  unitLabel={selectedSeedUnit}
                 />
+                {selectedSeed?.plantType?.expectedSeedQtyPerBatch ? (
+                  <View style={styles.hintContainer}>
+                    <MaterialIcons name="auto-awesome" size={12} color={Colors.info} />
+                    <Text style={styles.hintText}>
+                      Auto-selected from plant setup ({selectedSeed?.plantType?.expectedSeedQtyPerBatch} {selectedSeedUnit}).
+                    </Text>
+                  </View>
+                ) : null}
 
-                {selectedSeed.plantType?.name && (
+                {(selectedSeed?.plantType?.name ||
+                  (typeof selectedFarmerSeedBatch?.plantTypeId === "object" &&
+                    selectedFarmerSeedBatch?.plantTypeId?.name)) && (
                   <View style={styles.seedInfoCard}>
                     <View style={styles.seedInfoRow}>
                       <MaterialIcons
@@ -582,10 +867,13 @@ export default function StaffSowingCreate() {
                       />
                       <Text style={styles.seedInfoLabel}>Plant Type:</Text>
                       <Text style={styles.seedInfoValue}>
-                        {selectedSeed.plantType.name}
+                        {selectedSeed?.plantType?.name ||
+                          (typeof selectedFarmerSeedBatch?.plantTypeId === "object"
+                            ? selectedFarmerSeedBatch?.plantTypeId?.name
+                            : "-")}
                       </Text>
                     </View>
-                    {selectedSeed.supplierName && (
+                    {selectedSeed?.supplierName && (
                       <View style={styles.seedInfoRow}>
                         <MaterialIcons
                           name="business"
@@ -843,6 +1131,85 @@ const styles = {
   },
   hintText: {
     fontSize: 12,
+    color: "#6B7280",
+  },
+  customerSelector: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    backgroundColor: Colors.white,
+  },
+  customerSelectorContent: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  customerSelectorLabel: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: "#111827",
+  },
+  customerSelectorMeta: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 2,
+  },
+  customerPickerCard: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    backgroundColor: "#F9FAFB",
+    padding: 10,
+    gap: 8,
+    maxHeight: 280,
+  },
+  customerListScroll: {
+    maxHeight: 180,
+  },
+  customerSearchWrap: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: Colors.white,
+  },
+  customerSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#111827",
+    padding: 0,
+  },
+  customerOption: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    backgroundColor: Colors.white,
+  },
+  customerOptionContent: {
+    flex: 1,
+  },
+  customerOptionText: {
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "500" as const,
+  },
+  customerOptionMeta: {
+    marginTop: 2,
+    fontSize: 11,
     color: "#6B7280",
   },
 

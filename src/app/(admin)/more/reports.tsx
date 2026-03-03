@@ -1,1036 +1,477 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
-import { BarChart, LineChart, PieChart } from "react-native-chart-kit";
+import { BarChart, PieChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ReportsExportService } from "../../../services/reports-export.service";
 import { ReportService } from "../../../services/reports.service";
 import { Colors, Spacing } from "../../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CHART_WIDTH = SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md * 2;
-const CHART_HEIGHT = 200;
-const BOTTOM_NAV_HEIGHT = 80;
+const CHART_WIDTH = SCREEN_WIDTH - Spacing.lg * 2 - 20;
+const CHART_HEIGHT = 220;
+
+type Period = "all" | "week" | "month" | "year";
+type ReportType =
+  | "SALES"
+  | "PAYMENT_DUES"
+  | "INVENTORY"
+  | "STAFF_ACCOUNTING";
+
+const formatCurrency = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+
+const chartConfig = {
+  backgroundGradientFrom: Colors.surface,
+  backgroundGradientTo: Colors.surface,
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(31, 94, 140, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(92, 107, 122, ${opacity})`,
+  barPercentage: 0.55,
+  propsForBackgroundLines: { stroke: Colors.borderLight },
+};
+
+const reportTypeOptions: { id: ReportType; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
+  { id: "SALES", label: "Sales", icon: "payments" },
+  { id: "PAYMENT_DUES", label: "Dues", icon: "pending-actions" },
+  { id: "INVENTORY", label: "Inventory", icon: "inventory" },
+  { id: "STAFF_ACCOUNTING", label: "Staff", icon: "groups" },
+];
+
+const periodOptions: { id: Period; label: string }[] = [
+  { id: "all", label: "All Time" },
+  { id: "week", label: "7 Days" },
+  { id: "month", label: "30 Days" },
+  { id: "year", label: "12 Months" },
+];
+
+const getDateRange = (period: Period) => {
+  if (period === "all") {
+    return { startDate: undefined, endDate: undefined };
+  }
+  const end = new Date();
+  const start = new Date(end);
+  if (period === "week") start.setDate(end.getDate() - 7);
+  if (period === "month") start.setDate(end.getDate() - 30);
+  if (period === "year") start.setFullYear(end.getFullYear() - 1);
+  return { startDate: start.toISOString(), endDate: end.toISOString() };
+};
 
 export default function AdminReports() {
-  const [selectedPeriod, setSelectedPeriod] = useState<
-    "week" | "month" | "year"
-  >("month");
+  const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
+  const [selectedReportType, setSelectedReportType] = useState<ReportType>("SALES");
+  const [lastExport, setLastExport] = useState<{
+    fileName: string;
+    fileUri: string;
+    contentType?: string;
+  } | null>(null);
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["reports", selectedPeriod],
-    queryFn: () => ReportService.getOverview(),
+  const { startDate, endDate } = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
+
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
+    queryKey: ["report-analytics", selectedPeriod],
+    queryFn: () => ReportService.getOverview({ startDate, endDate }),
   });
 
+  const exportMutation = useMutation({
+    mutationFn: (format: "PDF" | "XLSX") =>
+      ReportsExportService.downloadByFormat({
+        format,
+        reportType: selectedReportType,
+        startDate,
+        endDate,
+      }),
+    onSuccess: (res, format) => {
+      if (res.fileUri && res.fileName) {
+        setLastExport({
+          fileName: res.fileName,
+          fileUri: res.fileUri,
+          contentType: res.contentType,
+        });
+      }
+      Alert.alert(
+        res.byteLength > 0 ? "Report Downloaded" : "Report Error",
+        res.byteLength > 0
+          ? `${format} report has been prepared and opened in share/save options.`
+          : "Unable to generate report. Please try again."
+      );
+    },
+    onError: (e: any) => {
+      Alert.alert("Report Error", e?.message || "Unable to generate report. Please try again.");
+    },
+  });
+
+  const summaryCards = useMemo(() => {
+    if (!data) return [];
+    return [
+      { label: "Total Sales", value: formatCurrency(data.sales.totalSales), color: Colors.primary },
+      { label: "Total Paid", value: formatCurrency(data.sales.totalPaid), color: Colors.success },
+      { label: "Total Due", value: formatCurrency(data.sales.totalDue), color: Colors.error },
+      { label: "Profit", value: formatCurrency(data.sales.profit), color: Colors.info },
+    ];
+  }, [data]);
+
+  const chartPayload = useMemo(() => {
+    if (!data) return null;
+
+    if (selectedReportType === "SALES") {
+      return {
+        title: "Sales Snapshot",
+        bar: {
+          labels: ["Sales", "Paid", "Due", "Refund", "Profit"],
+          values: [
+            data.sales.totalSales,
+            data.sales.totalPaid,
+            data.sales.totalDue,
+            data.sales.refundedAmount,
+            data.sales.profit,
+          ],
+        },
+      };
+    }
+
+    if (selectedReportType === "INVENTORY") {
+      return {
+        title: "Inventory Snapshot",
+        bar: {
+          labels: ["Available", "Sold", "Returned", "Discarded"],
+          values: [
+            data.inventory.totalPlantsAvailable,
+            data.inventory.plantsSold,
+            data.inventory.plantsReturned,
+            data.inventory.plantsDiscarded,
+          ],
+        },
+      };
+    }
+
+    if (selectedReportType === "PAYMENT_DUES") {
+      return {
+        title: "Payment Distribution",
+        pie: [
+          {
+            name: "Paid",
+            amount: data.sales.totalPaid,
+            color: Colors.success,
+            legendFontColor: Colors.textSecondary,
+            legendFontSize: 12,
+          },
+          {
+            name: "Due",
+            amount: data.sales.totalDue,
+            color: Colors.error,
+            legendFontColor: Colors.textSecondary,
+            legendFontSize: 12,
+          },
+        ],
+      };
+    }
+
+    if (selectedReportType === "STAFF_ACCOUNTING") {
+      const topStaff = (data.staff.analytics || [])
+        .slice()
+        .sort((a, b) => Number(b.collections || 0) - Number(a.collections || 0))
+        .slice(0, 5);
+
+      return {
+        title: "Top Staff Collections",
+        bar: {
+          labels: topStaff.map((row) => (row.staffName || "Staff").slice(0, 8)),
+          values: topStaff.map((row) => Number(row.collections || 0)),
+        },
+      };
+    }
+
+    return null;
+  }, [data, selectedReportType]);
+
   const onRefresh = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await refetch();
-  };
-
-  // Calculate insights
-  const insights = useMemo(() => {
-    if (!data) return null;
-
-    const totalSales = Object.values(data.salesByDate).reduce(
-      (sum, val) => sum + val,
-      0,
-    );
-
-    const salesByPlantEntries = Object.entries(data.salesByPlant);
-    const topPlant = salesByPlantEntries.sort(([, a], [, b]) => b - a)[0];
-
-    const inventoryHealth = data.inventoryCount - data.lowStock;
-    const healthPercentage =
-      data.inventoryCount > 0
-        ? ((inventoryHealth / data.inventoryCount) * 100).toFixed(1)
-        : "0";
-
-    return {
-      totalSales,
-      topPlant: topPlant ? { name: topPlant[0], amount: topPlant[1] } : null,
-      inventoryHealth,
-      healthPercentage,
-    };
-  }, [data]);
-
-  // Prepare chart data
-  const salesChartData = useMemo(() => {
-    if (!data) return null;
-
-    const entries = Object.entries(data.salesByDate).slice(-7);
-
-    return {
-      labels: entries.map(([date]) =>
-        new Date(date).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "short",
-        }),
-      ),
-      datasets: [
-        {
-          data: entries.map(([, value]) => value),
-          color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`,
-          strokeWidth: 2,
-        },
-      ],
-    };
-  }, [data]);
-
-  const plantChartData = useMemo(() => {
-    if (!data) return null;
-
-    const entries = Object.entries(data.salesByPlant)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
-
-    const colors = ["#2E7D32", "#4CAF50", "#81C784", "#A5D6A7", "#C8E6C9"];
-
-    return {
-      labels: entries.map(([name]) =>
-        name.length > 8 ? name.substring(0, 8) + "..." : name,
-      ),
-      datasets: [
-        {
-          data: entries.map(([, value]) => value),
-          colors: entries.map(
-            (_, i) =>
-              (opacity = 1) =>
-                colors[i],
-          ),
-        },
-      ],
-    };
-  }, [data]);
-
-  const paymentChartData = useMemo(() => {
-    if (!data) return null;
-
-    const entries = Object.entries(data.paymentSplit);
-    const colors = ["#2E7D32", "#4CAF50", "#81C784", "#A5D6A7", "#66BB6A"];
-
-    return entries.map(([name, value], index) => ({
-      name: name,
-      amount: value,
-      color: colors[index % colors.length],
-      legendFontColor: Colors.textSecondary,
-      legendFontSize: 12,
-    }));
-  }, [data]);
-
-  const chartConfig = {
-    backgroundGradientFrom: Colors.white,
-    backgroundGradientTo: Colors.white,
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(46, 125, 50, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(102, 102, 102, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: "4",
-      strokeWidth: "1",
-      stroke: Colors.primary,
-    },
-    propsForLabels: {
-      fontSize: 10,
-    },
-    propsForVerticalLabels: {
-      fontSize: 10,
-    },
-    propsForHorizontalLabels: {
-      fontSize: 10,
-    },
-    barPercentage: 0.6,
-    formatYLabel: (value: string) => `₹${Number(value).toLocaleString()}`,
   };
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <View style={styles.centerContainer}>
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Loading analytics...</Text>
-          </View>
-        </View>
+      <SafeAreaView style={styles.centered} edges={["left", "right"]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.helperText}>Loading report analytics...</Text>
       </SafeAreaView>
     );
   }
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <View style={styles.centerContainer}>
-          <View style={styles.errorCard}>
-            <MaterialIcons
-              name="error-outline"
-              size={48}
-              color={Colors.error}
-            />
-            <Text style={styles.errorTitle}>Failed to Load Reports</Text>
-            <Text style={styles.errorMessage}>
-              Unable to fetch analytics data. Please try again.
-            </Text>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                refetch();
-              }}
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.retryButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="refresh" size={20} color={Colors.white} />
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </Pressable>
-          </View>
-        </View>
+      <SafeAreaView style={styles.centered} edges={["left", "right"]}>
+        <MaterialIcons name="error-outline" size={46} color={Colors.error} />
+        <Text style={styles.errorTitle}>Unable to load reports</Text>
+        <Text style={styles.helperText}>Please retry. If this continues, check report permissions.</Text>
+        <Pressable style={styles.retryBtn} onPress={onRefresh}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Enhanced Header with Glass Morphism Effect */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        {/* Decorative Elements */}
-        <View style={styles.headerDecoration2} />
-
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <View style={styles.headerIconContainer}>
-              <LinearGradient
-                colors={["rgba(255,255,255,0.3)", "rgba(255,255,255,0.1)"]}
-                style={styles.headerIconGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <MaterialIcons
-                  name="analytics"
-                  size={24}
-                  color={Colors.white}
-                />
-              </LinearGradient>
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>Analytics</Text>
-              <View style={styles.headerDateContainer}>
-                <MaterialIcons
-                  name="calendar-today"
-                  size={12}
-                  color="rgba(255,255,255,0.7)"
-                />
-                <Text style={styles.headerSubtitle}>
-                  {new Date().toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.headerRight}>
-            <View style={styles.headerStatsBadge}>
-              <MaterialIcons
-                name="inventory"
-                size={12}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={styles.headerStatsText}>
-                {data.inventoryCount} items
-              </Text>
-            </View>
-            <Pressable
-              onPress={onRefresh}
-              style={({ pressed }) => [
-                styles.headerButton,
-                pressed && styles.headerButtonPressed,
-              ]}
-            >
-              <LinearGradient
-                colors={["rgba(255,255,255,0.25)", "rgba(255,255,255,0.1)"]}
-                style={styles.headerButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              >
-                <MaterialIcons name="refresh" size={18} color={Colors.white} />
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Enhanced KPI Cards with Glass Morphism */}
-        <View style={styles.kpiGrid}>
-          <LinearGradient
-            colors={["rgba(255,255,255,0.15)", "rgba(255,255,255,0.05)"]}
-            style={styles.kpiCard}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.kpiIconWrapper}>
-              <View
-                style={[styles.kpiIconBg, { backgroundColor: Colors.success }]}
-              >
-                <MaterialIcons
-                  name="trending-up"
-                  size={16}
-                  color={Colors.white}
-                />
-              </View>
-            </View>
-            <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>Total Revenue</Text>
-              <Text style={styles.kpiValue}>
-                ₹{insights?.totalSales.toLocaleString()}
-              </Text>
-            </View>
-          </LinearGradient>
-
-          <LinearGradient
-            colors={["rgba(255,255,255,0.15)", "rgba(255,255,255,0.05)"]}
-            style={styles.kpiCard}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <View style={styles.kpiIconWrapper}>
-              <View
-                style={[styles.kpiIconBg, { backgroundColor: Colors.warning }]}
-              >
-                <MaterialIcons
-                  name="inventory"
-                  size={16}
-                  color={Colors.white}
-                />
-              </View>
-            </View>
-            <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>Inventory Health</Text>
-              <View style={styles.kpiHealthRow}>
-                <Text style={styles.kpiValue}>
-                  {insights?.healthPercentage}%
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </View>
-
-        {/* Quick Stats Row */}
-        <View style={styles.quickStatsRow}>
-          <View style={styles.quickStatItem}>
-            <MaterialIcons
-              name="local-florist"
-              size={14}
-              color="rgba(255,255,255,0.7)"
-            />
-            <Text style={styles.quickStatLabel}>Top Plant</Text>
-            <Text style={styles.quickStatValue} numberOfLines={1}>
-              {insights?.topPlant?.name || "N/A"}
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Reports</Text>
+            <Text style={styles.subtitle}>
+              {startDate && endDate
+                ? `${new Date(startDate).toLocaleDateString("en-IN")} - ${new Date(endDate).toLocaleDateString("en-IN")}`
+                : "All-time analytics"}
             </Text>
           </View>
-          <View style={styles.quickStatDivider} />
-          <View style={styles.quickStatItem}>
-            <MaterialIcons
-              name="warning"
-              size={14}
-              color="rgba(255,255,255,0.7)"
-            />
-            <Text style={styles.quickStatLabel}>Low Stock Alert</Text>
-            <Text style={[styles.quickStatValue, { color: Colors.warning }]}>
-              {data.lowStock}
-            </Text>
-          </View>
+          <Pressable onPress={onRefresh} style={styles.iconBtn}>
+            <MaterialIcons name={isRefetching ? "hourglass-top" : "refresh"} size={18} color={Colors.white} />
+          </Pressable>
         </View>
-      </LinearGradient>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Period Selector */}
-        <View style={styles.periodSection}>
-          <View style={styles.periodChips}>
-            {[
-              { id: "week", label: "7 Days" },
-              { id: "month", label: "30 Days" },
-              { id: "year", label: "12 Months" },
-            ].map((period) => (
+        <View style={styles.cardRow}>
+          {summaryCards.map((item) => (
+            <View key={item.label} style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>{item.label}</Text>
+              <Text style={[styles.summaryValue, { color: item.color }]}>{item.value}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.selectorWrap}>
+          <View style={styles.periodRow}>
+            {periodOptions.map((period) => (
               <Pressable
                 key={period.id}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setSelectedPeriod(period.id as any);
-                }}
-                style={[
-                  styles.periodChip,
-                  selectedPeriod === period.id && styles.periodChipActive,
-                ]}
+                onPress={() => setSelectedPeriod(period.id)}
+                style={[styles.chip, selectedPeriod === period.id && styles.chipActive]}
               >
-                <Text
-                  style={[
-                    styles.periodChipText,
-                    selectedPeriod === period.id && styles.periodChipTextActive,
-                  ]}
-                >
+                <Text style={[styles.chipText, selectedPeriod === period.id && styles.chipTextActive]}>
                   {period.label}
                 </Text>
               </Pressable>
             ))}
           </View>
-        </View>
 
-        {/* Sales Trend Chart */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <View style={styles.chartTitleContainer}>
-              <View style={styles.chartIconBg}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
+            {reportTypeOptions.map((opt) => (
+              <Pressable
+                key={opt.id}
+                onPress={() => setSelectedReportType(opt.id)}
+                style={[styles.typeChip, selectedReportType === opt.id && styles.typeChipActive]}
+              >
                 <MaterialIcons
-                  name="show-chart"
-                  size={16}
-                  color={Colors.primary}
+                  name={opt.icon}
+                  size={14}
+                  color={selectedReportType === opt.id ? Colors.white : Colors.textSecondary}
                 />
-              </View>
-              <Text style={styles.chartTitle}>Sales Trend</Text>
-            </View>
-            {insights?.topPlant && (
-              <View style={styles.topPerformerBadge}>
-                <MaterialIcons name="stars" size={12} color={Colors.warning} />
-                <Text style={styles.topPerformerText} numberOfLines={1}>
-                  Top: {insights.topPlant.name}
+                <Text
+                  style={[styles.typeChipText, selectedReportType === opt.id && styles.typeChipTextActive]}
+                >
+                  {opt.label}
                 </Text>
-              </View>
-            )}
-          </View>
+              </Pressable>
+            ))}
+          </ScrollView>
 
-          {salesChartData && salesChartData.labels.length > 0 ? (
-            <View style={styles.chartWrapper}>
-              <LineChart
-                data={salesChartData}
-                width={CHART_WIDTH}
-                height={CHART_HEIGHT}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                yAxisLabel="₹"
-                yAxisSuffix=""
-                fromZero
-                withVerticalLines={false}
-                withHorizontalLines={true}
-                withVerticalLabels={true}
-                withHorizontalLabels={true}
-                segments={4}
-              />
-            </View>
-          ) : (
-            <View style={styles.noDataContainer}>
-              <MaterialIcons
-                name="insert-chart"
-                size={28}
-                color={Colors.textTertiary}
-              />
-              <Text style={styles.noDataText}>No sales data</Text>
-            </View>
-          )}
+          <View style={styles.exportRow}>
+            <Pressable
+              style={[styles.exportBtn, { backgroundColor: Colors.error }]}
+              onPress={() => exportMutation.mutate("PDF")}
+              disabled={exportMutation.isPending}
+            >
+              <MaterialIcons name="picture-as-pdf" size={16} color={Colors.white} />
+              <Text style={styles.exportText}>PDF</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.exportBtn, { backgroundColor: Colors.success }]}
+              onPress={() => exportMutation.mutate("XLSX")}
+              disabled={exportMutation.isPending}
+            >
+              <MaterialIcons name="grid-on" size={16} color={Colors.white} />
+              <Text style={styles.exportText}>Excel</Text>
+            </Pressable>
+          </View>
         </View>
 
-        {/* Top Selling Plants Chart */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <View style={styles.chartTitleContainer}>
-              <View style={styles.chartIconBg}>
-                <MaterialIcons
-                  name="local-florist"
-                  size={16}
-                  color={Colors.primary}
-                />
-              </View>
-              <Text style={styles.chartTitle}>Top Performing Plants</Text>
+        {lastExport ? (
+          <View style={styles.lastExportCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.lastExportTitle}>Last Export</Text>
+              <Text style={styles.lastExportName}>{lastExport.fileName}</Text>
+              <Text style={styles.lastExportPath} numberOfLines={1}>
+                {lastExport.fileUri}
+              </Text>
             </View>
-            <Text style={styles.chartSubtitle}>
-              {plantChartData?.labels.length || 0} varieties
-            </Text>
+            <Pressable
+              style={styles.openAgainBtn}
+              onPress={async () => {
+                try {
+                  await ReportsExportService.reopenSavedFile(
+                    lastExport.fileUri,
+                    lastExport.contentType
+                  );
+                } catch (e: any) {
+                  Alert.alert("Open Failed", e?.message || "Unable to open exported file.");
+                }
+              }}
+            >
+              <MaterialIcons name="open-in-new" size={16} color={Colors.white} />
+              <Text style={styles.openAgainText}>Open Again</Text>
+            </Pressable>
           </View>
+        ) : null}
 
-          {plantChartData && plantChartData.labels.length > 0 ? (
-            <View style={styles.chartWrapper}>
-              <BarChart
-                data={plantChartData}
-                width={CHART_WIDTH}
-                height={CHART_HEIGHT}
-                chartConfig={chartConfig}
-                style={styles.chart}
-                yAxisLabel="₹"
-                yAxisSuffix=""
-                fromZero
-                showValuesOnTopOfBars
-                withInnerLines={false}
-                withVerticalLines={false}
-                segments={4}
-              />
-            </View>
-          ) : (
-            <View style={styles.noDataContainer}>
-              <MaterialIcons
-                name="bar-chart"
-                size={28}
-                color={Colors.textTertiary}
-              />
-              <Text style={styles.noDataText}>No plant sales</Text>
-            </View>
-          )}
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>{chartPayload?.title || "Overview"}</Text>
+          {!!chartPayload?.bar && chartPayload.bar.values.some((v) => Number(v) > 0) ? (
+            <BarChart
+              data={{
+                labels: chartPayload.bar.labels,
+                datasets: [{ data: chartPayload.bar.values }],
+              }}
+              width={CHART_WIDTH}
+              height={CHART_HEIGHT}
+              chartConfig={chartConfig}
+              fromZero
+              yAxisLabel="₹"
+              yAxisSuffix=""
+              showValuesOnTopOfBars
+              withInnerLines
+              style={{ marginLeft: -12, borderRadius: 12 }}
+            />
+          ) : null}
+          {!!chartPayload?.pie && chartPayload.pie.some((d) => Number(d.amount) > 0) ? (
+            <PieChart
+              data={chartPayload.pie}
+              width={CHART_WIDTH}
+              height={210}
+              chartConfig={chartConfig}
+              accessor="amount"
+              backgroundColor="transparent"
+              paddingLeft="12"
+              absolute
+            />
+          ) : null}
+          {((!chartPayload?.bar || !chartPayload.bar.values.some((v) => Number(v) > 0)) &&
+            (!chartPayload?.pie || !chartPayload.pie.some((d) => Number(d.amount) > 0))) ? (
+            <Text style={styles.helperText}>No chart data available for selected filters.</Text>
+          ) : null}
         </View>
 
-        {/* Payment Methods */}
-        <View style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <View style={styles.chartTitleContainer}>
-              <View style={styles.chartIconBg}>
-                <MaterialIcons
-                  name="payment"
-                  size={16}
-                  color={Colors.primary}
-                />
-              </View>
-              <Text style={styles.chartTitle}>Payment Distribution</Text>
-            </View>
-          </View>
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Seed Lifecycle</Text>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Seeds Purchased</Text><Text style={styles.metricValue}>{data.seedLifecycle.seedsPurchased}</Text></View>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Seeds Sown</Text><Text style={styles.metricValue}>{data.seedLifecycle.seedsSown}</Text></View>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Germinated</Text><Text style={styles.metricValue}>{data.seedLifecycle.germinatedPlants}</Text></View>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Discarded</Text><Text style={styles.metricValue}>{data.seedLifecycle.discardedSeeds}</Text></View>
+        </View>
 
-          {paymentChartData && paymentChartData.length > 0 ? (
-            <View style={styles.pieChartContainer}>
-              <View style={styles.pieChartWrapper}>
-                <PieChart
-                  data={paymentChartData}
-                  width={CHART_WIDTH * 0.9}
-                  height={160}
-                  chartConfig={chartConfig}
-                  accessor="amount"
-                  backgroundColor="transparent"
-                  paddingLeft="60"
-                  absolute
-                  hasLegend={false}
-                />
-              </View>
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Customer Metrics</Text>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Total Customers</Text><Text style={styles.metricValue}>{data.customers.totalCustomers}</Text></View>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Customers with Due</Text><Text style={styles.metricValue}>{data.customers.customersWithDues}</Text></View>
+          <View style={styles.metricRow}><Text style={styles.metricLabel}>Completed Payments</Text><Text style={styles.metricValue}>{data.customers.customersWithCompletedPayments}</Text></View>
+        </View>
 
-              {/* Compact Legend */}
-              <View style={styles.pieLegend}>
-                {paymentChartData.map((item, index) => {
-                  const total = Object.values(data.paymentSplit).reduce(
-                    (sum, val) => sum + val,
-                    0,
-                  );
-                  const percentage =
-                    total > 0 ? ((item.amount / total) * 100).toFixed(1) : "0";
-                  return (
-                    <View key={item.name} style={styles.legendRow}>
-                      <View
-                        style={[
-                          styles.legendDot,
-                          { backgroundColor: item.color },
-                        ]}
-                      />
-                      <Text style={styles.legendName} numberOfLines={1}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.legendPercent}>{percentage}%</Text>
-                    </View>
-                  );
-                })}
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Staff Performance</Text>
+          {(data.staff.analytics || []).slice(0, 6).map((row, index) => (
+            <View key={`${row.staffUserId}-${index}`} style={styles.staffRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.staffName}>{row.staffName || "Unknown Staff"}</Text>
+                <Text style={styles.staffMeta}>Sales: {row.salesMade || 0}</Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.staffMeta}>Collections: {formatCurrency(Number(row.collections || 0))}</Text>
+                <Text style={styles.staffMeta}>Expenses: {formatCurrency(Number(row.expensesRecorded || 0))}</Text>
               </View>
             </View>
-          ) : (
-            <View style={styles.noDataContainer}>
-              <MaterialIcons
-                name="pie-chart"
-                size={28}
-                color={Colors.textTertiary}
-              />
-              <Text style={styles.noDataText}>No payment data</Text>
-            </View>
-          )}
+          ))}
+          {(data.staff.analytics || []).length === 0 ? (
+            <Text style={styles.helperText}>No staff accounting rows for selected period.</Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* -------------------- Enhanced Styles -------------------- */
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#F6FAFF" },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 20, backgroundColor: "#F6FAFF" },
+  content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: 24, fontWeight: "700", color: Colors.text },
+  subtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: Colors.primary },
 
-const styles = {
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: Spacing.lg,
-  },
-  // Enhanced Header with Glass Morphism
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    position: "relative" as const,
-    overflow: "hidden" as const,
-  },
-  headerDecoration1: {
-    position: "absolute" as const,
-    top: -20,
-    right: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(255,255,255,0.05)",
-  },
-  headerDecoration2: {
-    position: "absolute" as const,
-    bottom: -30,
-    left: -30,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "rgba(255,255,255,0.03)",
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.lg,
-  },
-  headerLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-  },
-  headerIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    overflow: "hidden" as const,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  headerIconGradient: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  headerDateContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.9)",
-  },
-  headerRight: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  headerStatsBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  headerStatsText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.white,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    overflow: "hidden" as const,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  headerButtonGradient: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  headerButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.95 }],
-  },
-  // Enhanced KPI Grid
-  kpiGrid: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  kpiCard: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    padding: Spacing.md,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  kpiIconWrapper: {
-    marginRight: Spacing.sm,
-  },
-  kpiIconBg: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  kpiContent: {
-    flex: 1,
-  },
-  kpiLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.8)",
-    marginBottom: 4,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-  },
-  kpiValue: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  kpiTrend: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 2,
-  },
-  kpiTrendText: {
-    fontSize: 10,
-    color: Colors.success,
-    fontWeight: "600" as const,
-  },
-  kpiHealthRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    marginBottom: 4,
-  },
-  healthPill: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  healthPillText: {
-    fontSize: 10,
-    fontWeight: "700" as const,
-  },
-  kpiSubtext: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.7)",
-  },
-  // Quick Stats Row
-  quickStatsRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(0,0,0,0.2)",
-    borderRadius: 16,
-    padding: Spacing.sm,
-    marginTop: Spacing.xs,
-  },
-  quickStatItem: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-  },
-  quickStatLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.7)",
-  },
-  quickStatValue: {
-    fontSize: 12,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    flex: 1,
-  },
-  quickStatDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    marginHorizontal: Spacing.sm,
-  },
-  // Scroll Content
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
-  },
-  // Period Section
-  periodSection: {
-    marginBottom: Spacing.lg,
-  },
-  periodChips: {
-    flexDirection: "row" as const,
+  cardRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  summaryCard: { width: "48%", backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 },
+  summaryLabel: { fontSize: 12, color: Colors.textSecondary },
+  summaryValue: { fontSize: 16, fontWeight: "700", marginTop: 4 },
+
+  selectorWrap: { backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, padding: 12, gap: 10 },
+  periodRow: { flexDirection: "row", gap: 8 },
+  chip: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: Colors.border, paddingVertical: 8, alignItems: "center" },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: 12, color: Colors.textSecondary, fontWeight: "600" },
+  chipTextActive: { color: Colors.white },
+  typeRow: { gap: 8, paddingVertical: 2, paddingRight: 12 },
+  typeChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 18, backgroundColor: Colors.surface },
+  typeChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  typeChipText: { color: Colors.textSecondary, fontSize: 12, fontWeight: "600" },
+  typeChipTextActive: { color: Colors.white },
+
+  exportRow: { flexDirection: "row", gap: 10 },
+  exportBtn: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
+  exportText: { color: Colors.white, fontWeight: "700" },
+  lastExportCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 30,
-    padding: 4,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-  },
-  periodChip: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: Spacing.sm,
-    borderRadius: 26,
-  },
-  periodChipActive: {
-    backgroundColor: Colors.primary,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  periodChipText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.textSecondary,
-  },
-  periodChipTextActive: {
-    color: Colors.white,
-  },
-  // Chart Cards
-  chartCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  chartHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
-  },
-  chartTitleContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  chartIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.primary + "10",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  chartSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  chartWrapper: {
-    alignItems: "center" as const,
-    marginLeft: -Spacing.md,
-  },
-  chart: {
-    marginVertical: Spacing.xs,
     borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  topPerformerBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.warning + "10",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 16,
-    gap: 4,
-    maxWidth: 160,
-  },
-  topPerformerText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: Colors.warning,
-  },
-  // Pie Chart
-  pieChartContainer: {
-    alignItems: "center" as const,
-  },
-  pieChartWrapper: {
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginBottom: Spacing.sm,
-  },
-  pieLegend: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    justifyContent: "center" as const,
-    gap: Spacing.md,
-    marginTop: Spacing.xs,
-  },
-  legendRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+  lastExportTitle: { fontSize: 11, color: Colors.textSecondary, fontWeight: "600" },
+  lastExportName: { fontSize: 14, color: Colors.text, fontWeight: "700", marginTop: 2 },
+  lastExportPath: { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
+  openAgainBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 16,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendName: {
-    fontSize: 11,
-    color: Colors.text,
-    maxWidth: 80,
-  },
-  legendPercent: {
-    fontSize: 11,
-    fontWeight: "700" as const,
-    color: Colors.textSecondary,
-  },
-  // No Data
-  noDataContainer: {
-    height: CHART_HEIGHT,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: Spacing.sm,
-  },
-  noDataText: {
-    fontSize: 13,
-    color: Colors.textTertiary,
-  },
-  // Export Button
-  exportButton: {
-    borderRadius: 16,
-    overflow: "hidden" as const,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  exportButtonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  exportGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  exportButtonText: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  // Loading & Error States
-  loadingCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
-    borderRadius: 24,
-    alignItems: "center" as const,
-    gap: Spacing.lg,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  loadingText: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
-  },
-  errorCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
-    borderRadius: 24,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    color: Colors.error,
-    marginTop: Spacing.sm,
-  },
-  errorMessage: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    textAlign: "center" as const,
-    marginBottom: Spacing.sm,
-  },
-  retryButton: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
-  },
-  retryButtonPressed: {
-    backgroundColor: Colors.primaryDark,
-    transform: [{ scale: 0.98 }],
-  },
-  retryButtonText: {
-    color: Colors.white,
-    fontSize: 15,
-    fontWeight: "600" as const,
-  },
-};
+  openAgainText: { color: Colors.white, fontWeight: "700", fontSize: 12 },
+
+  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 },
+  panelTitle: { fontSize: 15, fontWeight: "700", color: Colors.text, marginBottom: 8 },
+  metricRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
+  metricLabel: { color: Colors.textSecondary, fontSize: 13 },
+  metricValue: { color: Colors.text, fontWeight: "700", fontSize: 13 },
+
+  staffRow: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 10, marginTop: 10 },
+  staffName: { color: Colors.text, fontWeight: "700", fontSize: 13 },
+  staffMeta: { color: Colors.textSecondary, fontSize: 12 },
+
+  helperText: { color: Colors.textSecondary, fontSize: 12, textAlign: "center" },
+  errorTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
+  retryBtn: { marginTop: 8, backgroundColor: Colors.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
+  retryText: { color: Colors.white, fontWeight: "700" },
+});

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,11 @@ import { Colors } from "../../../theme";
 import { PlantType } from "../../../types/plant.types";
 import { formatErrorMessage } from "../../../utils/error";
 import { resolveEntityImage } from "../../../utils/image";
+import {
+  QUANTITY_UNITS,
+  formatQuantityUnit,
+  normalizeQuantityUnit,
+} from "../../../utils/units";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -302,6 +307,8 @@ export default function StaffSeedCreate() {
   const [selectedPlantType, setSelectedPlantType] = useState("");
   const [supplierName, setSupplierName] = useState("");
   const [totalPurchased, setTotalPurchased] = useState("");
+  const [isTotalPurchasedTouched, setIsTotalPurchasedTouched] = useState(false);
+  const [quantityUnit, setQuantityUnit] = useState("SEEDS");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [showPurchaseDatePicker, setShowPurchaseDatePicker] = useState(false);
@@ -317,6 +324,27 @@ export default function StaffSeedCreate() {
   });
 
   const plantTypes = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const selectedPlantTypeData = useMemo(
+    () => plantTypes.find((item) => item._id === selectedPlantType),
+    [plantTypes, selectedPlantType],
+  );
+
+  useEffect(() => {
+    if (!selectedPlantTypeData) {
+      return;
+    }
+    setQuantityUnit(
+      normalizeQuantityUnit(selectedPlantTypeData.expectedSeedUnit, "SEEDS"),
+    );
+    if (!isTotalPurchasedTouched) {
+      const expectedQty = Number(selectedPlantTypeData.expectedSeedQtyPerBatch);
+      if (Number.isFinite(expectedQty) && expectedQty > 0) {
+        setTotalPurchased(String(Math.max(1, Math.round(expectedQty))));
+      } else {
+        setTotalPurchased("");
+      }
+    }
+  }, [isTotalPurchasedTouched, selectedPlantTypeData]);
 
   // Format date for display
   const formatDisplayDate = (dateString: string) => {
@@ -361,6 +389,7 @@ export default function StaffSeedCreate() {
       plantType: string;
       supplierName?: string;
       totalPurchased?: number;
+      quantityUnit?: string;
       purchaseDate: string; // Now required
       expiryDate?: string;
     }) => SeedService.create(payload),
@@ -388,6 +417,11 @@ export default function StaffSeedCreate() {
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
+  };
+
+  const handlePlantTypeSelect = (plantTypeId: string) => {
+    setIsTotalPurchasedTouched(false);
+    setSelectedPlantType(plantTypeId);
   };
 
   const handleSave = () => {
@@ -464,6 +498,7 @@ export default function StaffSeedCreate() {
       plantType: selectedPlantType,
       supplierName: trimmedSupplier || undefined,
       totalPurchased: trimmedTotal ? Number(trimmedTotal) : undefined,
+      quantityUnit: normalizeQuantityUnit(quantityUnit, "SEEDS"),
       purchaseDate: purchaseDate, // Always send purchase date
       expiryDate: expiryDate || undefined,
     });
@@ -598,9 +633,22 @@ export default function StaffSeedCreate() {
             <PlantTypeSelector
               plantTypes={plantTypes}
               selectedId={selectedPlantType}
-              onSelect={setSelectedPlantType}
+              onSelect={handlePlantTypeSelect}
               testID="plant-type-selector"
             />
+            {selectedPlantTypeData?.expectedSeedQtyPerBatch ? (
+              <View style={styles.plantConfigNote}>
+                <MaterialIcons name="info" size={14} color={Colors.info} />
+                <Text style={styles.plantConfigNoteText}>
+                  Plant setup: {selectedPlantTypeData.expectedSeedQtyPerBatch}{" "}
+                  {formatQuantityUnit(
+                    selectedPlantTypeData.expectedSeedUnit,
+                    "SEEDS",
+                  )}{" "}
+                  per batch.
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Supplier Information Section */}
@@ -641,15 +689,74 @@ export default function StaffSeedCreate() {
             </View>
 
             <FormField
-              label="Purchased Quantity"
+              label={`Purchased Quantity (${formatQuantityUnit(quantityUnit, "SEEDS")})`}
               value={totalPurchased}
-              onChangeText={setTotalPurchased}
+              onChangeText={(value) => {
+                setIsTotalPurchasedTouched(true);
+                setTotalPurchased(value);
+              }}
               placeholder="e.g., 500"
               icon="shopping-cart"
               keyboardType="numeric"
-              helperText="Optional - Total seeds purchased"
+              helperText="Optional - Total purchased amount"
               testID="purchased-quantity-input"
             />
+            {!isTotalPurchasedTouched &&
+            selectedPlantTypeData?.expectedSeedQtyPerBatch ? (
+              <View style={styles.plantConfigNote}>
+                <MaterialIcons name="auto-awesome" size={14} color={Colors.info} />
+                <Text style={styles.plantConfigNoteText}>
+                  Auto-filled from plant setup. You can edit this value if needed.
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={styles.formField}>
+              <View style={styles.formFieldHeader}>
+                <View style={styles.formLabelContainer}>
+                  <MaterialIcons
+                    name="straighten"
+                    size={16}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.formLabel}>Quantity Unit</Text>
+                </View>
+                {selectedPlantTypeData?.expectedSeedUnit ? (
+                  <Text style={styles.helperText}>
+                    Plant default:{" "}
+                    {formatQuantityUnit(
+                      selectedPlantTypeData.expectedSeedUnit,
+                      "SEEDS",
+                    )}
+                  </Text>
+                ) : null}
+              </View>
+              <View style={styles.unitPills}>
+                {QUANTITY_UNITS.map((unit) => {
+                  const isSelected = quantityUnit === unit;
+                  return (
+                    <TouchableOpacity
+                      key={unit}
+                      onPress={() => setQuantityUnit(unit)}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.unitPill,
+                        isSelected && styles.unitPillSelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.unitPillText,
+                          isSelected && styles.unitPillTextSelected,
+                        ]}
+                      >
+                        {formatQuantityUnit(unit, "SEEDS")}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
 
             {/* Purchase Date - NEW & REQUIRED */}
             <FormField
@@ -990,6 +1097,33 @@ const styles = {
     fontSize: 11,
     color: "#6B7280",
   },
+  unitPills: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
+  },
+  unitPill: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#F9FAFB",
+  },
+  unitPillSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}15`,
+  },
+  unitPillText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: "500" as const,
+    textTransform: "capitalize" as const,
+  },
+  unitPillTextSelected: {
+    color: Colors.primary,
+    fontWeight: "700" as const,
+  },
   formInput: {
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1037,6 +1171,24 @@ const styles = {
   plantTypeSection: {
     borderBottomWidth: 1,
     borderBottomColor: "#E5E7EB",
+  },
+  plantConfigNote: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: `${Colors.info}12`,
+  },
+  plantConfigNoteText: {
+    color: Colors.info,
+    fontSize: 12,
+    fontWeight: "500" as const,
+    textTransform: "capitalize" as const,
+    flex: 1,
   },
   plantTypeContainer: {
     flex: 1,

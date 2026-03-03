@@ -26,6 +26,7 @@ import { AuthService } from "../../services/auth.service";
 import type { BannerItem } from "../../services/banner.service";
 import type { CustomerDashboardOverview } from "../../services/customer-dashboard.service";
 import { CustomerDashboardService } from "../../services/customer-dashboard.service";
+import type { NurseryPublicProfile } from "../../types/public-profile.types";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 
@@ -113,43 +114,45 @@ const BannerCard = ({ banner, onPress, index }: BannerCardProps) => (
         pressed && styles.bannerPressed,
       ]}
     >
-      <LinearGradient
-        colors={[
-          banner.color || Colors.primary,
-          (banner.color || Colors.primary) + "80",
-        ]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-
       {banner.imageUrl ? (
-        <Image
-          source={{ uri: banner.imageUrl }}
-          style={styles.bannerImage}
-          contentFit="cover"
-          transition={300}
-        />
+        <View style={styles.imageOnlyBannerContainer}>
+          <Image
+            source={{ uri: banner.imageUrl }}
+            style={styles.bannerImage}
+            contentFit="cover"
+            transition={300}
+          />
+        </View>
       ) : (
-        <View style={styles.bannerGradientOverlay} />
+        <>
+          <LinearGradient
+            colors={[
+              banner.color || Colors.primary,
+              (banner.color || Colors.primary) + "80",
+            ]}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+          <View style={styles.bannerGradientOverlay} />
+          <BlurView intensity={40} tint="dark" style={styles.bannerContent}>
+            <Text style={styles.bannerTitle}>{banner.title}</Text>
+            {banner.subtitle ? (
+              <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text>
+            ) : null}
+            {banner.cta ? (
+              <View style={styles.bannerCtaContainer}>
+                <Text style={styles.bannerCta}>{banner.cta}</Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={16}
+                  color={Colors.white}
+                />
+              </View>
+            ) : null}
+          </BlurView>
+        </>
       )}
-
-      <BlurView intensity={40} tint="dark" style={styles.bannerContent}>
-        <Text style={styles.bannerTitle}>{banner.title}</Text>
-        {banner.subtitle && (
-          <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text>
-        )}
-        {banner.cta && (
-          <View style={styles.bannerCtaContainer}>
-            <Text style={styles.bannerCta}>{banner.cta}</Text>
-            <MaterialIcons
-              name="arrow-forward"
-              size={16}
-              color={Colors.white}
-            />
-          </View>
-        )}
-      </BlurView>
     </Pressable>
   </Animated.View>
 );
@@ -171,8 +174,8 @@ const PaymentSummaryCard = ({
   dueSummary,
   onViewDues,
 }: PaymentSummaryCardProps) => {
-  const duePercentage =
-    dueSummary.total > 0 ? (dueSummary.due / dueSummary.total) * 100 : 0;
+  const paidPercentage =
+    dueSummary.total > 0 ? (dueSummary.paid / dueSummary.total) * 100 : 0;
 
   return (
     <Animated.View
@@ -202,7 +205,7 @@ const PaymentSummaryCard = ({
               style={[styles.badge, { backgroundColor: Colors.warning + "10" }]}
             >
               <Text style={[styles.badgeText, { color: Colors.warning }]}>
-                {dueSummary.pendingVerification} pending
+                {formatCompactMoney(dueSummary.pendingVerification)} pending verify
               </Text>
             </View>
           )}
@@ -219,15 +222,15 @@ const PaymentSummaryCard = ({
                 style={[
                   styles.progressFill,
                   {
-                    width: `${Math.min(duePercentage, 100)}%`,
+                    width: `${Math.min(paidPercentage, 100)}%`,
                     backgroundColor:
-                      duePercentage > 70 ? Colors.error : Colors.warning,
+                      paidPercentage < 30 ? Colors.error : Colors.warning,
                   },
                 ]}
               />
             </View>
             <Text style={styles.progressText}>
-              {duePercentage.toFixed(1)}% of total
+              {paidPercentage.toFixed(1)}% paid
             </Text>
           </View>
         </View>
@@ -445,19 +448,15 @@ const LifecycleCard = ({ lifecycle, onTrackProducts }: LifecycleCardProps) => {
 // ==================== CONTACT & PAYMENT CARD ====================
 
 interface ContactCardProps {
-  profile: {
-    upiId?: string;
-    qrImageUrl?: string;
-    primaryPhone?: string;
-    secondaryPhone?: string;
-    whatsappPhone?: string;
-    notes?: string;
-  };
+  profile: NurseryPublicProfile;
   onPayWithUpi: () => void;
   onCopyUpi: () => void;
   onUploadProof: () => void;
   onSaveQr: () => void;
   onOpenWhatsApp: () => void;
+  onCallPhone: (phone?: string) => void;
+  onOpenEmail: (email?: string) => void;
+  onOpenExternal: (url?: string) => void;
 }
 
 const ContactCard = ({
@@ -467,13 +466,37 @@ const ContactCard = ({
   onUploadProof,
   onSaveQr,
   onOpenWhatsApp,
+  onCallPhone,
+  onOpenEmail,
+  onOpenExternal,
 }: ContactCardProps) => {
+  const paymentConfig = profile.paymentConfig || {};
+  const contactDetails = Array.isArray(profile.contactDetails)
+    ? profile.contactDetails
+    : [];
+
+  const primaryContact = contactDetails[0];
+  const primaryPhone = profile.primaryPhone || primaryContact?.phoneNumber;
+  const whatsappPhone = profile.whatsappPhone || primaryContact?.whatsappNumber;
+  const primaryEmail = primaryContact?.email;
+
   const hasContactInfo =
     profile.upiId ||
     profile.qrImageUrl ||
-    profile.primaryPhone ||
+    primaryPhone ||
     profile.secondaryPhone ||
-    profile.whatsappPhone;
+    whatsappPhone ||
+    primaryEmail ||
+    paymentConfig.beneficiaryName ||
+    paymentConfig.bankName ||
+    paymentConfig.accountNumber ||
+    paymentConfig.ifscCode ||
+    paymentConfig.paymentNotes ||
+    profile.website ||
+    profile.facebook ||
+    profile.instagram ||
+    profile.youtube ||
+    contactDetails.length > 0;
 
   return (
     <Animated.View
@@ -580,41 +603,193 @@ const ContactCard = ({
 
         {hasContactInfo && (
           <View style={styles.contactInfo}>
-            {profile.primaryPhone && (
-              <View style={styles.contactRow}>
+            {primaryPhone && (
+              <Pressable
+                onPress={() => onCallPhone(primaryPhone)}
+                style={styles.contactRow}
+              >
                 <MaterialIcons
                   name="phone"
                   size={14}
                   color={Colors.textSecondary}
                 />
-                <Text style={styles.contactText}>{profile.primaryPhone}</Text>
-              </View>
+                <Text style={[styles.contactText, styles.linkText]}>
+                  Call: {primaryPhone}
+                </Text>
+              </Pressable>
             )}
             {profile.secondaryPhone && (
-              <View style={styles.contactRow}>
+              <Pressable
+                onPress={() => onCallPhone(profile.secondaryPhone)}
+                style={styles.contactRow}
+              >
                 <MaterialIcons
                   name="phone-android"
                   size={14}
                   color={Colors.textSecondary}
                 />
-                <Text style={styles.contactText}>{profile.secondaryPhone}</Text>
-              </View>
+                <Text style={[styles.contactText, styles.linkText]}>
+                  Alt: {profile.secondaryPhone}
+                </Text>
+              </Pressable>
             )}
-            {profile.whatsappPhone && (
+            {whatsappPhone && (
               <Pressable onPress={onOpenWhatsApp} style={styles.contactRow}>
                 <MaterialIcons name="chat" size={14} color={Colors.success} />
                 <Text style={[styles.contactText, styles.linkText]}>
-                  WhatsApp: {profile.whatsappPhone}
+                  WhatsApp: {whatsappPhone}
+                </Text>
+              </Pressable>
+            )}
+            {primaryEmail && (
+              <Pressable
+                onPress={() => onOpenEmail(primaryEmail)}
+                style={styles.contactRow}
+              >
+                <MaterialIcons
+                  name="email"
+                  size={14}
+                  color={Colors.textSecondary}
+                />
+                <Text style={[styles.contactText, styles.linkText]}>
+                  Email: {primaryEmail}
                 </Text>
               </Pressable>
             )}
           </View>
         )}
 
-        {profile.notes && (
+        {(paymentConfig.beneficiaryName ||
+          paymentConfig.bankName ||
+          paymentConfig.accountNumber ||
+          paymentConfig.ifscCode) && (
+          <View style={styles.detailsCard}>
+            <Text style={styles.detailsTitle}>Bank & Payment Details</Text>
+            {paymentConfig.beneficiaryName && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Beneficiary</Text>
+                <Text style={styles.detailValue}>{paymentConfig.beneficiaryName}</Text>
+              </View>
+            )}
+            {paymentConfig.bankName && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Bank</Text>
+                <Text style={styles.detailValue}>{paymentConfig.bankName}</Text>
+              </View>
+            )}
+            {paymentConfig.accountNumber && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Account</Text>
+                <Text style={styles.detailValue}>{paymentConfig.accountNumber}</Text>
+              </View>
+            )}
+            {paymentConfig.ifscCode && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>IFSC</Text>
+                <Text style={styles.detailValue}>{paymentConfig.ifscCode}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {contactDetails.length > 0 && (
+          <View style={styles.detailsCard}>
+            <Text style={styles.detailsTitle}>Contact Directory</Text>
+            {contactDetails.map((contact) => (
+              <View key={contact.id || `${contact.label}-${contact.phoneNumber}`} style={styles.contactDetailCard}>
+                {contact.label ? (
+                  <Text style={styles.contactDetailTitle}>{contact.label}</Text>
+                ) : null}
+                {contact.phoneNumber ? (
+                  <Pressable
+                    onPress={() => onCallPhone(contact.phoneNumber)}
+                    style={styles.contactRow}
+                  >
+                    <MaterialIcons name="phone" size={14} color={Colors.textSecondary} />
+                    <Text style={[styles.contactText, styles.linkText]}>
+                      {contact.phoneNumber}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {contact.whatsappNumber ? (
+                  <Pressable
+                    onPress={() => onOpenExternal(`https://wa.me/${digitsOnly(contact.whatsappNumber)}`)}
+                    style={styles.contactRow}
+                  >
+                    <MaterialIcons name="chat" size={14} color={Colors.success} />
+                    <Text style={[styles.contactText, styles.linkText]}>
+                      WhatsApp: {contact.whatsappNumber}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {contact.email ? (
+                  <Pressable
+                    onPress={() => onOpenEmail(contact.email)}
+                    style={styles.contactRow}
+                  >
+                    <MaterialIcons name="email" size={14} color={Colors.textSecondary} />
+                    <Text style={[styles.contactText, styles.linkText]}>{contact.email}</Text>
+                  </Pressable>
+                ) : null}
+                {contact.address ? (
+                  <View style={styles.contactRow}>
+                    <MaterialIcons name="location-on" size={14} color={Colors.textSecondary} />
+                    <Text style={styles.contactText}>{contact.address}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {(profile.website || profile.facebook || profile.instagram || profile.youtube) && (
+          <View style={styles.detailsCard}>
+            <Text style={styles.detailsTitle}>Web & Social</Text>
+            {profile.website && (
+              <Pressable
+                onPress={() => onOpenExternal(profile.website)}
+                style={styles.contactRow}
+              >
+                <MaterialIcons name="language" size={14} color={Colors.textSecondary} />
+                <Text style={[styles.contactText, styles.linkText]}>{profile.website}</Text>
+              </Pressable>
+            )}
+            {profile.facebook && (
+              <Pressable
+                onPress={() => onOpenExternal(profile.facebook)}
+                style={styles.contactRow}
+              >
+                <MaterialIcons name="facebook" size={14} color={Colors.textSecondary} />
+                <Text style={[styles.contactText, styles.linkText]}>{profile.facebook}</Text>
+              </Pressable>
+            )}
+            {profile.instagram && (
+              <Pressable
+                onPress={() => onOpenExternal(profile.instagram)}
+                style={styles.contactRow}
+              >
+                <MaterialIcons name="photo-camera" size={14} color={Colors.textSecondary} />
+                <Text style={[styles.contactText, styles.linkText]}>{profile.instagram}</Text>
+              </Pressable>
+            )}
+            {profile.youtube && (
+              <Pressable
+                onPress={() => onOpenExternal(profile.youtube)}
+                style={styles.contactRow}
+              >
+                <MaterialIcons name="smart-display" size={14} color={Colors.textSecondary} />
+                <Text style={[styles.contactText, styles.linkText]}>{profile.youtube}</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {(profile.notes || paymentConfig.paymentNotes) && (
           <View style={styles.notesContainer}>
             <MaterialIcons name="info" size={14} color={Colors.warning} />
-            <Text style={styles.notesText}>{profile.notes}</Text>
+            <Text style={styles.notesText}>
+              {profile.notes || paymentConfig.paymentNotes}
+            </Text>
           </View>
         )}
 
@@ -670,14 +845,7 @@ export default function CustomerDashboard() {
     pending: 0,
   };
 
-  const profile = (data?.nurseryPublicProfile || {}) as {
-    upiId?: string;
-    qrImageUrl?: string;
-    primaryPhone?: string;
-    secondaryPhone?: string;
-    whatsappPhone?: string;
-    notes?: string;
-  };
+  const profile = (data?.nurseryPublicProfile || {}) as NurseryPublicProfile;
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -734,6 +902,37 @@ export default function CustomerDashboard() {
     const url = `https://wa.me/${phone}`;
     Linking.openURL(url).catch(() => {
       Alert.alert("Unable to open", "Could not open WhatsApp chat.");
+    });
+  };
+
+  const openPhoneDialer = (phone?: string) => {
+    const raw = String(phone || "").trim();
+    if (!raw) {
+      Alert.alert("Phone not available", "No phone number is configured.");
+      return;
+    }
+    Linking.openURL(`tel:${raw}`).catch(() => {
+      Alert.alert("Unable to call", "Could not open dialer.");
+    });
+  };
+
+  const openEmail = (email?: string) => {
+    const raw = String(email || "").trim();
+    if (!raw) {
+      Alert.alert("Email not available", "No email is configured.");
+      return;
+    }
+    Linking.openURL(`mailto:${raw}`).catch(() => {
+      Alert.alert("Unable to open", "Could not open email app.");
+    });
+  };
+
+  const openExternalLink = (url?: string) => {
+    const raw = String(url || "").trim();
+    if (!raw) return;
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    Linking.openURL(normalized).catch(() => {
+      Alert.alert("Unable to open", "Could not open this link.");
     });
   };
 
@@ -864,7 +1063,7 @@ export default function CustomerDashboard() {
         {/* Lifecycle Card */}
         <LifecycleCard
           lifecycle={lifecycle}
-          onTrackProducts={() => router.push("/(customer)/products" as any)}
+          onTrackProducts={() => router.push("/(customer)/seeds" as any)}
         />
 
         {/* Contact & Payment Card */}
@@ -875,6 +1074,9 @@ export default function CustomerDashboard() {
           onUploadProof={() => router.push("/(customer)/dues" as any)}
           onSaveQr={saveOrShareQr}
           onOpenWhatsApp={openWhatsApp}
+          onCallPhone={openPhoneDialer}
+          onOpenEmail={openEmail}
+          onOpenExternal={openExternalLink}
         />
 
         {/* Loading Indicator */}
@@ -945,6 +1147,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     width: undefined,
     height: undefined,
+  },
+  imageOnlyBannerContainer: {
+    ...StyleSheet.absoluteFillObject,
   },
   bannerGradientOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1282,6 +1487,51 @@ const styles = StyleSheet.create({
   contactInfo: {
     marginTop: Spacing.sm,
     gap: 6,
+  },
+  detailsCard: {
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: Spacing.sm,
+    gap: 6,
+    backgroundColor: "#F9FAFB",
+  },
+  detailsTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+  detailValue: {
+    fontSize: 12,
+    color: "#111827",
+    fontWeight: "600",
+    flex: 1,
+    textAlign: "right",
+  },
+  contactDetailCard: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    padding: Spacing.sm,
+    gap: 4,
+    backgroundColor: Colors.white,
+  },
+  contactDetailTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#111827",
   },
   contactRow: {
     flexDirection: "row",

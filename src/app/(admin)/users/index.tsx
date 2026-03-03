@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -59,6 +60,20 @@ export default function Users() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   });
 
+  const resetMutation = useMutation({
+    mutationFn: (payload: { userId: string; defaultPassword?: string }) =>
+      UserService.resetPasswordToDefault(payload.userId, payload.defaultPassword),
+    onSuccess: (response: any) => {
+      const data = response?.data ?? response;
+      const password = String(data?.defaultPassword || "12345");
+      Alert.alert(
+        "Password Reset",
+        `Default password set to: ${password}\n\nShare this securely with the user. They will be asked to change it after login.`,
+      );
+    },
+    onError: (err: any) => Alert.alert("Unable to reset", err?.message || "Please try again"),
+  });
+
   const users = useMemo(() => data?.users ?? [], [data]);
   const totalUsers = data?.users?.length ?? 0;
 
@@ -67,7 +82,8 @@ export default function Users() {
       const matchesSearch =
         search.trim() === "" ||
         u.name.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase());
+        (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
+        (u.phoneNumber || "").toLowerCase().includes(search.toLowerCase());
 
       const matchesRole = roleFilter === "ALL" || u.role === roleFilter;
 
@@ -88,9 +104,9 @@ export default function Users() {
 
   const getRoleDisplay = (role: User["role"]) => {
     const roleMap = {
-      ADMIN: "Admin",
+      NURSERY_ADMIN: "Nursery Admin",
       STAFF: "Staff",
-      VIEWER: "Viewer",
+      CUSTOMER: "Customer",
     };
     return roleMap[role];
   };
@@ -99,6 +115,23 @@ export default function Users() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
+  };
+
+  const handleSendReset = (user: User) => {
+    Alert.alert(
+      "Reset To Default Password",
+      `Set default password for ${user.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          onPress: () =>
+            resetMutation.mutate({
+              userId: user._id,
+            }),
+        },
+      ],
+    );
   };
 
   // Calculate statistics
@@ -167,7 +200,7 @@ export default function Users() {
         renderItem={({ item }) => {
           const isSelf = item._id === currentUser?.id;
           const roleColor =
-            item.role === "ADMIN"
+            item.role === "NURSERY_ADMIN"
               ? Colors.error
               : item.role === "STAFF"
                 ? Colors.warning
@@ -191,7 +224,9 @@ export default function Users() {
                 </View>
                 <View style={styles.userDetails}>
                   <Text style={styles.userName}>{item.name}</Text>
-                  <Text style={styles.userEmail}>{item.email}</Text>
+                  <Text style={styles.userEmail}>
+                    {item.email || item.phoneNumber || "No contact"}
+                  </Text>
                   <View style={styles.userMeta}>
                     <View
                       style={[
@@ -258,6 +293,26 @@ export default function Users() {
                 >
                   <Icon name="swap-horiz" size={16} color={Colors.primary} />
                   <Text style={styles.actionButtonText}>Role</Text>
+                </Pressable>
+
+                <Pressable
+                  disabled={isSelf || resetMutation.isPending}
+                  onPress={() => handleSendReset(item)}
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    styles.actionButtonWarning,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                >
+                  <Icon name="lock-reset" size={16} color={Colors.warning} />
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      { color: Colors.warning },
+                    ]}
+                  >
+                    {resetMutation.isPending ? "Resetting..." : "Reset"}
+                  </Text>
                 </Pressable>
 
                 <Pressable
@@ -363,7 +418,7 @@ export default function Users() {
               style={styles.searchIcon}
             />
             <TextInput
-              placeholder="Search by name or email..."
+              placeholder="Search by name, phone or email..."
               placeholderTextColor={Colors.textTertiary}
               value={search}
               onChangeText={setSearch}
@@ -387,11 +442,11 @@ export default function Users() {
             onPress={() =>
               setRoleFilter((r) =>
                 r === "ALL"
-                  ? "ADMIN"
-                  : r === "ADMIN"
+                  ? "NURSERY_ADMIN"
+                  : r === "NURSERY_ADMIN"
                     ? "STAFF"
                     : r === "STAFF"
-                      ? "VIEWER"
+                      ? "CUSTOMER"
                       : "ALL",
               )
             }
@@ -412,7 +467,7 @@ export default function Users() {
             {roleFilter !== "ALL" && (
               <Icon
                 name={
-                  roleFilter === "ADMIN"
+                  roleFilter === "NURSERY_ADMIN"
                     ? "security"
                     : roleFilter === "STAFF"
                       ? "work"
@@ -849,6 +904,11 @@ const styles = {
     backgroundColor: Colors.error + "15",
     borderWidth: 1,
     borderColor: Colors.error + "30",
+  },
+  actionButtonWarning: {
+    backgroundColor: Colors.warning + "15",
+    borderWidth: 1,
+    borderColor: Colors.warning + "30",
   },
   actionButtonPressed: {
     transform: [{ scale: 0.98 }],

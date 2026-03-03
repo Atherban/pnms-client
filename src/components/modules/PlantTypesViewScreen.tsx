@@ -2,6 +2,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -19,9 +20,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PlantTypeService } from "../../services/plant-type.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { canViewSensitivePricing } from "../../utils/rbac";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -742,6 +744,7 @@ const Header = ({
 interface PlantTypeCardProps {
   item: any;
   onPress: () => void;
+  showSensitivePricing?: boolean;
   canWrite?: boolean;
   onEdit?: () => void;
   onUploadImage?: () => void;
@@ -752,6 +755,7 @@ interface PlantTypeCardProps {
 const PlantTypeCard = ({
   item,
   onPress,
+  showSensitivePricing = false,
   canWrite,
   onEdit,
   onUploadImage,
@@ -764,6 +768,7 @@ const PlantTypeCard = ({
   const minStockLevel = Number(item.minStockLevel ?? 0);
   const lifecycleCategory = getLifecycleCategory(lifecycleDays);
   const growthStages = getGrowthStageSummary(item.growthStages);
+  const imageUri = resolveEntityImage(item);
 
   return (
     <Pressable
@@ -776,169 +781,156 @@ const PlantTypeCard = ({
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       >
-        <View style={styles.cardHeader}>
-          <EntityThumbnail
-            uri={resolveEntityImage(item)}
-            label={item.name}
-            size={56}
-            iconName="local-florist"
-            style={styles.thumbnail}
-          />
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.cardImage} contentFit="cover" />
+        ) : (
+          <View style={styles.cardImagePlaceholder}>
+            <MaterialIcons name="local-florist" size={28} color="#D1D5DB" />
+          </View>
+        )}
 
-          <View style={styles.cardInfo}>
-            <View style={styles.titleRow}>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.name || "Unknown Plant Type"}
-              </Text>
-              {lifecycleCategory && (
-                <View
-                  style={[
-                    styles.lifecycleBadge,
-                    {
-                      backgroundColor: `${LIFECYCLE_CATEGORIES[lifecycleCategory].color}20`,
-                    },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={LIFECYCLE_CATEGORIES[lifecycleCategory].icon as any}
-                    size={12}
-                    color={LIFECYCLE_CATEGORIES[lifecycleCategory].color}
-                  />
-                  <Text
+        <View style={styles.cardContent}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardInfo}>
+              <View style={styles.titleRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.name || "Unknown Plant Type"}
+                </Text>
+                {lifecycleCategory && (
+                  <View
                     style={[
-                      styles.lifecycleBadgeText,
-                      { color: LIFECYCLE_CATEGORIES[lifecycleCategory].color },
+                      styles.lifecycleBadge,
+                      {
+                        backgroundColor: `${LIFECYCLE_CATEGORIES[lifecycleCategory].color}20`,
+                      },
                     ]}
                   >
-                    {LIFECYCLE_CATEGORIES[lifecycleCategory].label}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <MaterialIcons
-                  name="category"
-                  size={14}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.detailText} numberOfLines={1}>
-                  {formatEnumLabel(item.category)}
-                </Text>
+                    <MaterialIcons
+                      name={LIFECYCLE_CATEGORIES[lifecycleCategory].icon as any}
+                      size={12}
+                      color={LIFECYCLE_CATEGORIES[lifecycleCategory].color}
+                    />
+                    <Text
+                      style={[
+                        styles.lifecycleBadgeText,
+                        { color: LIFECYCLE_CATEGORIES[lifecycleCategory].color },
+                      ]}
+                    >
+                      {LIFECYCLE_CATEGORIES[lifecycleCategory].label}
+                    </Text>
+                  </View>
+                )}
               </View>
-
-              {item.variety && (
-                <View style={styles.detailItem}>
-                  <MaterialIcons
-                    name="grass"
-                    size={14}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.detailText} numberOfLines={1}>
-                    {item.variety}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.detailItem}>
-                <MaterialIcons
-                  name="timeline"
-                  size={14}
-                  color={Colors.textSecondary}
-                />
-                <Text style={styles.detailText} numberOfLines={1}>
-                  {growthStages.count > 0
-                    ? `${growthStages.count} stages`
-                    : "Stages not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.cardDivider} />
-
-        <View style={styles.cardFooter}>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricLabel}>Selling Price</Text>
-            <Text style={styles.metricValueSuccess}>
-              {price > 0 ? formatCurrency(price) : "—"}
-            </Text>
-          </View>
-          <View style={styles.metricBlock}>
-            <Text style={styles.metricLabel}>Default Cost</Text>
-            <Text style={styles.metricValue}>
-              {defaultCostPrice > 0 ? formatCurrency(defaultCostPrice) : "—"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.cardFooterSecondary}>
-          <View style={styles.infoPill}>
-            <MaterialIcons name="timer" size={14} color={Colors.primary} />
-            <Text style={styles.infoPillText}>
-              {lifecycleDays > 0 ? `${lifecycleDays} days` : "Lifecycle —"}
-            </Text>
-          </View>
-          <View style={styles.infoPill}>
-            <MaterialIcons name="inventory-2" size={14} color={Colors.primary} />
-            <Text style={styles.infoPillText}>
-              {minStockLevel > 0 ? `Min ${minStockLevel}` : "Min stock —"}
-            </Text>
-          </View>
-          <View style={styles.infoPill}>
-            <MaterialIcons name="timeline" size={14} color={Colors.primary} />
-            <Text style={styles.infoPillText}>{growthStages.rangeLabel}</Text>
-          </View>
-        </View>
-
-        {item.description && (
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.descriptionText} numberOfLines={2}>
-              {item.description}
-            </Text>
-          </View>
-        )}
-
-        {canWrite && (
-          <View style={styles.cardActionsRow}>
-            <Pressable
-              onPress={onEdit}
-              style={({ pressed }) => [
-                styles.cardActionButton,
-                pressed && styles.cardActionButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="edit" size={16} color={Colors.primary} />
-              <Text style={styles.cardActionButtonText}>Edit</Text>
-            </Pressable>
-            <Pressable
-              onPress={onUploadImage}
-              style={({ pressed }) => [
-                styles.cardActionButton,
-                pressed && styles.cardActionButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="image" size={16} color={Colors.primary} />
-              <Text style={styles.cardActionButtonText}>Image</Text>
-            </Pressable>
-            <Pressable
-              onPress={onDelete}
-              disabled={isDeletePending}
-              style={({ pressed }) => [
-                styles.cardActionButton,
-                styles.cardActionButtonDanger,
-                pressed && !isDeletePending && styles.cardActionButtonPressed,
-                isDeletePending && styles.cardActionButtonDisabled,
-              ]}
-            >
-              <MaterialIcons name="delete" size={16} color={Colors.error} />
-              <Text style={styles.cardActionButtonDangerText}>
-                {isDeletePending ? "Deleting..." : "Delete"}
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {formatEnumLabel(item.category)}
+                {item.variety ? ` • ${item.variety}` : ""}
               </Text>
-            </Pressable>
+            </View>
           </View>
-        )}
+
+          <View style={styles.metaSection}>
+            <View style={styles.metaRow}>
+              <MaterialIcons
+                name="timeline"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.metaText}>
+                {growthStages.count > 0
+                  ? `${growthStages.count} growth stages`
+                  : "Stages not set"}
+              </Text>
+            </View>
+            <View style={styles.metaRow}>
+              <MaterialIcons
+                name="inventory-2"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.metaText}>
+                {minStockLevel > 0 ? `Min stock ${minStockLevel}` : "Min stock —"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardFooter}>
+            <View style={styles.metricBlock}>
+              <Text style={styles.metricLabel}>Selling Price</Text>
+              <Text style={styles.metricValueSuccess}>
+                {price > 0 ? formatCurrency(price) : "—"}
+              </Text>
+            </View>
+            {showSensitivePricing && (
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricLabel}>Default Cost</Text>
+                <Text style={styles.metricValue}>
+                  {defaultCostPrice > 0 ? formatCurrency(defaultCostPrice) : "—"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.cardFooterSecondary}>
+            <View style={styles.infoPill}>
+              <MaterialIcons name="timer" size={14} color={Colors.primary} />
+              <Text style={styles.infoPillText}>
+                {lifecycleDays > 0 ? `${lifecycleDays} days` : "Lifecycle —"}
+              </Text>
+            </View>
+            <View style={styles.infoPill}>
+              <MaterialIcons name="timeline" size={14} color={Colors.primary} />
+              <Text style={styles.infoPillText}>{growthStages.rangeLabel}</Text>
+            </View>
+          </View>
+
+          {item.description && (
+            <View style={styles.descriptionContainer}>
+              <Text style={styles.descriptionText} numberOfLines={2}>
+                {item.description}
+              </Text>
+            </View>
+          )}
+
+          {canWrite && (
+            <View style={styles.cardActionsRow}>
+              <Pressable
+                onPress={onEdit}
+                style={({ pressed }) => [
+                  styles.cardActionButton,
+                  pressed && styles.cardActionButtonPressed,
+                ]}
+              >
+                <MaterialIcons name="edit" size={16} color={Colors.primary} />
+                <Text style={styles.cardActionButtonText}>Edit</Text>
+              </Pressable>
+              <Pressable
+                onPress={onUploadImage}
+                style={({ pressed }) => [
+                  styles.cardActionButton,
+                  pressed && styles.cardActionButtonPressed,
+                ]}
+              >
+                <MaterialIcons name="image" size={16} color={Colors.primary} />
+                <Text style={styles.cardActionButtonText}>Image</Text>
+              </Pressable>
+              <Pressable
+                onPress={onDelete}
+                disabled={isDeletePending}
+                style={({ pressed }) => [
+                  styles.cardActionButton,
+                  styles.cardActionButtonDanger,
+                  pressed && !isDeletePending && styles.cardActionButtonPressed,
+                  isDeletePending && styles.cardActionButtonDisabled,
+                ]}
+              >
+                <MaterialIcons name="delete" size={16} color={Colors.error} />
+                <Text style={styles.cardActionButtonDangerText}>
+                  {isDeletePending ? "Deleting..." : "Delete"}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </LinearGradient>
     </Pressable>
   );
@@ -1048,6 +1040,8 @@ export function PlantTypesViewScreen({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const showSensitivePricing = canViewSensitivePricing(role);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -1198,7 +1192,9 @@ export function PlantTypesViewScreen({
         const lifecycle = String(item.lifecycleDays ?? "");
         const minStock = String(item.minStockLevel ?? "");
         const sellingPrice = String(item.sellingPrice ?? "");
-        const defaultCostPrice = String(item.defaultCostPrice ?? "");
+        const defaultCostPrice = showSensitivePricing
+          ? String(item.defaultCostPrice ?? "")
+          : "";
         const growthStageText = Array.isArray(item.growthStages)
           ? item.growthStages
               .map((stage: any) => String(stage?.stage ?? ""))
@@ -1240,7 +1236,7 @@ export function PlantTypesViewScreen({
     }
 
     return filtered;
-  }, [plantTypes, filters]);
+  }, [plantTypes, filters, showSensitivePricing]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
@@ -1345,6 +1341,7 @@ export function PlantTypesViewScreen({
       <PlantTypeCard
         item={item}
         onPress={() => handleItemPress(item._id || item.id)}
+        showSensitivePricing={showSensitivePricing}
         canWrite={canWrite}
         onEdit={() => handleEditPress(item._id || item.id)}
         onUploadImage={() => handleUploadImagePress(item._id || item.id)}
@@ -1363,6 +1360,7 @@ export function PlantTypesViewScreen({
       handleEditPress,
       handleItemPress,
       handleUploadImagePress,
+      showSensitivePricing,
     ],
   );
 
@@ -2190,17 +2188,28 @@ const styles = {
     borderColor: Colors.primary,
   },
   cardGradient: {
+    padding: 0,
+  },
+  cardImage: {
+    width: "100%" as const,
+    height: 140,
+  },
+  cardImagePlaceholder: {
+    width: "100%" as const,
+    height: 140,
+    backgroundColor: "#F9FAFB",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  cardContent: {
     padding: Spacing.lg,
+    gap: Spacing.sm,
   },
   cardHeader: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-  },
-  thumbnail: {
-    borderRadius: 12,
+    gap: Spacing.xs,
   },
   cardInfo: {
-    flex: 1,
+    gap: 4,
   },
   titleRow: {
     flexDirection: "row" as const,
@@ -2209,11 +2218,15 @@ const styles = {
     marginBottom: Spacing.xs,
   },
   name: {
-    fontSize: 16,
-    fontWeight: "600" as const,
+    fontSize: 17,
+    fontWeight: "700" as const,
     color: Colors.text,
     flex: 1,
     marginRight: Spacing.sm,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
   lifecycleBadge: {
     flexDirection: "row" as const,
@@ -2227,27 +2240,21 @@ const styles = {
     fontSize: 11,
     fontWeight: "600" as const,
   },
-  detailsGrid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: Spacing.md,
-    marginTop: 4,
+  metaSection: {
+    gap: 6,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
   },
-  detailItem: {
+  metaRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 4,
-    flex: 1,
+    gap: 6,
   },
-  detailText: {
+  metaText: {
     fontSize: 12,
     color: Colors.textSecondary,
     flex: 1,
-  },
-  cardDivider: {
-    height: 1,
-    backgroundColor: Colors.borderLight,
-    marginVertical: Spacing.md,
   },
   cardFooter: {
     flexDirection: "row" as const,

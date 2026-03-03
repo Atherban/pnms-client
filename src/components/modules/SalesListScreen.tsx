@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -21,14 +22,15 @@ import {
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SalesService } from "../../services/sales.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { canViewSensitivePricing } from "../../utils/rbac";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
-type RoleGroup = "staff" | "admin" | "viewer";
+type RoleGroup = "staff" | "admin" | "customer";
 
 interface SalesListScreenProps {
   title?: string;
@@ -92,6 +94,27 @@ const SALE_STATUS = {
   },
 } as const;
 
+const PAYMENT_STATUS_TAGS = {
+  PAID: {
+    label: "Paid",
+    icon: "check-circle",
+    color: "#10B981",
+    bg: "#ECFDF5",
+  },
+  PARTIALLY_PAID: {
+    label: "Partially Paid",
+    icon: "hourglass-bottom",
+    color: "#F59E0B",
+    bg: "#FFFBEB",
+  },
+  UNPAID: {
+    label: "Unpaid",
+    icon: "warning",
+    color: "#EF4444",
+    bg: "#FEF2F2",
+  },
+} as const;
+
 const DATE_RANGES = [
   { id: "TODAY", label: "Today", icon: "today" },
   { id: "WEEK", label: "This Week", icon: "calendar-view-week" },
@@ -139,6 +162,17 @@ const getSaleAmount = (sale: any): number => {
 };
 
 const getSaleQty = (sale: any): number => {
+  const saleKind = String(sale?.saleKind || "").toUpperCase();
+  if (saleKind === "SERVICE_SALE") {
+    const batch =
+      sale?.customerSeedBatch && typeof sale.customerSeedBatch === "object"
+        ? sale.customerSeedBatch
+        : null;
+    const units = Number(
+      batch?.germinatedQuantity ?? batch?.seedsGerminated ?? batch?.seedsSown ?? 0,
+    );
+    return Number.isFinite(units) && units > 0 ? units : 1;
+  }
   if (Array.isArray(sale?.items)) {
     return sale.items.reduce(
       (sum: number, item: any) => sum + (Number(item.quantity) || 0),
@@ -162,6 +196,18 @@ const getSellerName = (sale: any): string => {
 };
 
 const getItemPlantNames = (sale: any): string[] => {
+  const saleKind = String(sale?.saleKind || "").toUpperCase();
+  if (saleKind === "SERVICE_SALE") {
+    const batch =
+      sale?.customerSeedBatch && typeof sale.customerSeedBatch === "object"
+        ? sale.customerSeedBatch
+        : null;
+    const serviceName =
+      batch?.plantTypeId?.name ||
+      sale?.serviceInvoice?.plantTypeName ||
+      "Seedling Service";
+    return [serviceName];
+  }
   if (!Array.isArray(sale?.items)) return [];
   const names: string[] = sale.items
     .map((item: any) => {
@@ -226,14 +272,18 @@ const getPaymentInfo = (mode?: string) => {
   return PAYMENT_METHODS[key] || PAYMENT_METHODS.OTHER;
 };
 
-const getStatusInfo = (
-  sale: any,
-): (typeof SALE_STATUS)[keyof typeof SALE_STATUS] => {
-  if (sale?.status) {
-    const key = sale.status.toUpperCase() as SaleStatus;
-    if (SALE_STATUS[key]) return SALE_STATUS[key];
+const getPaymentTagInfo = (sale: any) => {
+  const paymentStatus = String(sale?.paymentStatus || "").toUpperCase();
+  if (paymentStatus === "PAID") return PAYMENT_STATUS_TAGS.PAID;
+  if (paymentStatus === "PARTIALLY_PAID") return PAYMENT_STATUS_TAGS.PARTIALLY_PAID;
+  if (paymentStatus === "UNPAID" || paymentStatus === "OVERDUE") {
+    return PAYMENT_STATUS_TAGS.UNPAID;
   }
-  return SALE_STATUS.COMPLETED;
+  const due = Number(sale?.dueAmount ?? 0) || 0;
+  const paid = Number(sale?.paidAmount ?? 0) || 0;
+  if (due <= 0) return PAYMENT_STATUS_TAGS.PAID;
+  if (paid > 0) return PAYMENT_STATUS_TAGS.PARTIALLY_PAID;
+  return PAYMENT_STATUS_TAGS.UNPAID;
 };
 
 const getStatusKey = (sale: any): SaleStatus => {
@@ -320,11 +370,6 @@ const formatDate = (dateString?: string): string => {
       year: "numeric",
     });
   }
-};
-
-const formatId = (id?: string): string => {
-  if (!id) return "—";
-  return `#${id.slice(-6).toUpperCase()}`;
 };
 
 // ==================== FILTER MODAL COMPONENT ====================
@@ -730,9 +775,10 @@ interface StatsRowProps {
     totalProfit: number;
     avgSaleValue: number;
   };
+  showFinancialInsights: boolean;
 }
 
-const StatsRow = ({ stats }: StatsRowProps) => (
+const StatsRow = ({ stats, showFinancialInsights }: StatsRowProps) => (
   <ScrollView
     horizontal
     showsHorizontalScrollIndicator={false}
@@ -750,13 +796,15 @@ const StatsRow = ({ stats }: StatsRowProps) => (
       gradient={[Colors.primary, Colors.primaryLight || Colors.primary]}
     />
 
-    <StatsCard
-      icon="trending-up"
-      value={formatCompactCurrency(stats.totalProfit)}
-      label="Total Profit"
-      sublabel={`${((stats.totalProfit / stats.totalAmount) * 100 || 0).toFixed(1)}% margin`}
-      gradient={[Colors.success, "#059669"]}
-    />
+    {showFinancialInsights && (
+      <StatsCard
+        icon="trending-up"
+        value={formatCompactCurrency(stats.totalProfit)}
+        label="Total Profit"
+        sublabel={`${((stats.totalProfit / stats.totalAmount) * 100 || 0).toFixed(1)}% margin`}
+        gradient={[Colors.success, "#059669"]}
+      />
+    )}
 
     <StatsCard
       icon="receipt"
@@ -781,14 +829,15 @@ const StatsRow = ({ stats }: StatsRowProps) => (
 interface SaleCardProps {
   item: any;
   onPress: (id: string) => void;
+  showFinancialInsights: boolean;
 }
 
-const SaleCard = ({ item, onPress }: SaleCardProps) => {
+const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
   const amount = getSaleAmount(item);
   const qty = getSaleQty(item);
+  const saleKind = String(item?.saleKind || "").toUpperCase();
   const paymentInfo = getPaymentInfo(item.paymentMode);
-  const statusInfo = getStatusInfo(item);
-  const saleId = formatId(item._id);
+  const statusInfo = getPaymentTagInfo(item);
   const profit = Number(item.totalProfit ?? 0) || 0;
   const cost = Number(item.totalCost ?? 0) || 0;
   const profitPercentage =
@@ -798,10 +847,20 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
   const seller = getSellerName(item);
   const plantNames = getItemPlantNames(item);
   const thumbnailUri = getSaleThumbnail(item);
+  const serviceBatch =
+    item?.customerSeedBatch && typeof item.customerSeedBatch === "object"
+      ? item.customerSeedBatch
+      : null;
+  const serviceBatchStatus = String(serviceBatch?.status || "").toUpperCase();
+  const serviceStatusText = serviceBatchStatus
+    ? serviceBatchStatus.replace(/_/g, " ")
+    : "SERVICE";
   const itemSummary =
-    plantNames.length > 0
-      ? `${plantNames.slice(0, 2).join(", ")}${plantNames.length > 2 ? ` +${plantNames.length - 2}` : ""}`
-      : `${itemCount} ${itemCount === 1 ? "line item" : "line items"}`;
+    saleKind === "SERVICE_SALE"
+      ? `Service Batch • ${serviceStatusText}`
+      : plantNames.length > 0
+        ? `${plantNames.slice(0, 2).join(", ")}${plantNames.length > 2 ? ` +${plantNames.length - 2}` : ""}`
+        : `${itemCount} ${itemCount === 1 ? "line item" : "line items"}`;
 
   return (
     <Animated.View
@@ -824,51 +883,25 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
         >
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <EntityThumbnail
-                uri={thumbnailUri}
-                label={plantNames[0] || seller}
-                size={44}
-                borderRadius={12}
-                iconName="local-florist"
-              />
+          {thumbnailUri ? (
+            <Image
+              source={{ uri: thumbnailUri }}
+              style={styles.saleImage}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={styles.saleImagePlaceholder}>
+              <MaterialIcons name="receipt-long" size={28} color="#D1D5DB" />
+            </View>
+          )}
+
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
               <View style={styles.cardHeaderMeta}>
-                <View style={styles.idContainer}>
-                  <MaterialIcons
-                    name="person"
-                    size={14}
-                    color={Colors.primary}
-                  />
-                  <Text style={styles.saleId}>{seller}</Text>
-                </View>
-                <Text style={styles.saleMetaText}>Sale {saleId}</Text>
-                <Text style={styles.itemSummaryText} numberOfLines={1}>
-                  {itemSummary}
-                </Text>
-
-                <View style={styles.badgeContainer}>
-                  <View
-                    style={[
-                      styles.paymentBadge,
-                      { backgroundColor: paymentInfo.bg },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={paymentInfo.icon as any}
-                      size={11}
-                      color={paymentInfo.color}
-                    />
-                    <Text
-                      style={[
-                        styles.paymentBadgeText,
-                        { color: paymentInfo.color },
-                      ]}
-                    >
-                      {paymentInfo.label}
-                    </Text>
-                  </View>
-
+                <View style={styles.titleRow}>
+                  <Text style={styles.saleId} numberOfLines={1}>
+                    {seller}
+                  </Text>
                   <View
                     style={[
                       styles.statusBadge,
@@ -890,13 +923,13 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
                     </Text>
                   </View>
                 </View>
+                <Text style={styles.itemSummaryText} numberOfLines={1}>
+                  {itemSummary}
+                </Text>
               </View>
+              <Text style={styles.dateText}>{formatDate(saleDate)}</Text>
             </View>
 
-            <Text style={styles.dateText}>{formatDate(saleDate)}</Text>
-          </View>
-
-          <View style={styles.cardContent}>
             <View style={styles.amountSection}>
               <Text style={styles.amountLabel}>Total Amount</Text>
               <Text style={styles.amountValue}>{formatCurrency(amount)}</Text>
@@ -907,68 +940,87 @@ const SaleCard = ({ item, onPress }: SaleCardProps) => {
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
                 <MaterialIcons
-                  name="shopping-bag"
+                  name={saleKind === "SERVICE_SALE" ? "spa" : "shopping-bag"}
                   size={14}
                   color={Colors.primary}
                 />
                 <View>
-                  <Text style={styles.detailLabel}>Units</Text>
+                  <Text style={styles.detailLabel}>
+                    {saleKind === "SERVICE_SALE" ? "Service Units" : "Units"}
+                  </Text>
                   <Text style={styles.detailValue}>
-                    {qty} ({itemCount} {itemCount === 1 ? "item" : "items"})
+                    {saleKind === "SERVICE_SALE"
+                      ? `${qty} seedlings`
+                      : `${qty} (${itemCount} ${itemCount === 1 ? "item" : "items"})`}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.detailItem}>
-                <MaterialIcons
-                  name="trending-up"
-                  size={14}
-                  color={profit > 0 ? Colors.success : Colors.textSecondary}
-                />
-                <View>
-                  <Text style={styles.detailLabel}>Profit</Text>
-                  <Text
-                    style={[
-                      styles.detailValue,
-                      profit > 0 && styles.profitPositive,
-                      profit < 0 && styles.profitNegative,
-                    ]}
-                  >
-                    {formatCurrency(profit)}
-                  </Text>
-                  {profit > 0 && (
-                    <Text style={styles.profitPercentage}>
-                      +{profitPercentage}%
+              {showFinancialInsights && (
+                <View style={styles.detailItem}>
+                  <MaterialIcons
+                    name="trending-up"
+                    size={14}
+                    color={profit > 0 ? Colors.success : Colors.textSecondary}
+                  />
+                  <View>
+                    <Text style={styles.detailLabel}>Profit</Text>
+                    <Text
+                      style={[
+                        styles.detailValue,
+                        profit > 0 && styles.profitPositive,
+                        profit < 0 && styles.profitNegative,
+                      ]}
+                    >
+                      {formatCurrency(profit)}
                     </Text>
-                  )}
+                    {profit > 0 && (
+                      <Text style={styles.profitPercentage}>
+                        +{profitPercentage}%
+                      </Text>
+                    )}
+                  </View>
                 </View>
+              )}
+            </View>
+
+            <View style={styles.metaSection}>
+              <View style={styles.metaRow}>
+                <MaterialIcons
+                  name={paymentInfo.icon as any}
+                  size={14}
+                  color={paymentInfo.color}
+                />
+                <Text style={styles.metaText}>Payment: {paymentInfo.label}</Text>
               </View>
+              {showFinancialInsights && (
+                <View style={styles.metaRow}>
+                  <MaterialIcons
+                    name="account-balance-wallet"
+                    size={14}
+                    color={Colors.textSecondary}
+                  />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    Cost {formatCurrency(cost)} • Margin{" "}
+                    {Number(item.grossMarginPercent ?? profitPercentage).toFixed(1)}%
+                  </Text>
+                </View>
+              )}
             </View>
-          </View>
 
-          <View style={styles.notesContainer}>
-            <MaterialIcons
-              name="account-balance-wallet"
-              size={14}
-              color={Colors.textSecondary}
-            />
-            <Text style={styles.notesText} numberOfLines={1}>
-              Cost {formatCurrency(cost)} • Margin {Number(item.grossMarginPercent ?? profitPercentage).toFixed(1)}%
-            </Text>
+            {item.notes && (
+              <View style={styles.notesContainer}>
+                <MaterialIcons
+                  name="notes"
+                  size={14}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.notesText} numberOfLines={1}>
+                  {item.notes}
+                </Text>
+              </View>
+            )}
           </View>
-
-          {item.notes && (
-            <View style={styles.notesContainer}>
-              <MaterialIcons
-                name="notes"
-                size={14}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.notesText} numberOfLines={1}>
-                {item.notes}
-              </Text>
-            </View>
-          )}
         </LinearGradient>
       </TouchableOpacity>
     </Animated.View>
@@ -1124,6 +1176,8 @@ export function SalesListScreen({
   canCreate = false,
 }: SalesListScreenProps) {
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
+  const showFinancialInsights = canViewSensitivePricing(role);
 
   // Filter state
   const [filters, setFilters] = useState<FilterState>({
@@ -1187,10 +1241,9 @@ export function SalesListScreen({
       (sum, sale) => sum + getSaleAmount(sale),
       0,
     );
-    const totalProfit = sales.reduce(
-      (sum, sale) => sum + (Number(sale.totalProfit ?? 0) || 0),
-      0,
-    );
+    const totalProfit = showFinancialInsights
+      ? sales.reduce((sum, sale) => sum + (Number(sale.totalProfit ?? 0) || 0), 0)
+      : 0;
 
     const today = new Date().toISOString().split("T")[0];
     const todaySales = sales.filter((sale: any) =>
@@ -1212,7 +1265,7 @@ export function SalesListScreen({
       todayAmount,
       avgSaleValue,
     };
-  }, [sales]);
+  }, [sales, showFinancialInsights]);
 
   // Filter and search logic
   const filteredSales = useMemo(() => {
@@ -1282,7 +1335,7 @@ export function SalesListScreen({
         if (sortOption.id.includes("amount")) {
           aVal = getSaleAmount(a);
           bVal = getSaleAmount(b);
-        } else if (sortOption.id.includes("profit")) {
+        } else if (sortOption.id.includes("profit") && showFinancialInsights) {
           aVal = Number(a.totalProfit ?? 0);
           bVal = Number(b.totalProfit ?? 0);
         } else {
@@ -1297,7 +1350,7 @@ export function SalesListScreen({
     }
 
     return filtered;
-  }, [sales, filters]);
+  }, [sales, filters, showFinancialInsights]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1388,9 +1441,13 @@ export function SalesListScreen({
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => (
-      <SaleCard item={item} onPress={handleViewSale} />
+      <SaleCard
+        item={item}
+        onPress={handleViewSale}
+        showFinancialInsights={showFinancialInsights}
+      />
     ),
-    [handleViewSale],
+    [handleViewSale, showFinancialInsights],
   );
 
   const keyExtractor = useCallback(
@@ -1681,7 +1738,7 @@ export function SalesListScreen({
       {/* Stats Section */}
       {sales.length > 0 && (
         <View style={styles.statsWrapper}>
-          <StatsRow stats={stats} />
+          <StatsRow stats={stats} showFinancialInsights={showFinancialInsights} />
         </View>
       )}
 
@@ -2388,50 +2445,46 @@ const styles = {
     backgroundColor: Colors.white,
   },
   cardGradient: {
+    padding: 0,
+  },
+  saleImage: {
+    width: "100%" as const,
+    height: 140,
+  },
+  saleImagePlaceholder: {
+    width: "100%" as const,
+    height: 140,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "#F9FAFB",
+  },
+  cardContent: {
     padding: Spacing.md,
+    gap: Spacing.sm,
   },
   cardHeader: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    alignItems: "flex-start" as const,
-    marginBottom: Spacing.sm,
-  },
-  cardHeaderLeft: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    gap: Spacing.sm,
+    alignItems: "center" as const,
   },
   cardHeaderMeta: {
     flex: 1,
     minWidth: 0,
   },
-  idContainer: {
+  saleId: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: Colors.text,
+  },
+  titleRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 6,
-    marginBottom: 4,
-  },
-  saleId: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.text,
-    letterSpacing: 0.5,
-  },
-  saleMetaText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginBottom: 2,
+    justifyContent: "space-between" as const,
+    gap: 8,
   },
   itemSummaryText: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    marginBottom: 4,
-  },
-  badgeContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
   paymentBadge: {
     flexDirection: "row" as const,
@@ -2458,16 +2511,11 @@ const styles = {
     fontWeight: "600" as const,
   },
   dateText: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textSecondary,
   },
-  cardContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-  },
   amountSection: {
-    flex: 1,
+    paddingTop: Spacing.xs,
   },
   amountLabel: {
     fontSize: 11,
@@ -2481,14 +2529,13 @@ const styles = {
     letterSpacing: -0.5,
   },
   cardDivider: {
-    width: 1,
-    height: 40,
+    height: 1,
     backgroundColor: Colors.borderLight,
+    marginVertical: Spacing.xs,
   },
   detailsGrid: {
-    flex: 2,
     flexDirection: "row" as const,
-    justifyContent: "space-around" as const,
+    justifyContent: "space-between" as const,
     gap: Spacing.lg,
   },
   detailItem: {
@@ -2516,19 +2563,31 @@ const styles = {
     color: Colors.success,
     marginTop: 1,
   },
+  metaSection: {
+    gap: 6,
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.borderLight,
+  },
+  metaRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  metaText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
   notesContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    marginTop: Spacing.xs,
   },
   notesText: {
     flex: 1,
     fontSize: 12,
     color: Colors.textSecondary,
-    fontStyle: "italic" as const,
   },
 } as const;

@@ -413,6 +413,7 @@ export default function CustomerProfileScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

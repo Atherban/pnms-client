@@ -18,16 +18,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SeedService } from "../../services/seed.service";
 import { UploadService } from "../../services/upload.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { formatErrorMessage } from "../../utils/error";
 import { toImageUrl } from "../../utils/image";
+import { canViewSourcingDetails } from "../../utils/rbac";
+import { formatQuantityUnit } from "../../utils/units";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
 interface SeedDetailScreenProps {
   id?: string;
   title?: string;
-  routeGroup?: "staff" | "admin" | "viewer";
+  routeGroup?: "staff" | "admin" | "customer";
   canUpload?: boolean;
 }
 
@@ -55,6 +58,8 @@ export function SeedDetailScreen({
   title = "Seed Details",
   canUpload = false,
 }: SeedDetailScreenProps) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSourcingDetails = canViewSourcingDetails(role);
   const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -181,6 +186,10 @@ export function SeedDetailScreen({
   const selectedImageItem = imageItems.find((image) => image.uri === displayImage) ?? null;
   const totalPurchased = toNumber(seed?.totalPurchased);
   const seedsUsed = toNumber(seed?.seedsUsed);
+  const quantityUnit = formatQuantityUnit(
+    seed?.quantityUnit ?? seed?.plantType?.expectedSeedUnit,
+    "SEEDS",
+  );
   const available = Math.max(
     0,
     totalPurchased - seedsUsed - toNumber(seed?.discardedSeeds),
@@ -371,24 +380,32 @@ export function SeedDetailScreen({
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Purchased</Text>
-              <Text style={styles.statValue}>{totalPurchased}</Text>
+              <Text style={styles.statValue}>
+                {totalPurchased} {quantityUnit}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Used</Text>
-              <Text style={styles.statValue}>{seedsUsed}</Text>
+              <Text style={styles.statValue}>
+                {seedsUsed} {quantityUnit}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Available</Text>
-              <Text style={styles.statValue}>{available}</Text>
+              <Text style={styles.statValue}>
+                {available} {quantityUnit}
+              </Text>
             </View>
           </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailKey}>Supplier</Text>
-            <Text style={styles.detailValue}>{seed.supplierName || "—"}</Text>
-          </View>
+          {showSourcingDetails && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>Supplier</Text>
+              <Text style={styles.detailValue}>{seed.supplierName || "—"}</Text>
+            </View>
+          )}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>Purchase Date</Text>
             <Text style={styles.detailValue}>{formatDate(seed.purchaseDate)}</Text>

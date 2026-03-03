@@ -61,6 +61,8 @@ export default function CreatePlantType() {
   const [sellingPrice, setSellingPrice] = useState("");
   const [minStockLevel, setMinStockLevel] = useState("");
   const [defaultCostPrice, setDefaultCostPrice] = useState("");
+  const [expectedSeedQtyPerBatch, setExpectedSeedQtyPerBatch] = useState("");
+  const [expectedSeedUnit, setExpectedSeedUnit] = useState("");
   const [growthStages, setGrowthStages] = useState<GrowthStageFormEntry[]>(
     INITIAL_GROWTH_STAGES,
   );
@@ -109,6 +111,19 @@ export default function CreatePlantType() {
     const value = Number(trimmed);
     return value >= 0 ? value : null;
   }, [defaultCostPrice]);
+
+  const parsedExpectedSeedQtyPerBatch = useMemo(() => {
+    const trimmed = expectedSeedQtyPerBatch.trim();
+    if (!trimmed) return undefined;
+    const value = Number(trimmed);
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }, [expectedSeedQtyPerBatch]);
+
+  const seedSowingGuidance = useMemo(() => {
+    if (!parsedExpectedSeedQtyPerBatch) return null;
+    const unit = expectedSeedUnit.trim() || "seeds";
+    return `Sowing guidance: use ${parsedExpectedSeedQtyPerBatch} ${unit} for one standard batch of this plant type.`;
+  }, [expectedSeedUnit, parsedExpectedSeedQtyPerBatch]);
 
   const parsedGrowthStages = useMemo(() => {
     let hasAnyValues = false;
@@ -195,6 +210,16 @@ export default function CreatePlantType() {
       Alert.alert("Validation Error", "Enter a valid default cost price");
       return;
     }
+    if (
+      expectedSeedQtyPerBatch.trim() &&
+      parsedExpectedSeedQtyPerBatch === null
+    ) {
+      Alert.alert(
+        "Validation Error",
+        "Expected seed quantity must be a positive whole number",
+      );
+      return;
+    }
     if (variety.trim() && parsedVariety === null) {
       Alert.alert(
         "Validation Error",
@@ -221,6 +246,8 @@ export default function CreatePlantType() {
       sellingPrice: parsedPrice,
       minStockLevel: parsedMinStockLevel ?? undefined,
       defaultCostPrice: parsedDefaultCostPrice ?? undefined,
+      expectedSeedQtyPerBatch: parsedExpectedSeedQtyPerBatch ?? undefined,
+      expectedSeedUnit: expectedSeedUnit.trim() || undefined,
       growthStages: parsedGrowthStages,
     });
   };
@@ -232,6 +259,7 @@ export default function CreatePlantType() {
     (!lifecycleDays.trim() || parsedLifecycleDays !== null) &&
     (!minStockLevel.trim() || parsedMinStockLevel !== null) &&
     (!defaultCostPrice.trim() || parsedDefaultCostPrice !== null) &&
+    (!expectedSeedQtyPerBatch.trim() || parsedExpectedSeedQtyPerBatch !== null) &&
     (!variety.trim() || parsedVariety !== null) &&
     parsedGrowthStages !== null &&
     !isSubmitting;
@@ -451,6 +479,35 @@ export default function CreatePlantType() {
               keyboardType="numeric"
               style={styles.input}
             />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <View style={styles.inputLabel}>
+              <MaterialIcons name="grain" size={18} color={Colors.text} />
+              <Text style={styles.inputLabelText}>Expected Seed Qty / Batch</Text>
+            </View>
+            <TextInput
+              value={expectedSeedQtyPerBatch}
+              onChangeText={setExpectedSeedQtyPerBatch}
+              placeholder="e.g. 200"
+              placeholderTextColor={Colors.textTertiary}
+              keyboardType="numeric"
+              style={styles.input}
+            />
+            <TextInput
+              value={expectedSeedUnit}
+              onChangeText={setExpectedSeedUnit}
+              placeholder="Unit (e.g. grams, seeds)"
+              placeholderTextColor={Colors.textTertiary}
+              style={[styles.input, { marginTop: 8 }]}
+            />
+            {seedSowingGuidance ? (
+              <Text style={styles.guidanceText}>{seedSowingGuidance}</Text>
+            ) : (
+              <Text style={styles.hintText}>
+                Add expected seed quantity so staff and customers know sowing requirement per batch.
+              </Text>
+            )}
           </View>
 
           <View style={styles.inputContainer}>
@@ -712,6 +769,19 @@ const styles = {
     fontSize: 13,
     color: Colors.white,
     opacity: 0.9,
+  },
+  hintText: {
+    marginTop: 6,
+    color: Colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  guidanceText: {
+    marginTop: 6,
+    color: Colors.success,
+    fontSize: 12,
+    fontWeight: "600" as const,
+    lineHeight: 16,
   },
   scrollContent: {
     padding: Spacing.lg,

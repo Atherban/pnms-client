@@ -93,6 +93,34 @@ const getCollectionLabel = (value: string) =>
     ? "Plant Types"
     : value.charAt(0).toUpperCase() + value.slice(1);
 
+const getSafeEntityLabel = (record: SoftDeletedAuditRow) =>
+  record.entityName?.trim() || `${record.entityType} record`;
+
+const getAuditActor = (record: SoftDeletedAuditRow) =>
+  record.deletedBy?.trim() ||
+  (typeof record.metadata?.actorName === "string"
+    ? record.metadata.actorName
+    : "") ||
+  "System";
+
+const getAuditAction = (record: SoftDeletedAuditRow) => {
+  const rawAction =
+    typeof record.metadata?.action === "string"
+      ? record.metadata.action
+      : "SOFT_DELETED";
+  const normalized = rawAction.toUpperCase();
+  if (normalized.includes("SOFT_DELETED")) return "deleted";
+  if (normalized.includes("DELETED")) return "removed";
+  if (normalized.includes("UPDATED")) return "updated";
+  if (normalized.includes("CREATED")) return "created";
+  return "changed";
+};
+
+const getAuditSummary = (record: SoftDeletedAuditRow) =>
+  `${getAuditActor(record)} ${getAuditAction(record)} ${getSafeEntityLabel(
+    record,
+  )}`;
+
 // ==================== STATS CARD ====================
 
 interface StatsCardProps {
@@ -243,7 +271,7 @@ const AuditCard = ({ record }: AuditCardProps) => {
           <View style={styles.auditTitleContainer}>
             <Text style={styles.auditEntityType}>{record.entityType}</Text>
             <Text style={styles.auditEntityName} numberOfLines={1}>
-              {record.entityName || record.entityId || "Unknown Entity"}
+              {getSafeEntityLabel(record)}
             </Text>
           </View>
         </View>
@@ -258,6 +286,15 @@ const AuditCard = ({ record }: AuditCardProps) => {
             <Text style={styles.expiredBadgeText}>Expired</Text>
           </View>
         )}
+      </View>
+
+      <View style={styles.actionSummary}>
+        <MaterialIcons
+          name="history-toggle-off"
+          size={14}
+          color={Colors.primary}
+        />
+        <Text style={styles.actionSummaryText}>{getAuditSummary(record)}</Text>
       </View>
 
       <View style={styles.auditDetails}>
@@ -284,21 +321,11 @@ const AuditCard = ({ record }: AuditCardProps) => {
 
         <View style={styles.auditDetailRow}>
           <MaterialIcons name="person" size={12} color="#9CA3AF" />
-          <Text style={styles.auditDetailLabel}>Deleted By:</Text>
+          <Text style={styles.auditDetailLabel}>Performed By:</Text>
           <Text style={styles.auditDetailValue}>
-            {record.deletedBy || "System"}
+            {getAuditActor(record)}
           </Text>
         </View>
-
-        {record.nurseryId && (
-          <View style={styles.auditDetailRow}>
-            <MaterialIcons name="store" size={12} color="#9CA3AF" />
-            <Text style={styles.auditDetailLabel}>Nursery ID:</Text>
-            <Text style={styles.auditDetailValue} numberOfLines={1}>
-              {String(record.nurseryId)}
-            </Text>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -344,7 +371,6 @@ const CollectionItemCard = ({
     <Text style={styles.collectionItemTitle} numberOfLines={1}>
       {item.entityLabel || item.id}
     </Text>
-    <Text style={styles.collectionItemMeta}>ID: {item.id}</Text>
     <Text style={styles.collectionItemMeta}>
       Deleted: {formatDateTime(item.deletedAt)}
     </Text>
@@ -419,13 +445,14 @@ export default function SuperAdminAuditLogsScreen() {
   const purgeMutation = useMutation({
     mutationFn: () =>
       SoftDeleteService.purgeExpired({ nurseryId, retentionDays: 30 }),
-    onSuccess: () => {
+    onSuccess: async () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         "✅ Cleanup Started",
-        "30-day soft-delete purge has been triggered successfully.",
-        [{ text: "OK", onPress: () => refetch() }],
+        "30-day cleanup has started for soft-deleted items and their audit logs.",
+        [{ text: "OK" }],
       );
+      await Promise.all([refetch(), refetchCollectionItems()]);
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -433,6 +460,23 @@ export default function SuperAdminAuditLogsScreen() {
         "❌ Failed",
         err?.message || "Unable to start cleanup for selected nursery.",
       );
+    },
+  });
+
+  const clearLogsMutation = useMutation({
+    mutationFn: () =>
+      SoftDeleteService.clearAuditLogs({
+        nurseryId,
+      }),
+    onSuccess: async (res: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const deletedCount = Number(res?.data?.deletedCount ?? res?.deletedCount ?? 0);
+      Alert.alert("✅ Logs Cleared", `${deletedCount} log${deletedCount === 1 ? "" : "s"} removed.`);
+      await refetch();
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("❌ Failed", err?.message || "Unable to clear audit logs.");
     },
   });
 
@@ -497,8 +541,6 @@ export default function SuperAdminAuditLogsScreen() {
         <FixedHeader
           title="Audit Logs"
           subtitle="Loading nurseries..."
-          showBackButton
-          onBackPress={() => {}}
         />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -512,9 +554,7 @@ export default function SuperAdminAuditLogsScreen() {
     <View style={styles.container}>
       <FixedHeader
         title="Audit Logs"
-        subtitle="View and manage soft-deleted records"
-        showBackButton
-        onBackPress={() => {}}
+        subtitle="Track who deleted what across nurseries"
       />
 
       <ScrollView
@@ -599,7 +639,7 @@ export default function SuperAdminAuditLogsScreen() {
                       color={Colors.white}
                     />
                     <Text style={styles.cleanupButtonText}>
-                      Run 30-Day Cleanup
+                      Run Auto Cleanup
                     </Text>
                   </>
                 )}
@@ -612,7 +652,7 @@ export default function SuperAdminAuditLogsScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <MaterialIcons name="storage" size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Soft-Deleted DB Items</Text>
+              <Text style={styles.sectionTitle}>Cleanup Queue</Text>
             </View>
             <Text style={styles.sectionCount}>
               {(collectionItems || []).length} items
@@ -689,7 +729,7 @@ export default function SuperAdminAuditLogsScreen() {
                     color={Colors.white}
                   />
                   <Text style={styles.cleanupButtonText}>
-                    Permanently Delete Filtered Items
+                    Delete Filtered Queue
                   </Text>
                 </>
               )}
@@ -700,13 +740,13 @@ export default function SuperAdminAuditLogsScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color={Colors.primary} />
               <Text style={styles.loadingSmallText}>
-                Loading soft-deleted DB items...
+                Loading cleanup queue...
               </Text>
             </View>
           ) : !(collectionItems || []).length ? (
             <View style={styles.emptyContainer}>
               <MaterialIcons name="inventory-2" size={48} color="#D1D5DB" />
-              <Text style={styles.emptyTitle}>No Soft-Deleted DB Items</Text>
+              <Text style={styles.emptyTitle}>Queue is Empty</Text>
               <Text style={styles.emptyMessage}>
                 No soft-deleted documents found in selected collections.
               </Text>
@@ -743,9 +783,37 @@ export default function SuperAdminAuditLogsScreen() {
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
               <MaterialIcons name="history" size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Deleted Records</Text>
+              <Text style={styles.sectionTitle}>Deletion History</Text>
             </View>
-            <Text style={styles.sectionCount}>{stats.totalRecords} items</Text>
+            <View style={styles.sectionHeaderActions}>
+              <Text style={styles.sectionCount}>{stats.totalRecords} items</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.clearLogsButton,
+                  pressed && styles.cleanupButtonPressed,
+                ]}
+                onPress={() =>
+                  Alert.alert(
+                    "Clear Logs",
+                    "Permanently remove deletion history for current scope?",
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Clear Logs",
+                        style: "destructive",
+                        onPress: () => clearLogsMutation.mutate(),
+                      },
+                    ],
+                  )
+                }
+                disabled={clearLogsMutation.isPending}
+              >
+                <MaterialIcons name="delete-forever" size={14} color={Colors.error} />
+                <Text style={styles.clearLogsButtonText}>
+                  {clearLogsMutation.isPending ? "Clearing..." : "Clear Logs"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           {isLoading ? (
@@ -975,6 +1043,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
   },
+  sectionHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  clearLogsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+  },
+  clearLogsButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.error,
+  },
 
   // Loading
   loadingContainer: {
@@ -1063,6 +1152,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#111827",
+  },
+  actionSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: -2,
+    marginBottom: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: `${Colors.primary}10`,
+  },
+  actionSummaryText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#1F2937",
+    fontWeight: "500",
   },
   expiredBadge: {
     flexDirection: "row",

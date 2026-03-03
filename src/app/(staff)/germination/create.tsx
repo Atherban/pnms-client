@@ -65,6 +65,13 @@ const getSeedName = (sowing: Sowing): string => {
   if (typeof sowing.seedId === "object") {
     return sowing.seedId?.name || "Unknown Seed";
   }
+  if (typeof sowing.customerSeedBatch === "object") {
+    const plantName = (sowing.customerSeedBatch as any)?.plantTypeId?.name;
+    return plantName ? `${plantName} Farmer Seed Batch` : "Farmer Seed Batch";
+  }
+  if (typeof sowing.customerSeedBatch === "string" && sowing.customerSeedBatch.trim()) {
+    return "Farmer Seed Batch";
+  }
   return "Unknown Seed";
 };
 
@@ -75,6 +82,16 @@ const getPlantName = (sowing: Sowing): string => {
       sowing.plantType?.name ||
       "Unknown Plant"
     );
+  }
+  if (typeof sowing.customerSeedBatch === "object") {
+    return (
+      (sowing.customerSeedBatch as any)?.plantTypeId?.name ||
+      sowing.plantType?.name ||
+      "Unknown Plant"
+    );
+  }
+  if (typeof sowing.customerSeedBatch === "string") {
+    return sowing.plantType?.name || "Customer Batch Plant";
   }
   return sowing.plantType?.name || "Unknown Plant";
 };

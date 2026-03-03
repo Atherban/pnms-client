@@ -7,11 +7,14 @@ export interface Seed {
     category?: string;
     variety?: string;
     minStockLevel?: number;
+    expectedSeedQtyPerBatch?: number;
+    expectedSeedUnit?: string;
     imageUrl?: string;
     images?: { fileName?: string; url?: string; path?: string }[];
   };
   supplierName?: string;
   totalPurchased?: number;
+  quantityUnit?: string;
   seedsUsed?: number;
   discardedSeeds?: number;
   purchaseDate?: string;
@@ -28,6 +31,7 @@ export interface CreateSeedPayload {
   plantType: string;
   supplierName?: string;
   totalPurchased?: number;
+  quantityUnit?: string;
   discardedSeeds?: number;
   purchaseDate?: string;
   expiryDate?: string;

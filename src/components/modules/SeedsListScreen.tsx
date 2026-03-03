@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
@@ -17,12 +18,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Seed, SeedService } from "../../services/seed.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors } from "../../theme";
 import { formatErrorMessage } from "../../utils/error";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { canViewSourcingDetails } from "../../utils/rbac";
+import { formatQuantityUnit } from "../../utils/units";
 
 const BOTTOM_NAV_HEIGHT = 80;
-type RoleGroup = "staff" | "admin" | "viewer";
+type RoleGroup = "staff" | "admin" | "customer";
 
 interface SeedsListScreenProps {
   title?: string;
@@ -116,6 +119,7 @@ interface SearchBarProps {
   onChangeText: (text: string) => void;
   onClear: () => void;
   resultCount: number;
+  showSourcingDetails: boolean;
 }
 
 const SearchBar = ({
@@ -123,6 +127,7 @@ const SearchBar = ({
   onChangeText,
   onClear,
   resultCount,
+  showSourcingDetails,
 }: SearchBarProps) => (
   <View style={styles.searchWrapper}>
     <View style={styles.searchContainer}>
@@ -130,7 +135,11 @@ const SearchBar = ({
         <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by name, supplier, or category..."
+          placeholder={
+            showSourcingDetails
+              ? "Search by name, supplier, or category..."
+              : "Search by name or category..."
+          }
           placeholderTextColor={Colors.textTertiary}
           value={value}
           onChangeText={onChangeText}
@@ -167,9 +176,17 @@ interface SeedCardProps {
   onEdit: (id: string) => void;
   onDelete: (seed: Seed) => void;
   canWrite: boolean;
+  showSourcingDetails: boolean;
 }
 
-const SeedCard = ({ seed, onPress, onEdit, onDelete, canWrite }: SeedCardProps) => {
+const SeedCard = ({
+  seed,
+  onPress,
+  onEdit,
+  onDelete,
+  canWrite,
+  showSourcingDetails,
+}: SeedCardProps) => {
   const expiryStatus = getExpiryStatus(seed.expiryDate ?? "");
   const totalStock = seed.totalPurchased ?? 0;
   const availableStock = getSeedStock(seed);
@@ -180,6 +197,10 @@ const SeedCard = ({ seed, onPress, onEdit, onDelete, canWrite }: SeedCardProps) 
     100,
   );
   const imageUri = seed.imageUrl || seed.plantType?.imageUrl;
+  const quantityUnit = formatQuantityUnit(
+    seed?.quantityUnit ?? seed?.plantType?.expectedSeedUnit,
+    "SEEDS",
+  );
 
   return (
     <TouchableOpacity
@@ -187,165 +208,170 @@ const SeedCard = ({ seed, onPress, onEdit, onDelete, canWrite }: SeedCardProps) 
       activeOpacity={0.92}
       onPress={() => onPress(seed._id)}
     >
-      {/* Header */}
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <EntityThumbnail
-            uri={imageUri}
-            label={seed.name || seed.plantType?.name}
-            size={44}
-            iconName="grass"
-            style={styles.seedIcon}
-          />
+      {imageUri ? (
+        <Image source={{ uri: imageUri }} style={styles.seedImage} contentFit="cover" />
+      ) : (
+        <View style={styles.seedImagePlaceholder}>
+          <MaterialIcons name="grass" size={26} color="#D1D5DB" />
+        </View>
+      )}
+
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
           <View style={styles.seedInfo}>
-            <Text style={styles.seedName} numberOfLines={1}>
-              {seed.name}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.seedName} numberOfLines={1}>
+                {seed.name}
+              </Text>
+              <View
+                style={[styles.statusBadge, { backgroundColor: expiryStatus.bg }]}
+              >
+                <MaterialIcons
+                  name={expiryStatus.icon as any}
+                  size={12}
+                  color={expiryStatus.color}
+                />
+                <Text style={[styles.statusText, { color: expiryStatus.color }]}>
+                  {expiryStatus.status}
+                </Text>
+              </View>
+            </View>
             {(seed.category || seed.plantType?.name) && (
+              <Text style={styles.seedCategory} numberOfLines={1}>
+                {seed.category || seed.plantType?.name}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.metaSection}>
+          {showSourcingDetails && seed.supplierName && (
+            <View style={styles.metaRow}>
+              <MaterialIcons
+                name="business"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.metaText} numberOfLines={1}>
+                Supplier: {seed.supplierName}
+              </Text>
+            </View>
+          )}
+          <View style={styles.metaRow}>
+            <MaterialIcons name="event" size={14} color={Colors.textSecondary} />
+            <Text style={styles.metaText}>
+              Expiry: {formatDate(seed.expiryDate ?? "")}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stockSection}>
+          <View style={styles.stockHeader}>
+            <View style={styles.stockLabelContainer}>
+              <MaterialIcons
+                name="inventory"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.stockLabel}>Stock Level</Text>
+            </View>
+            {isLowStock && (
               <View
                 style={[
-                  styles.categoryBadge,
-                  { backgroundColor: `${Colors.info}10` },
+                  styles.lowStockBadge,
+                  { backgroundColor: `${Colors.warning}10` },
                 ]}
               >
-                <Text style={[styles.categoryText, { color: Colors.info }]}>
-                  {seed.category || seed.plantType?.name}
+                <MaterialIcons
+                  name="warning"
+                  size={12}
+                  color={Colors.warning}
+                />
+                <Text style={[styles.lowStockText, { color: Colors.warning }]}>
+                  Low Stock
                 </Text>
               </View>
             )}
           </View>
-        </View>
-        <View
-          style={[styles.statusBadge, { backgroundColor: expiryStatus.bg }]}
-        >
-          <MaterialIcons
-            name={expiryStatus.icon as any}
-            size={12}
-            color={expiryStatus.color}
-          />
-          <Text style={[styles.statusText, { color: expiryStatus.color }]}>
-            {expiryStatus.status}
-          </Text>
-        </View>
-      </View>
-
-      {/* Supplier */}
-      {seed.supplierName && (
-        <View style={styles.supplierRow}>
-          <MaterialIcons
-            name="business"
-            size={14}
-            color={Colors.textSecondary}
-          />
-          <Text style={styles.supplierText} numberOfLines={1}>
-            {seed.supplierName}
-          </Text>
-        </View>
-      )}
-
-      {/* Stock Info */}
-      <View style={styles.stockSection}>
-        <View style={styles.stockHeader}>
-          <View style={styles.stockLabelContainer}>
-            <MaterialIcons
-              name="inventory"
-              size={14}
-              color={Colors.textSecondary}
-            />
-            <Text style={styles.stockLabel}>Stock Level</Text>
+          <View style={styles.stockBarContainer}>
+            <View style={styles.stockBarBackground}>
+              <View
+                style={[
+                  styles.stockBarFill,
+                  {
+                    width: `${stockPercentage}%`,
+                    backgroundColor: isLowStock ? Colors.warning : Colors.success,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.stockValue}>
+              {formatNumber(availableStock)} / {formatNumber(totalStock)}{" "}
+              {quantityUnit}
+            </Text>
           </View>
-          {isLowStock && (
-            <View
-              style={[
-                styles.lowStockBadge,
-                { backgroundColor: `${Colors.warning}10` },
-              ]}
-            >
-              <MaterialIcons name="warning" size={12} color={Colors.warning} />
-              <Text style={[styles.lowStockText, { color: Colors.warning }]}>
-                Low Stock
+        </View>
+
+        <View style={styles.detailsGrid}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Purchased</Text>
+            <View style={styles.detailValueContainer}>
+              <MaterialIcons
+                name="shopping-cart"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.detailValue}>
+                {formatNumber(seed.totalPurchased ?? 0)} {quantityUnit}
               </Text>
             </View>
-          )}
-        </View>
-        <View style={styles.stockBarContainer}>
-          <View style={styles.stockBarBackground}>
-            <View
-              style={[
-                styles.stockBarFill,
-                {
-                  width: `${stockPercentage}%`,
-                  backgroundColor: isLowStock ? Colors.warning : Colors.success,
-                },
-              ]}
-            />
           </View>
-          <Text style={styles.stockValue}>
-            {formatNumber(availableStock)} / {formatNumber(totalStock)}
-          </Text>
+
+          <View style={styles.detailDivider} />
+
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Available</Text>
+            <View style={styles.detailValueContainer}>
+              <MaterialIcons
+                name="check-circle"
+                size={14}
+                color={Colors.success}
+              />
+              <Text style={styles.detailValue}>
+                {formatNumber(availableStock)} {quantityUnit}
+              </Text>
+            </View>
+          </View>
         </View>
+
+        {canWrite && (
+          <View style={styles.actionsContainer}>
+            <TouchableOpacity
+              onPress={() => onEdit(seed._id)}
+              style={[styles.actionButton, styles.editButton]}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="edit" size={16} color={Colors.primary} />
+              <Text style={styles.actionButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => onDelete(seed)}
+              style={[styles.actionButton, styles.deleteButton]}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons
+                name="delete-outline"
+                size={16}
+                color={Colors.error}
+              />
+              <Text style={[styles.actionButtonText, { color: Colors.error }]}>
+                Delete
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-
-      {/* Details Grid */}
-      <View style={styles.detailsGrid}>
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Purchased</Text>
-          <View style={styles.detailValueContainer}>
-            <MaterialIcons
-              name="shopping-cart"
-              size={14}
-              color={Colors.textSecondary}
-            />
-            <Text style={styles.detailValue}>
-              {formatNumber(seed.totalPurchased ?? 0)}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.detailDivider} />
-
-        <View style={styles.detailItem}>
-          <Text style={styles.detailLabel}>Expiry</Text>
-          <View style={styles.detailValueContainer}>
-            <MaterialIcons
-              name="event"
-              size={14}
-              color={Colors.textSecondary}
-            />
-            <Text style={styles.detailValue}>
-              {formatDate(seed.expiryDate ?? "")}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {canWrite && (
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            onPress={() => onEdit(seed._id)}
-            style={[styles.actionButton, styles.editButton]}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="edit" size={16} color={Colors.primary} />
-            <Text style={styles.actionButtonText}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => onDelete(seed)}
-            style={[styles.actionButton, styles.deleteButton]}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="delete-outline"
-              size={16}
-              color={Colors.error}
-            />
-            <Text style={[styles.actionButtonText, { color: Colors.error }]}>
-              Delete
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </TouchableOpacity>
   );
 };
@@ -418,6 +444,8 @@ export function SeedsListScreen({
   routeGroup,
   canWrite = false,
 }: SeedsListScreenProps) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSourcingDetails = canViewSourcingDetails(role);
   const router = useRouter();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -440,11 +468,11 @@ export function SeedsListScreen({
     return seeds.filter(
       (s) =>
         s.name.toLowerCase().includes(term) ||
-        s.supplierName?.toLowerCase().includes(term) ||
+        (showSourcingDetails && s.supplierName?.toLowerCase().includes(term)) ||
         s.category?.toLowerCase().includes(term) ||
         s.plantType?.name?.toLowerCase().includes(term),
     );
-  }, [seeds, searchQuery]);
+  }, [seeds, searchQuery, showSourcingDetails]);
 
   const stats = useMemo(() => {
     const totalSeeds = seeds.length;
@@ -547,9 +575,10 @@ export function SeedsListScreen({
         onEdit={handleEditPress}
         onDelete={handleDelete}
         canWrite={canWrite}
+        showSourcingDetails={showSourcingDetails}
       />
     ),
-    [canWrite, handleDetailPress, handleEditPress, handleDelete],
+    [canWrite, handleDetailPress, handleEditPress, handleDelete, showSourcingDetails],
   );
 
   const keyExtractor = useCallback((item: Seed) => item._id, []);
@@ -664,6 +693,7 @@ export function SeedsListScreen({
         onChangeText={handleSearchChange}
         onClear={handleSearchClear}
         resultCount={filteredSeeds.length}
+        showSourcingDetails={showSourcingDetails}
       />
 
       {/* Content Area */}
@@ -941,76 +971,80 @@ const styles = {
   seedCard: {
     backgroundColor: Colors.white,
     borderRadius: 16,
-    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+    overflow: "hidden" as const,
   },
-  cardHeader: {
-    flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: 12,
+  seedImage: {
+    width: "100%" as const,
+    height: 140,
   },
-  cardHeaderLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 12,
-    flex: 1,
-  },
-  seedIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+  seedImagePlaceholder: {
+    width: "100%" as const,
+    height: 140,
+    backgroundColor: "#F9FAFB",
     alignItems: "center" as const,
     justifyContent: "center" as const,
+  },
+  cardContent: {
+    padding: 14,
+    gap: 12,
+  },
+  cardHeader: {
+    gap: 6,
   },
   seedInfo: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    gap: 8,
+  },
   seedName: {
     fontSize: 15,
-    fontWeight: "600" as const,
+    fontWeight: "700" as const,
     color: "#111827",
-    marginBottom: 4,
+    flex: 1,
   },
-  categoryBadge: {
-    alignSelf: "flex-start" as const,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: "600" as const,
+  seedCategory: {
+    fontSize: 13,
+    color: "#6B7280",
   },
   statusBadge: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 16,
+    borderRadius: 12,
     gap: 4,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600" as const,
   },
-  supplierRow: {
+  metaSection: {
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F3F4F6",
+  },
+  metaRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: 16,
     gap: 6,
   },
-  supplierText: {
-    fontSize: 13,
+  metaText: {
+    fontSize: 12,
     color: "#6B7280",
     flex: 1,
   },
 
   // Stock Section
   stockSection: {
-    marginBottom: 16,
+    gap: 8,
   },
   stockHeader: {
     flexDirection: "row" as const,
@@ -1066,7 +1100,6 @@ const styles = {
     backgroundColor: "#F9FAFB",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
   },
   detailItem: {
     flex: 1,
@@ -1097,6 +1130,7 @@ const styles = {
   actionsContainer: {
     flexDirection: "row" as const,
     gap: 12,
+    marginTop: 4,
   },
   actionButton: {
     flex: 1,

@@ -15,14 +15,16 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import EntityThumbnail from "../ui/EntityThumbnail";
 import { InventoryService } from "../../services/inventory.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
-import { resolveInventoryPricing } from "../../utils/inventory-pricing";
 import { resolveEntityImage } from "../../utils/image";
+import { resolveInventoryPricing } from "../../utils/inventory-pricing";
+import { canViewSensitivePricing } from "../../utils/rbac";
+import BannerCardImage from "../ui/BannerCardImage";
 
 const BOTTOM_NAV_HEIGHT = 80;
-type RoleGroup = "staff" | "admin" | "viewer";
+type RoleGroup = "staff" | "admin" | "customer";
 
 interface InventoryListScreenProps {
   title?: string;
@@ -51,7 +53,7 @@ const FILTER_TYPES = {
   OUT_OF_STOCK: "out-of-stock",
 } as const;
 
-type FilterType = typeof FILTER_TYPES[keyof typeof FILTER_TYPES];
+type FilterType = (typeof FILTER_TYPES)[keyof typeof FILTER_TYPES];
 
 // Utility functions
 const getStockStatus = (quantity: number) => {
@@ -146,7 +148,9 @@ const FilterChip = ({
         {label}
       </Text>
       {count !== undefined && count > 0 && (
-        <View style={[styles.filterChipBadge, { backgroundColor: color + "20" }]}>
+        <View
+          style={[styles.filterChipBadge, { backgroundColor: color + "20" }]}
+        >
           <Text style={[styles.filterChipBadgeText, { color }]}>{count}</Text>
         </View>
       )}
@@ -162,25 +166,25 @@ const StatsRow = ({ stats }: { stats: any }) => (
       <Text style={styles.statCompactValue}>{stats.totalItems}</Text>
       <Text style={styles.statCompactLabel}>Items</Text>
     </View>
-    
+
     <View style={styles.statDivider} />
-    
+
     <View style={styles.statCompactItem}>
       <MaterialIcons name="storage" size={16} color={Colors.success} />
       <Text style={styles.statCompactValue}>{stats.totalStock}</Text>
       <Text style={styles.statCompactLabel}>Stock</Text>
     </View>
-    
+
     <View style={styles.statDivider} />
-    
+
     <View style={styles.statCompactItem}>
       <MaterialIcons name="warning" size={16} color={Colors.warning} />
       <Text style={styles.statCompactValue}>{stats.lowStockItems}</Text>
       <Text style={styles.statCompactLabel}>Low</Text>
     </View>
-    
+
     <View style={styles.statDivider} />
-    
+
     <View style={styles.statCompactItem}>
       <MaterialIcons name="block" size={16} color={Colors.error} />
       <Text style={styles.statCompactValue}>{stats.outOfStockItems}</Text>
@@ -254,8 +258,15 @@ const Header = ({
           returnKeyType="search"
         />
         {searchQuery.length > 0 && (
-          <Pressable onPress={onSearchClear} style={styles.headerSearchClearButton}>
-            <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.8)" />
+          <Pressable
+            onPress={onSearchClear}
+            style={styles.headerSearchClearButton}
+          >
+            <MaterialIcons
+              name="close"
+              size={16}
+              color="rgba(255,255,255,0.8)"
+            />
           </Pressable>
         )}
       </View>
@@ -299,9 +310,11 @@ const ErrorHeader = ({ onBack }: { onBack: () => void }) => (
 const InventoryCard = ({
   item,
   onPress,
+  showPricing,
 }: {
   item: any;
   onPress: () => void;
+  showPricing: boolean;
 }) => {
   const stockStatus = getStockStatus(item.quantity || 0);
   const sourceInfo = getSourceInfo(item.sourceType);
@@ -324,36 +337,31 @@ const InventoryCard = ({
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       >
-        <View style={styles.cardHeader}>
-          <EntityThumbnail
-            uri={thumbnailUri}
-            label={plantName}
-            size={56}
-            style={styles.thumbnail}
-          />
+        <BannerCardImage
+          uri={thumbnailUri}
+          label={plantName}
+          containerStyle={styles.cardImageBanner}
+        >
+          <View
+            style={[styles.stockBadge, { backgroundColor: stockStatus.color + "20" }]}
+          >
+            <MaterialIcons
+              name={stockStatus.icon as any}
+              size={12}
+              color={stockStatus.color}
+            />
+            <Text style={[styles.stockBadgeText, { color: stockStatus.color }]}>
+              {stockStatus.label}
+            </Text>
+          </View>
+        </BannerCardImage>
 
-          <View style={styles.cardInfo}>
+        <View style={styles.cardContent}>
+          <View style={styles.cardBody}>
             <View style={styles.titleRow}>
               <Text style={styles.plantName} numberOfLines={1}>
                 {plantName}
               </Text>
-              <View
-                style={[
-                  styles.stockBadge,
-                  { backgroundColor: stockStatus.color + "20" },
-                ]}
-              >
-                <MaterialIcons
-                  name={stockStatus.icon as any}
-                  size={12}
-                  color={stockStatus.color}
-                />
-                <Text
-                  style={[styles.stockBadgeText, { color: stockStatus.color }]}
-                >
-                  {stockStatus.label}
-                </Text>
-              </View>
             </View>
 
             <View style={styles.detailsGrid}>
@@ -392,63 +400,69 @@ const InventoryCard = ({
               </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.cardDivider} />
+          <View style={styles.cardDivider} />
 
-        <View style={styles.cardFooter}>
-          <View style={styles.quantityContainer}>
-            <Text style={styles.quantityLabel}>Available Stock</Text>
-            <View style={styles.quantityValueContainer}>
-              <Text
-                style={[
-                  styles.quantityValue,
-                  item.quantity <= 0 && styles.quantityZero,
-                  item.quantity > 0 &&
-                    item.quantity <= STOCK_THRESHOLDS.LOW &&
-                    styles.quantityLow,
-                ]}
-              >
-                {item.quantity || 0}
-              </Text>
-              <Text style={styles.quantityUnit}>units</Text>
+          <View style={styles.cardFooter}>
+            <View style={styles.quantityContainer}>
+              <Text style={styles.quantityLabel}>Available Stock</Text>
+              <View style={styles.quantityValueContainer}>
+                <Text
+                  style={[
+                    styles.quantityValue,
+                    item.quantity <= 0 && styles.quantityZero,
+                    item.quantity > 0 &&
+                      item.quantity <= STOCK_THRESHOLDS.LOW &&
+                      styles.quantityLow,
+                  ]}
+                >
+                  {item.quantity || 0}
+                </Text>
+                <Text style={styles.quantityUnit}>units</Text>
+              </View>
             </View>
+
+            {showPricing && (
+              <View style={styles.priceContainer}>
+                <Text style={styles.priceLabel}>Unit Cost</Text>
+                <Text style={styles.priceValue}>
+                  {pricing.unitCost !== null
+                    ? formatCurrency(pricing.unitCost)
+                    : "—"}
+                </Text>
+              </View>
+            )}
+
+            {showPricing && (
+              <View style={styles.totalValueContainer}>
+                <Text style={styles.totalValueLabel}>Inventory Value</Text>
+                <Text style={styles.totalValue}>
+                  {pricing.inventoryValue !== null
+                    ? formatCurrency(pricing.inventoryValue)
+                    : "—"}
+                </Text>
+              </View>
+            )}
           </View>
 
-          <View style={styles.priceContainer}>
-            <Text style={styles.priceLabel}>Unit Cost</Text>
-            <Text style={styles.priceValue}>
-              {pricing.unitCost !== null ? formatCurrency(pricing.unitCost) : "—"}
-            </Text>
-          </View>
+          {item.quantity <= STOCK_THRESHOLDS.LOW && item.quantity > 0 && (
+            <View style={styles.lowStockAlert}>
+              <MaterialIcons name="warning" size={16} color={Colors.warning} />
+              <Text style={styles.lowStockText}>
+                Only {item.quantity} units left - Reorder soon
+              </Text>
+            </View>
+          )}
 
-          <View style={styles.totalValueContainer}>
-            <Text style={styles.totalValueLabel}>Inventory Value</Text>
-            <Text style={styles.totalValue}>
-              {pricing.inventoryValue !== null
-                ? formatCurrency(pricing.inventoryValue)
-                : "—"}
-            </Text>
-          </View>
+          {item.quantity <= STOCK_THRESHOLDS.CRITICAL && (
+            <View style={styles.outOfStockAlert}>
+              <MaterialIcons name="block" size={16} color={Colors.error} />
+              <Text style={styles.outOfStockText}>
+                Out of stock - Please restock
+              </Text>
+            </View>
+          )}
         </View>
-
-        {item.quantity <= STOCK_THRESHOLDS.LOW && item.quantity > 0 && (
-          <View style={styles.lowStockAlert}>
-            <MaterialIcons name="warning" size={16} color={Colors.warning} />
-            <Text style={styles.lowStockText}>
-              Only {item.quantity} units left - Reorder soon
-            </Text>
-          </View>
-        )}
-
-        {item.quantity <= STOCK_THRESHOLDS.CRITICAL && (
-          <View style={styles.outOfStockAlert}>
-            <MaterialIcons name="block" size={16} color={Colors.error} />
-            <Text style={styles.outOfStockText}>
-              Out of stock - Please restock
-            </Text>
-          </View>
-        )}
       </LinearGradient>
     </Pressable>
   );
@@ -572,8 +586,12 @@ export function InventoryListScreen({
   canCreate = false,
 }: InventoryListScreenProps) {
   const router = useRouter();
+  const role = useAuthStore((state) => state.user?.role);
+  const showPricing = canViewSensitivePricing(role);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>(FILTER_TYPES.ALL);
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>(
+    FILTER_TYPES.ALL,
+  );
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["inventory"],
@@ -602,10 +620,11 @@ export function InventoryListScreen({
         const category = item.plantType?.category?.toLowerCase() || "";
         const sourceType = item.sourceType?.toLowerCase() || "";
         const pricing = resolveInventoryPricing(item);
-        const unitCost = pricing.unitCost !== null ? String(pricing.unitCost) : "";
+        const unitCost =
+          showPricing && pricing.unitCost !== null ? String(pricing.unitCost) : "";
         const sellingPrice =
-          pricing.sellingPrice !== null ? String(pricing.sellingPrice) : "";
-        
+          showPricing && pricing.sellingPrice !== null ? String(pricing.sellingPrice) : "";
+
         return (
           plantName.includes(query) ||
           category.includes(query) ||
@@ -697,14 +716,19 @@ export function InventoryListScreen({
 
   const renderItem = useCallback(
     ({ item }: { item: any }) => (
-      <InventoryCard item={item} onPress={() => handleItemPress(item._id)} />
+      <InventoryCard
+        item={item}
+        onPress={() => handleItemPress(item._id)}
+        showPricing={showPricing}
+      />
     ),
-    [handleItemPress],
+    [handleItemPress, showPricing],
   );
 
   const keyExtractor = useCallback((item: any) => item._id, []);
 
-  const hasActiveFilters = selectedFilter !== FILTER_TYPES.ALL || searchQuery.length > 0;
+  const hasActiveFilters =
+    selectedFilter !== FILTER_TYPES.ALL || searchQuery.length > 0;
 
   if (isLoading) {
     return (
@@ -754,7 +778,7 @@ export function InventoryListScreen({
               count={inventory.length}
               color={Colors.primary}
             />
-            
+
             <FilterChip
               label="In Stock"
               icon="check-circle"
@@ -763,7 +787,7 @@ export function InventoryListScreen({
               count={filterCounts.inStock}
               color={Colors.success}
             />
-            
+
             <FilterChip
               label="Low Stock"
               icon="warning"
@@ -772,7 +796,7 @@ export function InventoryListScreen({
               count={filterCounts.lowStock}
               color={Colors.warning}
             />
-            
+
             <FilterChip
               label="Out of Stock"
               icon="block"
@@ -791,13 +815,16 @@ export function InventoryListScreen({
           <Text style={styles.activeFiltersText} numberOfLines={1}>
             {searchQuery && `Search: "${searchQuery}"`}
             {searchQuery && selectedFilter !== FILTER_TYPES.ALL && " • "}
-            {selectedFilter !== FILTER_TYPES.ALL && 
-              `Filter: ${selectedFilter.split("-").map(word => 
-                word.charAt(0).toUpperCase() + word.slice(1)
-              ).join(" ")}`
-            }
+            {selectedFilter !== FILTER_TYPES.ALL &&
+              `Filter: ${selectedFilter
+                .split("-")
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(" ")}`}
           </Text>
-          <Pressable onPress={handleClearFilters} style={styles.clearFiltersButton}>
+          <Pressable
+            onPress={handleClearFilters}
+            style={styles.clearFiltersButton}
+          >
             <Text style={styles.clearFiltersText}>Clear all</Text>
           </Pressable>
         </View>
@@ -1265,22 +1292,24 @@ const styles = {
     borderColor: Colors.primary,
   },
   cardGradient: {
+    padding: 0,
+  },
+  cardImageBanner: {
+    width: "100%" as const,
+    minHeight: 140,
+    borderRadius: 0,
+    marginBottom: 0,
+  },
+  cardContent: {
     padding: Spacing.lg,
   },
-  cardHeader: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-  },
-  thumbnail: {
-    borderRadius: 12,
-  },
-  cardInfo: {
-    flex: 1,
+  cardBody: {
+    gap: Spacing.xs,
   },
   titleRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    justifyContent: "space-between" as const,
+    justifyContent: "flex-start" as const,
     marginBottom: Spacing.xs,
   },
   plantName: {
@@ -1291,6 +1320,9 @@ const styles = {
     marginRight: Spacing.sm,
   },
   stockBadge: {
+    position: "absolute" as const,
+    top: Spacing.sm,
+    right: Spacing.sm,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: Spacing.sm,

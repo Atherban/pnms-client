@@ -1,3 +1,4 @@
+import type { NurseryPublicProfile } from "../types/public-profile.types";
 import type { Sale } from "../types/sales.type";
 
 export interface BillLineItem {
@@ -9,22 +10,49 @@ export interface BillLineItem {
   lineTotal: number;
 }
 
+export interface BillPaymentRow {
+  id: string;
+  amount: number;
+  mode: string;
+  status: string;
+  reference?: string;
+  paidAt?: string;
+}
+
+export interface BillNurseryInfo {
+  name: string;
+  code?: string;
+  phoneNumber?: string;
+  whatsappNumber?: string;
+  email?: string;
+  address?: string;
+  website?: string;
+  upiId?: string;
+}
+
 export interface BillData {
   billNumber: string;
   saleId: string;
+  saleNumber: string;
   issuedAt: string;
-  dueDate: string;
+  dueDate?: string;
   currencyCode: string;
   customerName: string;
   customerPhone?: string;
   paymentMode: string;
+  paymentStatus: string;
   sellerName: string;
+  nursery: BillNurseryInfo;
   items: BillLineItem[];
+  payments: BillPaymentRow[];
   totalUnits: number;
   subtotal: number;
   discountAmount: number;
   taxPercent: number;
   taxAmount: number;
+  netAmount: number;
+  paidAmount: number;
+  dueAmount: number;
   grandTotal: number;
   totalAmount: number;
 }
@@ -44,11 +72,22 @@ const toFixedNumber = (value: unknown): number => {
 
 const pad2 = (value: number): string => String(value).padStart(2, "0");
 
+const toCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
 export const buildBillNumber = (sale: Partial<Sale>): string => {
   const ts = getSaleTimestamp(sale);
-  const saleId = String(sale._id || "SALE").slice(-6).toUpperCase();
+  const saleCode = String(sale.saleNumber || sale._id || "SALE")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(-8)
+    .toUpperCase();
   const stamp = `${ts.getFullYear()}${pad2(ts.getMonth() + 1)}${pad2(ts.getDate())}`;
-  return `BILL-${stamp}-${saleId}`;
+  return `INV-${stamp}-${saleCode || "SALE"}`;
 };
 
 export const getSellerName = (sale: Partial<Sale>): string => {
@@ -56,13 +95,80 @@ export const getSellerName = (sale: Partial<Sale>): string => {
     return sale.performedBy.trim();
   }
   if (sale.performedBy && typeof sale.performedBy === "object") {
-    return sale.performedBy.name || sale.performedBy.email || "Unknown Staff";
+    return sale.performedBy.name || sale.performedBy.email || "Staff";
   }
-  return "Unknown Staff";
+  return "Staff";
 };
 
-export const buildBillDataFromSale = (sale: Partial<Sale>): BillData => {
-  const items = Array.isArray(sale.items)
+const getSaleCustomerName = (sale: Partial<Sale>): string => {
+  const customerObj = sale.customer;
+  if (customerObj?.name && customerObj.name.trim()) return customerObj.name.trim();
+  const fallback = (sale as any)?.customerName;
+  if (typeof fallback === "string" && fallback.trim()) return fallback.trim();
+  return "Walk-in Customer";
+};
+
+const getSaleCustomerPhone = (sale: Partial<Sale>): string | undefined => {
+  return sale.customer?.phone || (sale as any)?.customerPhone || undefined;
+};
+
+const resolveNurseryInfo = (
+  sale: Partial<Sale>,
+  nurseryProfile?: NurseryPublicProfile | null,
+): BillNurseryInfo => {
+  const saleNursery =
+    sale?.nurseryId && typeof sale.nurseryId === "object" ? sale.nurseryId : null;
+  const contact = nurseryProfile?.contactDetails?.[0];
+  const settingsContact = saleNursery?.settings?.contactDetails?.[0];
+  const social = saleNursery?.settings?.socialLinks;
+  const paymentConfig = saleNursery?.settings?.paymentConfig;
+
+  return {
+    name:
+      saleNursery?.name ||
+      contact?.label ||
+      nurseryProfile?.contactDetails?.[0]?.label ||
+      "Nursery",
+    code: saleNursery?.code,
+    phoneNumber:
+      contact?.phoneNumber ||
+      settingsContact?.phoneNumber ||
+      nurseryProfile?.primaryPhone ||
+      nurseryProfile?.secondaryPhone ||
+      undefined,
+    whatsappNumber:
+      contact?.whatsappNumber ||
+      settingsContact?.whatsappNumber ||
+      nurseryProfile?.whatsappPhone ||
+      social?.whatsapp ||
+      undefined,
+    email: contact?.email || settingsContact?.email || undefined,
+    address: contact?.address || settingsContact?.address || undefined,
+    website: nurseryProfile?.website || social?.website || undefined,
+    upiId: nurseryProfile?.paymentConfig?.upiId || paymentConfig?.upiId || nurseryProfile?.upiId,
+  };
+};
+
+const toPaymentRows = (sale: Partial<Sale>): BillPaymentRow[] => {
+  const rows = Array.isArray((sale as any)?.payments) ? (sale as any).payments : [];
+  return rows.map((payment: any, index: number) => ({
+    id: String(payment?._id || `payment-${index + 1}`),
+    amount: Math.max(0, toFixedNumber(payment?.amount)),
+    mode: String(payment?.mode || sale.paymentMode || "UNKNOWN").toUpperCase(),
+    status: String(
+      payment?.status ||
+        (payment?.verifiedAt || payment?.verifiedBy ? "VERIFIED" : "PENDING_VERIFICATION"),
+    ).toUpperCase(),
+    reference: payment?.transactionRef || payment?.utrNumber || undefined,
+    paidAt: payment?.verifiedAt || payment?.createdAt,
+  }));
+};
+
+export const buildBillDataFromSale = (
+  sale: Partial<Sale>,
+  options?: { nurseryProfile?: NurseryPublicProfile | null },
+): BillData => {
+  const mappedItems = Array.isArray(sale.items)
     ? sale.items.map((item, index) => {
         const inventoryRef =
           typeof item.inventoryId === "string"
@@ -86,38 +192,100 @@ export const buildBillDataFromSale = (sale: Partial<Sale>): BillData => {
         };
       })
     : [];
+  const saleKind = String((sale as any)?.saleKind || "").toUpperCase();
+  const customerSeedBatch =
+    (sale as any)?.customerSeedBatch && typeof (sale as any).customerSeedBatch === "object"
+      ? (sale as any).customerSeedBatch
+      : null;
+  const serviceUnits = Math.max(
+    0,
+    toFixedNumber(
+      customerSeedBatch?.germinatedQuantity ??
+        customerSeedBatch?.seedsGerminated ??
+        customerSeedBatch?.seedsSown,
+    ),
+  );
+  const serviceName =
+    customerSeedBatch?.plantTypeId?.name ||
+    (sale as any)?.serviceInvoice?.plantTypeName ||
+    "Seedling Service";
+  const serviceItems =
+    mappedItems.length === 0 && saleKind === "SERVICE_SALE"
+      ? (() => {
+          const quantity = serviceUnits > 0 ? serviceUnits : 1;
+          const lineTotal = Math.max(0, toFixedNumber(sale.netAmount ?? sale.totalAmount));
+          const unitPrice = quantity > 0 ? lineTotal / quantity : lineTotal;
+          return [
+            {
+              id: String(customerSeedBatch?._id || sale._id || "service-line"),
+              name: `${serviceName}`,
+              category: "Service Invoice",
+              quantity,
+              unitPrice,
+              lineTotal,
+            },
+          ];
+        })()
+      : [];
+  const items = mappedItems.length > 0 ? mappedItems : serviceItems;
 
   const totalUnits = items.reduce((sum, line) => sum + line.quantity, 0);
-  const fallbackTotal = items.reduce((sum, line) => sum + line.lineTotal, 0);
-  const subtotal = Math.max(0, toFixedNumber(sale.totalAmount || fallbackTotal));
-  const discountAmount = 0;
+  const linesSubtotal = items.reduce((sum, line) => sum + line.lineTotal, 0);
+  const subtotalRaw =
+    toFixedNumber(sale.grossAmount) ||
+    toFixedNumber(sale.totalAmount) ||
+    linesSubtotal;
+  const discountAmount = Math.max(0, toFixedNumber(sale.discountAmount));
+  const netAmountRaw = toFixedNumber(sale.netAmount);
+  const netAmount =
+    netAmountRaw > 0
+      ? netAmountRaw
+      : Math.max(0, subtotalRaw - discountAmount);
+
+  const paidAmountRaw = toFixedNumber(sale.paidAmount);
+  const dueAmountRaw = toFixedNumber(sale.dueAmount);
+  const dueAmount = Math.max(0, dueAmountRaw || netAmount - paidAmountRaw);
+  const paidAmount = Math.max(0, paidAmountRaw || netAmount - dueAmount);
+
   const taxPercent = 0;
-  const taxableBase = Math.max(0, subtotal - discountAmount);
-  const taxAmount = Math.max(0, (taxableBase * taxPercent) / 100);
-  const grandTotal = Math.max(0, taxableBase + taxAmount);
+  const taxAmount = 0;
+  const grandTotal = Math.max(0, netAmount + taxAmount);
   const totalAmount = grandTotal;
+
   const ts = getSaleTimestamp(sale);
-  const dueDate = new Date(ts.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const customerName = sale.customer?.name?.trim() || "Walk-in Customer";
-  const paymentMode = (sale.paymentMode || "UNKNOWN").toUpperCase();
+  const dueDate = dueAmount > 0 ? new Date(ts.getTime() + 7 * 24 * 60 * 60 * 1000) : undefined;
+  const customerName = getSaleCustomerName(sale);
+  const customerPhone = getSaleCustomerPhone(sale);
+  const paymentMode = String(sale.paymentMode || "UNKNOWN").toUpperCase();
   const billNumber = buildBillNumber(sale);
+  const paymentStatus = String(
+    sale.paymentStatus || (dueAmount > 0 ? "PARTIALLY_PAID" : "PAID"),
+  ).toUpperCase();
+  const payments = toPaymentRows(sale);
 
   return {
     billNumber,
-    saleId: sale._id || "N/A",
+    saleId: String(sale._id || "N/A"),
+    saleNumber: String(sale.saleNumber || sale._id || "N/A"),
     issuedAt: ts.toISOString(),
-    dueDate: dueDate.toISOString(),
+    dueDate: dueDate?.toISOString(),
     currencyCode: "INR",
     customerName,
-    customerPhone: sale.customer?.phone,
+    customerPhone,
     paymentMode,
+    paymentStatus,
     sellerName: getSellerName(sale),
+    nursery: resolveNurseryInfo(sale, options?.nurseryProfile),
     items,
+    payments,
     totalUnits,
-    subtotal,
+    subtotal: Math.max(0, subtotalRaw),
     discountAmount,
     taxPercent,
     taxAmount,
+    netAmount,
+    paidAmount,
+    dueAmount,
     grandTotal,
     totalAmount,
   };
@@ -127,26 +295,46 @@ export const formatBillShareText = (bill: BillData): string => {
   const itemLines = bill.items
     .map(
       (line, index) =>
-        `${index + 1}. ${line.name} - Qty ${line.quantity} x ₹${line.unitPrice} = ₹${line.lineTotal}`,
+        `${index + 1}. ${line.name} - Qty ${line.quantity} x ${toCurrency(line.unitPrice)} = ${toCurrency(line.lineTotal)}`,
     )
     .join("\n");
 
+  const paymentLines = bill.payments.length
+    ? bill.payments
+        .map(
+          (p, idx) =>
+            `${idx + 1}. ${toCurrency(p.amount)} via ${p.mode} (${p.status})${p.reference ? ` • Ref ${p.reference}` : ""}`,
+        )
+        .join("\n")
+    : "- No payment entries -";
+
   const lines = [
-    "PNMS - Customer Bill",
-    `Bill No: ${bill.billNumber}`,
+    `${bill.nursery.name} - Tax Invoice`,
+    `Invoice No: ${bill.billNumber}`,
+    `Sale Ref: ${bill.saleNumber}`,
     `Date: ${new Date(bill.issuedAt).toLocaleString("en-IN")}`,
+    ...(bill.dueDate ? [`Due Date: ${new Date(bill.dueDate).toLocaleDateString("en-IN")}`] : []),
     `Customer: ${bill.customerName}`,
-    `Payment: ${bill.paymentMode}`,
+    `Phone: ${bill.customerPhone || "N/A"}`,
+    `Payment Mode: ${bill.paymentMode}`,
+    `Payment Status: ${bill.paymentStatus}`,
     `Handled By: ${bill.sellerName}`,
+    ...(bill.nursery.phoneNumber ? [`Nursery Phone: ${bill.nursery.phoneNumber}`] : []),
+    ...(bill.nursery.address ? [`Address: ${bill.nursery.address}`] : []),
     "",
     "Items:",
     itemLines || "- No line items -",
     "",
+    "Payments:",
+    paymentLines,
+    "",
     `Total Units: ${bill.totalUnits}`,
-    `Subtotal: ₹${bill.subtotal}`,
-    `Discount: ₹${bill.discountAmount}`,
-    `Tax (${bill.taxPercent}%): ₹${bill.taxAmount}`,
-    `Grand Total: ₹${bill.grandTotal}`,
+    `Subtotal: ${toCurrency(bill.subtotal)}`,
+    `Discount: ${toCurrency(bill.discountAmount)}`,
+    `Net Amount: ${toCurrency(bill.netAmount)}`,
+    `Paid Amount: ${toCurrency(bill.paidAmount)}`,
+    `Due Amount: ${toCurrency(bill.dueAmount)}`,
+    `Grand Total: ${toCurrency(bill.grandTotal)}`,
   ];
 
   return lines.join("\n");
@@ -161,8 +349,21 @@ export const formatBillHtml = (bill: BillData): string => {
         <td>${line.name}</td>
         <td>${line.category}</td>
         <td class="right">${line.quantity}</td>
-        <td class="right">₹${line.unitPrice.toFixed(2)}</td>
-        <td class="right">₹${line.lineTotal.toFixed(2)}</td>
+        <td class="right">${toCurrency(line.unitPrice)}</td>
+        <td class="right">${toCurrency(line.lineTotal)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const paymentRows = bill.payments
+    .map(
+      (payment, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${toCurrency(payment.amount)}</td>
+        <td>${payment.mode}</td>
+        <td>${payment.status}</td>
+        <td>${payment.reference || "-"}</td>
       </tr>`,
     )
     .join("");
@@ -186,26 +387,31 @@ export const formatBillHtml = (bill: BillData): string => {
         th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; }
         th { background: #f3f4f6; text-align: left; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
         .right { text-align: right; }
-        .totals-wrap { margin-top: 12px; margin-left: auto; width: 320px; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
+        .totals-wrap { margin-top: 12px; margin-left: auto; width: 360px; border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
         .totals-row { display: flex; justify-content: space-between; font-size: 13px; margin: 5px 0; }
         .grand { border-top: 1px solid #d1d5db; margin-top: 8px; padding-top: 8px; font-size: 16px; font-weight: 700; }
+        .section-title { margin-top: 20px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.4px; color: #374151; }
         .footer { margin-top: 24px; font-size: 11px; color: #6b7280; display: flex; justify-content: space-between; }
-        .signature { text-align: right; }
       </style>
     </head>
     <body>
       <div class="top">
         <div>
-          <div class="company">PNMS</div>
-          <div class="company-sub">Plant Nursery Management System</div>
-          <div class="company-sub">Nursery Operations & Sales Billing</div>
+          <div class="company">${bill.nursery.name}</div>
+          ${bill.nursery.code ? `<div class="company-sub">Code: ${bill.nursery.code}</div>` : ""}
+          ${bill.nursery.address ? `<div class="company-sub">${bill.nursery.address}</div>` : ""}
+          ${bill.nursery.phoneNumber ? `<div class="company-sub">Phone: ${bill.nursery.phoneNumber}</div>` : ""}
+          ${bill.nursery.email ? `<div class="company-sub">Email: ${bill.nursery.email}</div>` : ""}
+          ${bill.nursery.website ? `<div class="company-sub">Website: ${bill.nursery.website}</div>` : ""}
         </div>
         <div>
           <div class="invoice-title">TAX INVOICE</div>
           <div class="invoice-meta">
             Invoice No: ${bill.billNumber}<br/>
+            Sale Ref: ${bill.saleNumber}<br/>
             Issue Date: ${new Date(bill.issuedAt).toLocaleDateString("en-IN")}<br/>
-            Due Date: ${new Date(bill.dueDate).toLocaleDateString("en-IN")}
+            ${bill.dueDate ? `Due Date: ${new Date(bill.dueDate).toLocaleDateString("en-IN")}<br/>` : ""}
+            Payment Status: ${bill.paymentStatus}
           </div>
         </div>
       </div>
@@ -214,45 +420,63 @@ export const formatBillHtml = (bill: BillData): string => {
         <div class="box">
           <div class="box-title">Bill To</div>
           <div class="box-line"><strong>${bill.customerName}</strong></div>
-          ${bill.customerPhone ? `<div class="box-line">Phone: ${bill.customerPhone}</div>` : `<div class="box-line">Phone: N/A</div>`}
+          <div class="box-line">Phone: ${bill.customerPhone || "N/A"}</div>
         </div>
         <div class="box">
           <div class="box-title">Bill Details</div>
-          <div class="box-line">Sale Ref: ${bill.saleId}</div>
+          <div class="box-line">Sale ID: ${bill.saleId}</div>
           <div class="box-line">Payment Mode: ${bill.paymentMode}</div>
           <div class="box-line">Handled By: ${bill.sellerName}</div>
+          ${bill.nursery.upiId ? `<div class="box-line">UPI ID: ${bill.nursery.upiId}</div>` : ""}
         </div>
       </div>
 
-      <div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:7%">#</th>
-              <th style="width:43%">Item Description</th>
-              <th style="width:15%">Category</th>
-              <th class="right" style="width:10%">Qty</th>
-              <th class="right" style="width:12%">Rate</th>
-              <th class="right" style="width:13%">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemRows || '<tr><td colspan="6">No line items</td></tr>'}
-          </tbody>
-        </table>
-      </div>
+      <div class="section-title">Line Items</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:7%">#</th>
+            <th style="width:43%">Item Description</th>
+            <th style="width:15%">Category</th>
+            <th class="right" style="width:10%">Qty</th>
+            <th class="right" style="width:12%">Rate</th>
+            <th class="right" style="width:13%">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemRows || '<tr><td colspan="6">No line items</td></tr>'}
+        </tbody>
+      </table>
+
+      <div class="section-title">Payments</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:8%">#</th>
+            <th style="width:22%">Amount</th>
+            <th style="width:20%">Mode</th>
+            <th style="width:20%">Status</th>
+            <th style="width:30%">Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${paymentRows || '<tr><td colspan="5">No payments recorded</td></tr>'}
+        </tbody>
+      </table>
 
       <div class="totals-wrap">
         <div class="totals-row"><span>Total Units</span><span>${bill.totalUnits}</span></div>
-        <div class="totals-row"><span>Subtotal</span><span>₹${bill.subtotal.toFixed(2)}</span></div>
-        <div class="totals-row"><span>Discount</span><span>₹${bill.discountAmount.toFixed(2)}</span></div>
-        <div class="totals-row"><span>Tax (${bill.taxPercent.toFixed(2)}%)</span><span>₹${bill.taxAmount.toFixed(2)}</span></div>
-        <div class="totals-row grand"><span>Grand Total</span><span>₹${bill.grandTotal.toFixed(2)}</span></div>
+        <div class="totals-row"><span>Subtotal</span><span>${toCurrency(bill.subtotal)}</span></div>
+        <div class="totals-row"><span>Discount</span><span>${toCurrency(bill.discountAmount)}</span></div>
+        <div class="totals-row"><span>Net Amount</span><span>${toCurrency(bill.netAmount)}</span></div>
+        <div class="totals-row"><span>Paid Amount</span><span>${toCurrency(bill.paidAmount)}</span></div>
+        <div class="totals-row"><span>Due Amount</span><span>${toCurrency(bill.dueAmount)}</span></div>
+        <div class="totals-row grand"><span>Grand Total</span><span>${toCurrency(bill.grandTotal)}</span></div>
       </div>
 
       <div class="footer">
         <div>System Generated Invoice - ${bill.billNumber}</div>
-        <div class="signature">Authorized Signatory</div>
+        <div>Authorized Signatory</div>
       </div>
     </body>
   </html>`;

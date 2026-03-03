@@ -16,9 +16,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GerminationService } from "../../services/germination.service";
-import { Colors } from "../../theme";
+import { useAuthStore } from "../../stores/auth.store";
+import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { canViewSourcingDetails } from "../../utils/rbac";
+import BannerCardImage from "../ui/BannerCardImage";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -46,6 +48,7 @@ type GerminationDetails = {
   plantName: string;
   variety: string;
   category: string;
+  expectedSeedQtyPerBatch: number | null;
   seedName: string;
   supplierName: string;
   seedExpiryDate?: string;
@@ -142,6 +145,10 @@ const isInDateRange = (dateString: string | undefined, range: DateFilter) => {
 
 const extractRecordDetails = (record: any): GerminationDetails => {
   const sowing = typeof record?.sowingId === "object" ? record.sowingId : {};
+  const customerSeedBatch =
+    (typeof sowing?.customerSeedBatch === "object" && sowing.customerSeedBatch) ||
+    (typeof sowing?.customerSeedBatchId === "object" && sowing.customerSeedBatchId) ||
+    {};
   const inventory =
     (typeof record?.inventoryBatch === "object" && record.inventoryBatch) ||
     (typeof record?.generatedInventory === "object" &&
@@ -149,14 +156,31 @@ const extractRecordDetails = (record: any): GerminationDetails => {
     (typeof record?.inventory === "object" && record.inventory) ||
     null;
 
-  const plantType = sowing?.plantType ?? inventory?.plantType ?? {};
+  const plantType =
+    sowing?.plantType ??
+    customerSeedBatch?.plantTypeId ??
+    inventory?.plantType ??
+    {};
   const seed =
     (typeof sowing?.seed === "object" && sowing.seed) ||
     (typeof sowing?.seedId === "object" && sowing.seedId) ||
     {};
+  const seedName =
+    seed?.name ||
+    sowing?.seedName ||
+    customerSeedBatch?.seedName ||
+    (customerSeedBatch?._id
+      ? `${customerSeedBatch?.plantTypeId?.name || "Farmer"} Seed Batch`
+      : undefined) ||
+    "Unknown Seed";
 
   const sownQuantity =
-    Number(sowing?.quantitySown ?? sowing?.quantity ?? 0) || 0;
+    Number(
+      sowing?.quantitySown ??
+        sowing?.quantity ??
+        customerSeedBatch?.seedsSown ??
+        0,
+    ) || 0;
   const sowingGerminated = Number(sowing?.quantityGerminated ?? 0) || 0;
   const sowingPending = Number(sowing?.quantityPendingGermination ?? 0) || 0;
   const germinatedSeeds = Number(record?.germinatedSeeds ?? 0) || 0;
@@ -174,8 +198,16 @@ const extractRecordDetails = (record: any): GerminationDetails => {
     plantName: plantType?.name ?? "Unknown Plant",
     variety: plantType?.variety ?? "",
     category: plantType?.category ?? "",
-    seedName: seed?.name ?? "Unknown Seed",
-    supplierName: seed?.supplierName ?? "",
+    expectedSeedQtyPerBatch:
+      Number(plantType?.expectedSeedQtyPerBatch) > 0
+        ? Number(plantType?.expectedSeedQtyPerBatch)
+        : null,
+    seedName,
+    supplierName:
+      seed?.supplierName ??
+      customerSeedBatch?.customerId?.name ??
+      customerSeedBatch?.customerName ??
+      "",
     seedExpiryDate: seed?.expiryDate,
     sownQuantity,
     sowingGerminated,
@@ -285,9 +317,10 @@ const getGerminationStatus = (item: GerminationDetails) => {
 };
 
 const getRoleVisual = (role: string) => {
-  if (role === "ADMIN") {
+  const normalizedRole = String(role || "").toUpperCase();
+  if (normalizedRole === "NURSERY_ADMIN" || normalizedRole === "SUPER_ADMIN") {
     return {
-      label: "Admin",
+      label: normalizedRole === "SUPER_ADMIN" ? "Super Admin" : "Nursery Admin",
       icon: "verified-user" as const,
       color: "#7C3AED",
       bg: "#F3E8FF",
@@ -524,6 +557,8 @@ export function GerminationReadScreen({
   canCreate = false,
   onCreatePress,
 }: GerminationReadScreenProps) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSourcingDetails = canViewSourcingDetails(role);
   const [selectedRecord, setSelectedRecord] =
     useState<GerminationDetails | null>(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -562,7 +597,7 @@ export function GerminationReadScreen({
           item.variety,
           item.category,
           item.seedName,
-          item.supplierName,
+          showSourcingDetails ? item.supplierName : "",
           item.performedBy,
           item.inventoryStatus,
         ]
@@ -592,7 +627,7 @@ export function GerminationReadScreen({
         matchesSearch && matchesDate && matchesInventory && matchesPerformance
       );
     });
-  }, [mergedDetails, searchQuery, filters]);
+  }, [mergedDetails, searchQuery, filters, showSourcingDetails]);
 
   const stats = useMemo(() => {
     const totalGerminated = mergedDetails.reduce(
@@ -802,7 +837,11 @@ export function GerminationReadScreen({
               <TextInput
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search plant, seed, supplier, staff..."
+                placeholder={
+                  showSourcingDetails
+                    ? "Search plant, seed, supplier, staff..."
+                    : "Search plant, seed, staff..."
+                }
                 placeholderTextColor="rgba(255,255,255,0.6)"
                 style={styles.searchInput}
                 returnKeyType="search"
@@ -907,39 +946,16 @@ export function GerminationReadScreen({
                 pressed && styles.recordCardPressed,
               ]}
             >
-              <View style={styles.recordTitleRow}>
-                <EntityThumbnail
-                  uri={item.thumbnail}
-                  label={item.plantName}
-                  size={42}
-                  iconName="eco"
-                  style={styles.recordThumbnail}
-                />
-                <View style={styles.recordTitleBlock}>
-                  <Text style={styles.recordTitle} numberOfLines={1}>
-                    {item.plantName}
-                    {item.variety ? ` (${item.variety})` : ""}
-                  </Text>
-                  <Text style={styles.recordSubTitle} numberOfLines={1}>
-                    Seed: {item.seedName}
-                    {item.supplierName ? ` • ${item.supplierName}` : ""}
-                  </Text>
-                  {item.category ? (
-                    <View style={styles.categoryChip}>
-                      <MaterialIcons
-                        name="category"
-                        size={11}
-                        color={Colors.primary}
-                      />
-                      <Text style={styles.categoryChipText}>
-                        {item.category}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
+              <BannerCardImage
+                uri={item.thumbnail}
+                label={item.plantName}
+                iconName="eco"
+                containerStyle={styles.recordImageBanner}
+              >
                 <View
                   style={[
                     styles.statusBadge,
+                    styles.bannerStatusBadge,
                     { backgroundColor: `${status.color}18` },
                   ]}
                 >
@@ -947,105 +963,134 @@ export function GerminationReadScreen({
                     {status.label}
                   </Text>
                 </View>
-              </View>
+              </BannerCardImage>
 
-              <View style={styles.metricsRow}>
-                <View style={styles.metricItem}>
-                  <View style={styles.metricLabelRow}>
+              <View style={styles.recordCardContent}>
+                <View style={styles.recordTitleRow}>
+                  <View style={styles.recordTitleBlock}>
+                    <Text style={styles.recordTitle} numberOfLines={1}>
+                      {item.plantName}
+                      {item.variety ? ` (${item.variety})` : ""}
+                    </Text>
+                    <Text style={styles.recordSubTitle} numberOfLines={1}>
+                      Seed: {item.seedName}
+                      {showSourcingDetails && item.supplierName
+                        ? ` • ${item.supplierName}`
+                        : ""}
+                    </Text>
+                    {item.category ? (
+                      <View style={styles.categoryChip}>
+                        <MaterialIcons
+                          name="category"
+                          size={11}
+                          color={Colors.primary}
+                        />
+                        <Text style={styles.categoryChipText}>
+                          {item.category}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                <View style={styles.metricsRow}>
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricLabelRow}>
+                      <MaterialIcons
+                        name="scatter-plot"
+                        size={12}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.metricLabel}>Sown</Text>
+                    </View>
+                    <Text style={styles.metricValue}>
+                      {formatNumber(item.sownQuantity)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricLabelRow}>
+                      <MaterialIcons
+                        name="eco"
+                        size={12}
+                        color={Colors.success}
+                      />
+                      <Text style={styles.metricLabel}>Germinated</Text>
+                    </View>
+                    <Text style={styles.metricValue}>
+                      {formatNumber(item.germinatedSeeds)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricLabelRow}>
+                      <MaterialIcons
+                        name="delete-outline"
+                        size={12}
+                        color={Colors.error}
+                      />
+                      <Text style={styles.metricLabel}>Discarded</Text>
+                    </View>
+                    <Text style={styles.metricValue}>
+                      {formatNumber(item.discardedSeeds)}
+                    </Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <View style={styles.metricLabelRow}>
+                      <MaterialIcons
+                        name="schedule"
+                        size={12}
+                        color={Colors.warning}
+                      />
+                      <Text style={styles.metricLabel}>Pending</Text>
+                    </View>
+                    <Text style={styles.metricValue}>
+                      {formatNumber(item.pendingSeeds)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.recordFooter}>
+                  {item.sourceCount > 1 && (
+                    <View style={styles.footerItem}>
+                      <MaterialIcons
+                        name="merge-type"
+                        size={12}
+                        color={Colors.primary}
+                      />
+                      <Text style={[styles.footerText, { color: Colors.primary }]}>
+                        Merged {item.sourceCount} entries
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.footerItem}>
                     <MaterialIcons
-                      name="scatter-plot"
+                      name="person"
                       size={12}
                       color={Colors.textSecondary}
                     />
-                    <Text style={styles.metricLabel}>Sown</Text>
+                    <Text style={styles.footerText}>{item.performedBy}</Text>
                   </View>
-                  <Text style={styles.metricValue}>
-                    {formatNumber(item.sownQuantity)}
-                  </Text>
-                </View>
-                <View style={styles.metricItem}>
-                  <View style={styles.metricLabelRow}>
-                    <MaterialIcons
-                      name="eco"
-                      size={12}
-                      color={Colors.success}
-                    />
-                    <Text style={styles.metricLabel}>Germinated</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    {formatNumber(item.germinatedSeeds)}
-                  </Text>
-                </View>
-                <View style={styles.metricItem}>
-                  <View style={styles.metricLabelRow}>
-                    <MaterialIcons
-                      name="delete-outline"
-                      size={12}
-                      color={Colors.error}
-                    />
-                    <Text style={styles.metricLabel}>Discarded</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    {formatNumber(item.discardedSeeds)}
-                  </Text>
-                </View>
-                <View style={styles.metricItem}>
-                  <View style={styles.metricLabelRow}>
-                    <MaterialIcons
-                      name="schedule"
-                      size={12}
-                      color={Colors.warning}
-                    />
-                    <Text style={styles.metricLabel}>Pending</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    {formatNumber(item.pendingSeeds)}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.recordFooter}>
-                {item.sourceCount > 1 && (
                   <View style={styles.footerItem}>
                     <MaterialIcons
-                      name="merge-type"
+                      name="calendar-today"
                       size={12}
-                      color={Colors.primary}
+                      color={Colors.textSecondary}
                     />
-                    <Text style={[styles.footerText, { color: Colors.primary }]}>
-                      Merged {item.sourceCount} entries
+                    <Text style={styles.footerText}>
+                      {formatDate(item.germinationDate)}
                     </Text>
                   </View>
-                )}
-                <View style={styles.footerItem}>
-                  <MaterialIcons
-                    name="person"
-                    size={12}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.footerText}>{item.performedBy}</Text>
-                </View>
-                <View style={styles.footerItem}>
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={12}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.footerText}>
-                    {formatDate(item.germinationDate)}
-                  </Text>
-                </View>
-                <View style={styles.footerItem}>
-                  <MaterialIcons
-                    name="inventory"
-                    size={12}
-                    color={Colors.textSecondary}
-                  />
-                  <Text style={styles.footerText}>
-                    {item.inventoryInitialQuantity > 0
-                      ? `${formatNumber(item.inventoryInStockQuantity)} in stock`
-                      : "Inventory not created"}
-                  </Text>
+                  <View style={styles.footerItem}>
+                    <MaterialIcons
+                      name="inventory"
+                      size={12}
+                      color={Colors.textSecondary}
+                    />
+                    <Text style={styles.footerText}>
+                      {item.inventoryInitialQuantity > 0
+                        ? `${formatNumber(item.inventoryInStockQuantity)} in stock`
+                        : "Inventory not created"}
+                    </Text>
+                  </View>
                 </View>
               </View>
             </Pressable>
@@ -1077,7 +1122,7 @@ export function GerminationReadScreen({
               <View>
                 <Text style={styles.detailsTitle}>Germination Details</Text>
                 <Text style={styles.detailsSubtitle}>
-                  Record insights and traceability
+                  Simple batch summary for field use
                 </Text>
               </View>
               <Pressable
@@ -1101,6 +1146,27 @@ export function GerminationReadScreen({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.detailsBody}
             >
+              <BannerCardImage
+                uri={selectedRecord.thumbnail}
+                label={selectedRecord.plantName}
+                iconName="eco"
+                containerStyle={styles.detailsHeroBanner}
+                imageStyle={styles.detailsHeroImage}
+                minHeight={120}
+              />
+              <View style={styles.detailsHeroMeta}>
+                <Text style={styles.detailsHeroTitle} numberOfLines={1}>
+                  {selectedRecord.plantName}
+                  {selectedRecord.variety ? ` (${selectedRecord.variety})` : ""}
+                </Text>
+                <Text style={styles.detailsHeroSubtitle} numberOfLines={1}>
+                  {selectedRecord.seedName}
+                  {showSourcingDetails && selectedRecord.supplierName
+                    ? ` • ${selectedRecord.supplierName}`
+                    : ""}
+                </Text>
+              </View>
+
               <View style={styles.detailsTopCards}>
                 <View style={styles.detailsTopCard}>
                   <MaterialIcons
@@ -1246,19 +1312,36 @@ export function GerminationReadScreen({
                       : ""}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="category"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Category</Text>
+                {selectedRecord.category ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="category"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Category</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {selectedRecord.category}
+                    </Text>
                   </View>
-                  <Text style={styles.detailValue}>
-                    {selectedRecord.category || "-"}
-                  </Text>
-                </View>
+                ) : null}
+                {showSourcingDetails && selectedRecord.expectedSeedQtyPerBatch ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="straighten"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Expected Seeds / Batch</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {formatNumber(selectedRecord.expectedSeedQtyPerBatch)}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
@@ -1272,7 +1355,7 @@ export function GerminationReadScreen({
                     {selectedRecord.seedName}
                   </Text>
                 </View>
-                {selectedRecord.supplierName ? (
+                {showSourcingDetails && selectedRecord.supplierName ? (
                   <View style={styles.detailRow}>
                     <View style={styles.detailLabelWrap}>
                       <MaterialIcons
@@ -1305,20 +1388,7 @@ export function GerminationReadScreen({
               </View>
 
               <View style={styles.detailsSection}>
-                <Text style={styles.detailsSectionTitle}>Sowing Source</Text>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="fingerprint"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Sowing ID</Text>
-                  </View>
-                  <Text style={styles.detailValueMono}>
-                    {selectedRecord.sowingId || "-"}
-                  </Text>
-                </View>
+                <Text style={styles.detailsSectionTitle}>Schedule</Text>
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
@@ -1334,75 +1404,40 @@ export function GerminationReadScreen({
                     {formatNumber(selectedRecord.sowingPending)}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="event"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Sowing Date</Text>
+                {selectedRecord.sowingDate ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="event"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Sowing Date</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {formatDate(selectedRecord.sowingDate)}
+                    </Text>
                   </View>
-                  <Text style={styles.detailValue}>
-                    {formatDate(selectedRecord.sowingDate)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="event-available"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Germination Date</Text>
+                ) : null}
+                {selectedRecord.germinationDate ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="event-available"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Germination Date</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {formatDate(selectedRecord.germinationDate)}
+                    </Text>
                   </View>
-                  <Text style={styles.detailValue}>
-                    {formatDate(selectedRecord.germinationDate)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="schedule"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Sowing Created</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(selectedRecord.sowingCreatedAt)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="history"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Sowing Updated</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(selectedRecord.sowingUpdatedAt)}
-                  </Text>
-                </View>
+                ) : null}
               </View>
 
               <View style={styles.detailsSection}>
-                <Text style={styles.detailsSectionTitle}>Inventory Batch</Text>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="inventory"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Batch ID</Text>
-                  </View>
-                  <Text style={styles.detailValueMono}>
-                    {selectedRecord.inventoryId || "-"}
-                  </Text>
-                </View>
+                <Text style={styles.detailsSectionTitle}>Inventory Outcome</Text>
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
@@ -1416,19 +1451,22 @@ export function GerminationReadScreen({
                     {selectedRecord.inventoryStatus}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="timeline"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Growth Stage</Text>
+                {selectedRecord.inventoryGrowthStage &&
+                selectedRecord.inventoryGrowthStage !== "-" ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="timeline"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Growth Stage</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {selectedRecord.inventoryGrowthStage}
+                    </Text>
                   </View>
-                  <Text style={styles.detailValue}>
-                    {selectedRecord.inventoryGrowthStage}
-                  </Text>
-                </View>
+                ) : null}
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
@@ -1443,78 +1481,10 @@ export function GerminationReadScreen({
                     {formatNumber(selectedRecord.inventoryInStockQuantity)}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="sell"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Unit Cost</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {selectedRecord.inventoryUnitCost > 0
-                      ? formatNumber(selectedRecord.inventoryUnitCost)
-                      : "-"}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="input"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Source</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {selectedRecord.inventorySourceType} /{" "}
-                    {selectedRecord.inventorySourceModel}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="link"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Source Ref</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {selectedRecord.inventorySource}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="event-available"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Received</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(selectedRecord.inventoryReceivedAt)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="update"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Batch Updated</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(selectedRecord.inventoryUpdatedAt)}
-                  </Text>
-                </View>
               </View>
 
               <View style={styles.detailsSection}>
-                <Text style={styles.detailsSectionTitle}>Audit Trail</Text>
+                <Text style={styles.detailsSectionTitle}>Recorded By</Text>
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
@@ -1540,35 +1510,38 @@ export function GerminationReadScreen({
                     </Text>
                   </View>
                 </View>
-                {selectedRecord.performedByEmail ? (
+                {selectedRecord.germinationDate ? (
                   <View style={styles.detailRow}>
                     <View style={styles.detailLabelWrap}>
                       <MaterialIcons
-                        name="alternate-email"
+                        name="event-available"
                         size={14}
                         color={Colors.textSecondary}
                       />
-                      <Text style={styles.detailLabel}>Staff Email</Text>
+                      <Text style={styles.detailLabel}>Recorded On</Text>
                     </View>
                     <Text style={styles.detailValue}>
-                      {selectedRecord.performedByEmail}
+                      {formatDate(selectedRecord.germinationDate)}
                     </Text>
                   </View>
                 ) : null}
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="fingerprint"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Record ID</Text>
+                {selectedRecord.recordUpdatedAt ? (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLabelWrap}>
+                      <MaterialIcons
+                        name="update"
+                        size={14}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.detailLabel}>Last Updated</Text>
+                    </View>
+                    <Text style={styles.detailValue}>
+                      {formatDateTime(selectedRecord.recordUpdatedAt)}
+                    </Text>
                   </View>
-                  <Text style={styles.detailValueMono}>
-                    {selectedRecord.recordId || "-"}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
+                ) : null}
+                {selectedRecord.recordCreatedAt ? (
+                  <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MaterialIcons
                       name="event-available"
@@ -1581,19 +1554,7 @@ export function GerminationReadScreen({
                     {formatDateTime(selectedRecord.recordCreatedAt)}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLabelWrap}>
-                    <MaterialIcons
-                      name="update"
-                      size={14}
-                      color={Colors.textSecondary}
-                    />
-                    <Text style={styles.detailLabel}>Updated</Text>
-                  </View>
-                  <Text style={styles.detailValue}>
-                    {formatDateTime(selectedRecord.recordUpdatedAt)}
-                  </Text>
-                </View>
+                ) : null}
               </View>
             </ScrollView>
           </View>
@@ -1887,25 +1848,36 @@ const styles = {
   },
   recordCard: {
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 20,
+    marginBottom: Spacing.md,
+    overflow: "hidden" as const,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   recordCardPressed: {
     backgroundColor: Colors.surface,
     transform: [{ scale: 0.98 }],
   },
+  recordImageBanner: {
+    width: "100%" as const,
+    minHeight: 140,
+    borderRadius: 0,
+    marginBottom: 0,
+  },
+  recordCardContent: {
+    padding: Spacing.lg,
+  },
   recordTitleRow: {
     flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
+    justifyContent: "flex-start" as const,
+    alignItems: "flex-start" as const,
     marginBottom: 10,
     gap: 8,
-  },
-  recordThumbnail: {
-    borderRadius: 10,
   },
   recordTitleBlock: {
     flex: 1,
@@ -1942,6 +1914,11 @@ const styles = {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+  bannerStatusBadge: {
+    position: "absolute" as const,
+    top: 8,
+    right: 8,
   },
   statusText: {
     fontSize: 11,
@@ -2179,6 +2156,38 @@ const styles = {
     padding: 16,
     gap: 12,
     paddingBottom: 28,
+  },
+  detailsHero: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 12,
+    backgroundColor: "#F6F8FC",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E8EDF5",
+  },
+  detailsHeroBanner: {
+    width: "100%",
+  },
+  detailsHeroMeta: {
+    width: "100%",
+    alignItems: "center" as const,
+    paddingTop: 10,
+  },
+  detailsHeroImage: {
+    borderRadius: 14,
+  },
+  detailsHeroTitle: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: Colors.text,
+    paddingHorizontal: 12,
+  },
+  detailsHeroSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    paddingHorizontal: 12,
   },
   detailsTopCards: {
     flexDirection: "row" as const,

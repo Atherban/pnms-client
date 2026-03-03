@@ -30,7 +30,27 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(num) ? num : 0;
 };
 
+const hasDefinedNumber = (value: unknown) =>
+  value !== null && value !== undefined && Number.isFinite(Number(value));
+
+const clamp = (
+  value: number,
+  min = 0,
+  max = Number.POSITIVE_INFINITY,
+) => Math.min(Math.max(value, min), max);
+
 const normalizePhone = (value?: string) => (value || "").replace(/[^\d]/g, "");
+const isVerifiedPaymentStatus = (status?: string) => {
+  const value = String(status || "").toUpperCase();
+  return (
+    value === "VERIFIED" ||
+    value === "APPROVED" ||
+    value === "ACCEPTED" ||
+    value === "PAID" ||
+    value === "SUCCESS"
+  );
+};
+
 const normalizeVerificationStatus = (status?: string) => {
   const value = String(status || "").toUpperCase();
   if (value === "APPROVED" || value === "VERIFIED" || value === "ACCEPTED") {
@@ -42,13 +62,25 @@ const normalizeVerificationStatus = (status?: string) => {
   return "PENDING_VERIFICATION" as const;
 };
 
-const inferSaleAmount = (sale: any) => {
-  const gross = toNumber(sale?.grandTotal ?? sale?.finalAmount ?? sale?.billAmount);
-  if (gross > 0) return gross;
-  const net = toNumber(sale?.netAmount);
-  if (net > 0) return net;
-  const total = toNumber(sale?.totalAmount);
-  if (total > 0) return total;
+const resolveTransactionStatus = (tx: any) => {
+  const explicitStatus = normalizeVerificationStatus(tx?.status);
+  if (tx?.status) return explicitStatus;
+  if (tx?.verifiedAt || tx?.verifiedBy) return "VERIFIED" as const;
+  if (tx?.rejectionReason || tx?.rejectedAt || tx?.rejectedBy) {
+    return "REJECTED" as const;
+  }
+  return "PENDING_VERIFICATION" as const;
+};
+
+const inferGrossAmount = (sale: any) => {
+  const grossAmount = toNumber(
+    sale?.grossAmount ??
+      sale?.grandTotal ??
+      sale?.finalAmount ??
+      sale?.billAmount ??
+      sale?.totalAmount,
+  );
+  if (grossAmount > 0) return grossAmount;
 
   const items = Array.isArray(sale?.items) ? sale.items : [];
   return items.reduce(
@@ -60,17 +92,50 @@ const inferSaleAmount = (sale: any) => {
   );
 };
 
+const inferNetAmount = (sale: any) => {
+  const net = toNumber(sale?.netAmount);
+  if (net > 0) return net;
+  const gross = inferGrossAmount(sale);
+  const discount = clamp(toNumber(sale?.discountAmount), 0, gross);
+  return Math.max(0, gross - discount);
+};
+
 const inferPaidAmount = (sale: any) => {
-  const paid = toNumber(sale?.paidAmount ?? sale?.amountPaid);
-  if (paid > 0) return paid;
+  const netAmount = inferNetAmount(sale);
+  const paidRaw = sale?.paidAmount ?? sale?.amountPaid;
+  if (hasDefinedNumber(paidRaw)) {
+    return clamp(Math.max(0, toNumber(paidRaw)), 0, netAmount);
+  }
+
   const paymentRows = Array.isArray(sale?.payments)
     ? sale.payments
     : Array.isArray(sale?.paymentTransactions)
       ? sale.paymentTransactions
       : [];
-  const paymentsSum = paymentRows.reduce((sum: number, row: any) => sum + toNumber(row?.amount), 0);
-  if (paymentsSum > 0) return paymentsSum;
-  return String(sale?.paymentStatus || "").includes("PAID") ? inferSaleAmount(sale) : 0;
+  const verifiedPaymentsSum = paymentRows.reduce((sum: number, row: any) => {
+    const amount = Math.max(0, toNumber(row?.amount));
+    const txStatus = String(row?.status || "").toUpperCase();
+    if (!txStatus) return sum + amount;
+    return isVerifiedPaymentStatus(txStatus) ? sum + amount : sum;
+  }, 0);
+  if (verifiedPaymentsSum > 0) return clamp(verifiedPaymentsSum, 0, netAmount);
+
+  const paymentStatus = String(sale?.paymentStatus || "").toUpperCase();
+  if (
+    paymentStatus === "PAID" ||
+    paymentStatus === "FULLY_PAID" ||
+    paymentStatus === "COMPLETED" ||
+    paymentStatus === "VERIFIED"
+  ) {
+    return netAmount;
+  }
+  if (paymentStatus === "PARTIALLY_PAID" || paymentStatus === "PARTIAL") {
+    const dueRaw = sale?.dueAmount;
+    if (hasDefinedNumber(dueRaw)) {
+      return clamp(netAmount - Math.max(0, toNumber(dueRaw)), 0, netAmount);
+    }
+  }
+  return 0;
 };
 
 const inferTransactions = (sale: any): PaymentTransaction[] => {
@@ -88,16 +153,85 @@ const inferTransactions = (sale: any): PaymentTransaction[] => {
     reference: tx?.transactionRef || tx?.reference,
     utrNumber: tx?.utrNumber || tx?.utr || tx?.upiUtr,
     paymentAt: tx?.paymentAt || tx?.paidAt || tx?.transactionAt,
-    status: normalizeVerificationStatus(tx?.status),
+    status: resolveTransactionStatus(tx),
     screenshotUri: toImageUrl(tx?.proofUrl || tx?.screenshotUri),
     rejectionReason: tx?.rejectionReason,
   }));
 };
 
+const getItemPlantNames = (sale: any): string[] => {
+  if (!Array.isArray(sale?.items)) return [];
+  const names: string[] = sale.items
+    .map((item: any) => {
+      const name =
+        item?.inventory?.plantType?.name ??
+        item?.inventoryId?.plantType?.name ??
+        item?.plantType?.name ??
+        item?.name;
+      return typeof name === "string" ? name : "";
+    })
+    .filter((name: string): name is string => Boolean(name));
+  return Array.from(new Set(names));
+};
+
+const resolveEntityImage = (entity: any): string | undefined => {
+  if (!entity || typeof entity !== "object") return undefined;
+
+  const direct = toImageUrl(
+    entity.imageUrl ??
+      entity.image ??
+      entity.fileUrl ??
+      entity.url ??
+      entity.path ??
+      entity.fileName,
+  );
+  if (direct) return direct;
+
+  const images = Array.isArray(entity.images) ? entity.images : [];
+  for (const img of images) {
+    const uri = toImageUrl(
+      img?.imageUrl ?? img?.fileUrl ?? img?.url ?? img?.path ?? img?.fileName,
+    );
+    if (uri) return uri;
+  }
+
+  return undefined;
+};
+
+const inferSaleImage = (sale: any): string | undefined => {
+  if (Array.isArray(sale?.items)) {
+    for (const item of sale.items) {
+      const candidates = [
+        item?.inventory?.plantType,
+        item?.inventoryId?.plantType,
+        item?.plantType,
+        item?.inventory,
+        item?.inventoryId,
+        item,
+      ];
+      for (const candidate of candidates) {
+        const uri = resolveEntityImage(candidate);
+        if (uri) return uri;
+      }
+    }
+  }
+
+  return resolveEntityImage(sale?.plantType) ?? resolveEntityImage(sale);
+};
+
 const toDueSale = (sale: any): DueSale => {
-  const totalAmount = Math.max(0, inferSaleAmount(sale));
-  const paidAmount = Math.max(0, inferPaidAmount(sale));
-  const dueAmount = Math.max(0, toNumber(sale?.dueAmount) || totalAmount - paidAmount);
+  const totalAmount = Math.max(0, inferNetAmount(sale));
+  const paidAmount = clamp(Math.max(0, inferPaidAmount(sale)), 0, totalAmount);
+  const hasDueAmount = hasDefinedNumber(sale?.dueAmount);
+  const dueFromServer = Math.max(0, toNumber(sale?.dueAmount));
+  let dueAmount = clamp(
+    hasDueAmount ? dueFromServer : totalAmount - paidAmount,
+    0,
+    totalAmount,
+  );
+  if (Math.abs(totalAmount - (paidAmount + dueAmount)) > 0.01) {
+    dueAmount = clamp(totalAmount - paidAmount, 0, totalAmount);
+  }
   const customerObj = sale?.customer || sale?.customerDetails || {};
   const customerName =
     customerObj?.name ||
@@ -116,12 +250,51 @@ const toDueSale = (sale: any): DueSale => {
     customerObj?.id ||
     sale?.customerId ||
     sale?.buyerId;
+  const itemNames = getItemPlantNames(sale);
+  const saleKind = String(sale?.saleKind || "").toUpperCase();
+  const customerSeedBatch =
+    sale?.customerSeedBatch && typeof sale.customerSeedBatch === "object"
+      ? sale.customerSeedBatch
+      : null;
+  const servicePlantName =
+    customerSeedBatch?.plantTypeId?.name ||
+    sale?.serviceInvoice?.plantTypeName ||
+    itemNames[0];
+  const serviceUnits = Math.max(
+    0,
+    toNumber(
+      customerSeedBatch?.germinatedQuantity ??
+        customerSeedBatch?.seedsGerminated ??
+        customerSeedBatch?.seedsSown ??
+        0,
+    ),
+  );
+  const itemTitle =
+    saleKind === "SERVICE_SALE"
+      ? servicePlantName
+        ? `${servicePlantName} Service`
+        : "Nursery Service Invoice"
+      : itemNames.length > 0
+        ? `${itemNames.slice(0, 2).join(", ")}${itemNames.length > 2 ? ` +${itemNames.length - 2}` : ""}`
+        : "Nursery Invoice";
+  const itemSubtitle =
+    saleKind === "SERVICE_SALE"
+      ? serviceUnits > 0
+        ? `${serviceUnits.toLocaleString("en-IN")} seedlings ready`
+        : "Service billing"
+      : Array.isArray(sale?.items) && sale.items.length > 0
+        ? `${sale.items.length} line item${sale.items.length > 1 ? "s" : ""}`
+        : undefined;
 
   return {
     saleId: String(sale?._id || sale?.saleId || ""),
     customerId: customerId ? String(customerId) : undefined,
     customerName,
     customerPhone,
+    itemTitle,
+    itemSubtitle,
+    saleKind: saleKind || undefined,
+    imageUri: inferSaleImage(sale),
     issuedAt: sale?.saleDate || sale?.createdAt || new Date().toISOString(),
     totalAmount,
     paidAmount,
@@ -133,16 +306,32 @@ const toDueSale = (sale: any): DueSale => {
 
 const normalizeProof = (item: any): PaymentProof => ({
   id: String(item?._id || item?.id || ""),
-  saleId: String(item?.sale?._id || item?.saleId || item?.sale || ""),
+  saleId: String(item?.sale?._id || item?.saleId?._id || item?.saleId || item?.sale || ""),
+  saleNumber: item?.sale?.saleNumber || item?.saleId?.saleNumber || item?.saleNumber,
+  customerId: String(
+    item?.customer?._id ||
+      item?.customerId?._id ||
+      item?.customerId ||
+      "",
+  ) || undefined,
   customerName:
     item?.customer?.name ||
+    item?.customerId?.name ||
     item?.sale?.customer?.name ||
+    item?.saleId?.customer?.name ||
     item?.customerName ||
-    "Customer",
+    "Walk-in Customer",
   customerPhone:
     item?.customer?.phone ||
     item?.customer?.phoneNumber ||
+    item?.customer?.mobileNumber ||
+    item?.customerId?.phone ||
+    item?.customerId?.phoneNumber ||
+    item?.customerId?.mobileNumber ||
     item?.sale?.customer?.phone ||
+    item?.sale?.customer?.mobileNumber ||
+    item?.saleId?.customer?.phone ||
+    item?.saleId?.customer?.mobileNumber ||
     item?.customerPhone,
   amount: toNumber(item?.amount),
   mode: item?.mode || item?.paymentMode,
@@ -150,7 +339,13 @@ const normalizeProof = (item: any): PaymentProof => ({
   paymentAt: item?.paymentAt || item?.paidAt || item?.transactionAt,
   screenshotUri: toImageUrl(item?.proofUrl || item?.screenshotUri),
   submittedAt: item?.submittedAt || item?.createdAt || new Date().toISOString(),
-  status: normalizeVerificationStatus(item?.status),
+  status: item?.status
+    ? normalizeVerificationStatus(item?.status)
+    : item?.verifiedAt || item?.verifiedBy
+      ? "VERIFIED"
+      : item?.rejectionReason
+        ? "REJECTED"
+        : "PENDING_VERIFICATION",
   reviewerName: item?.verifiedBy?.name || item?.reviewerName,
   reviewedAt: item?.verifiedAt || item?.reviewedAt,
   rejectionReason: item?.rejectionReason,
@@ -186,13 +381,7 @@ export const PaymentService = {
     const userPhone = normalizePhone(user?.phoneNumber);
 
     const filtered = (Array.isArray(sales) ? sales : []).filter((sale: any) => {
-      if (
-        !user ||
-        user.role === "NURSERY_ADMIN" ||
-        user.role === "SUPER_ADMIN" ||
-        user.role === "CUSTOMER"
-      ) {
-        // CUSTOMER rows are already scoped server-side using auth token.
+      if (!user || user.role === "NURSERY_ADMIN" || user.role === "SUPER_ADMIN") {
         return true;
       }
       const saleCustomerId = String(
@@ -217,6 +406,7 @@ export const PaymentService = {
 
     return filtered
       .map(toDueSale)
+      .filter((item) => Boolean(item.saleId))
       .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
   },
 
@@ -316,6 +506,27 @@ export const PaymentService = {
     }
   },
 
+  async recordWalkInPayment(payload: {
+    saleId: string;
+    amount: number;
+    mode: ApiPaymentMode;
+    utrNumber?: string;
+    transactionRef?: string;
+    paymentAt?: string;
+  }) {
+    const requestPayload = {
+      saleId: payload.saleId,
+      amount: Math.max(0, toNumber(payload.amount)),
+      mode: payload.mode,
+      utrNumber: payload.utrNumber?.trim() || undefined,
+      transactionRef: payload.transactionRef?.trim() || undefined,
+      paymentAt: payload.paymentAt,
+      autoVerify: true,
+    };
+    const res = await api.post(apiPath("/payments"), requestPayload);
+    return getApiPayload<any>(unwrap<any>(res));
+  },
+
   async listPaymentProofs(status?: PaymentProof["status"]) {
     try {
       const res = await api.get(apiPath("/payments"), {
@@ -343,22 +554,20 @@ export const PaymentService = {
       rejectionReason: payload.approve ? undefined : payload.rejectionReason,
     };
 
-    try {
-      await api.post(apiPath(`/payments/${payload.id}/verify`), requestPayload);
-    } finally {
-      const cached = await getCachedProofs();
-      const updated = cached.map((proof) =>
-        proof.id === payload.id
-          ? {
-              ...proof,
-              status: (payload.approve ? "VERIFIED" : "REJECTED") as PaymentProof["status"],
-              reviewerName: payload.reviewerName,
-              reviewedAt: new Date().toISOString(),
-              rejectionReason: payload.approve ? undefined : payload.rejectionReason,
-            }
-          : proof,
-      );
-      await cacheProofs(updated);
-    }
+    await api.post(apiPath(`/payments/${payload.id}/verify`), requestPayload);
+
+    const cached = await getCachedProofs();
+    const updated = cached.map((proof) =>
+      proof.id === payload.id
+        ? {
+            ...proof,
+            status: (payload.approve ? "VERIFIED" : "REJECTED") as PaymentProof["status"],
+            reviewerName: payload.reviewerName,
+            reviewedAt: new Date().toISOString(),
+            rejectionReason: payload.approve ? undefined : payload.rejectionReason,
+          }
+        : proof,
+    );
+    await cacheProofs(updated);
   },
 };

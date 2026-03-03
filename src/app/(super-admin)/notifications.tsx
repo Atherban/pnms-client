@@ -306,14 +306,6 @@ const NotificationCard = ({ notification }: NotificationCardProps) => {
 
       <Text style={styles.notificationBody}>{notification.body}</Text>
 
-      {notification.nurseryId && (
-        <View style={styles.nurseryRef}>
-          <MaterialIcons name="store" size={12} color="#9CA3AF" />
-          <Text style={styles.nurseryRefText} numberOfLines={1}>
-            Nursery ID: {notification.nurseryId}
-          </Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -334,6 +326,7 @@ const EmptyState = () => (
 
 export default function SuperAdminNotificationsScreen() {
   const queryClient = useQueryClient();
+  const notificationsQueryKey = ["notifications", "super-admin"] as const;
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [mode, setMode] = useState<SendMode>("TARGETED");
@@ -341,7 +334,7 @@ export default function SuperAdminNotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["notifications", "super-admin"],
+    queryKey: notificationsQueryKey,
     queryFn: () => NotificationService.list("SUPER_ADMIN"),
   });
 
@@ -405,11 +398,48 @@ export default function SuperAdminNotificationsScreen() {
     },
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => NotificationService.clearAll(),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: notificationsQueryKey });
+      const previous = queryClient.getQueryData<any[]>(notificationsQueryKey);
+      queryClient.setQueryData(notificationsQueryKey, []);
+      return { previous };
+    },
+    onError: (err: any, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(notificationsQueryKey, context.previous);
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("❌ Failed", err?.message || "Unable to clear notifications");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+  });
+
   const handleRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await refetch();
     setRefreshing(false);
+  };
+
+  const handleClearAll = () => {
+    if (!notifications.length) return;
+    Alert.alert(
+      "Clear notifications?",
+      "This will permanently remove all notifications.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: () => clearAllMutation.mutate(),
+        },
+      ],
+    );
   };
 
   const isValid =
@@ -427,19 +457,36 @@ export default function SuperAdminNotificationsScreen() {
         showBackButton
         onBackPress={() => {}}
         actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={handleRefresh}
-          >
-            <MaterialIcons
-              name={refreshing ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
-            />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                pressed && styles.headerIconBtnPressed,
+              ]}
+              onPress={handleRefresh}
+            >
+              <MaterialIcons
+                name={refreshing ? "sync" : "refresh"}
+                size={20}
+                color={Colors.white}
+              />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                styles.headerDangerBtn,
+                pressed && styles.headerIconBtnPressed,
+              ]}
+              onPress={handleClearAll}
+              disabled={!notifications.length || clearAllMutation.isPending}
+            >
+              <MaterialIcons
+                name={clearAllMutation.isPending ? "hourglass-empty" : "delete-sweep"}
+                size={20}
+                color={Colors.white}
+              />
+            </Pressable>
+          </View>
         }
       />
 
@@ -530,6 +577,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.34)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  headerDangerBtn: {
+    backgroundColor: "transparent",
+    borderColor: "rgba(255,255,255,0.34)",
   },
   headerIconBtnPressed: {
     backgroundColor: "rgba(255,255,255,0.1)",

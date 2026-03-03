@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,7 +15,8 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import KpiCard from "../../components/admin/KpiCard";
+import KpiCard from "../../components/common/KpiCard";
+import FixedHeader from "../../components/common/FixedHeader";
 import { AuthService } from "../../services/auth.service";
 import { StaffDashboardService } from "../../services/staff-dashboard.service";
 import { useAuthStore } from "../../stores/auth.store";
@@ -31,7 +31,6 @@ export default function StaffDashboard() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const actionCardWidth = (width - Spacing.lg * 2 - Spacing.md) / 2;
-  const headerPaddingTop = Spacing.lg;
   const bottomContentPadding = NAV_HEIGHT + insets.bottom + Spacing.lg;
 
   /* ---------------- AUTH ---------------- */
@@ -59,7 +58,6 @@ export default function StaffDashboard() {
 
   const user = storeUser ?? storageUser;
   const userName = user?.name || "Staff Member";
-  const userInitials = userName.charAt(0).toUpperCase();
 
   /* ---------------- DATA ---------------- */
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
@@ -118,34 +116,16 @@ export default function StaffDashboard() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-        >
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Loading insights...</Text>
-            </View>
-            <Pressable onPress={handleLogout} style={styles.logoutButton}>
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-
-          <View style={styles.userWelcome}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>{userInitials}</Text>
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{userName}</Text>
-              <View style={styles.roleBadge}>
-                <MaterialIcons name="work" size={12} color={Colors.white} />
-                <Text style={styles.roleText}>Staff Member</Text>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
+        <FixedHeader
+          title="Dashboard"
+          subtitle="Loading insights..."
+          contentStyle={styles.headerContent}
+          titleStyle={styles.title}
+          subtitleStyle={styles.subtitle}
+          userName={userName}
+          userRoleLabel="Staff Member"
+          onLogout={handleLogout}
+        />
 
         <View
           style={[styles.loadingContainer, { paddingBottom: bottomContentPadding }]}
@@ -161,34 +141,16 @@ export default function StaffDashboard() {
   if (error || !data) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-        >
-          <View style={styles.headerContent}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>Error loading data</Text>
-            </View>
-            <Pressable onPress={handleLogout} style={styles.logoutButton}>
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-
-          <View style={styles.userWelcome}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>{userInitials}</Text>
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.welcomeText}>Hi there,</Text>
-              <Text style={styles.userName}>{userName}</Text>
-              <View style={styles.roleBadge}>
-                <MaterialIcons name="work" size={12} color={Colors.white} />
-                <Text style={styles.roleText}>Staff Member</Text>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
+        <FixedHeader
+          title="Dashboard"
+          subtitle="Error loading data"
+          contentStyle={styles.headerContent}
+          titleStyle={styles.title}
+          subtitleStyle={styles.subtitle}
+          userName={userName}
+          userRoleLabel="Staff Member"
+          onLogout={handleLogout}
+        />
 
         <View
           style={[styles.errorContainer, { paddingBottom: bottomContentPadding }]}
@@ -279,6 +241,20 @@ export default function StaffDashboard() {
       action: () => router.push("/(staff)/plants"),
     },
     {
+      title: "Notifications",
+      subtitle: "View alerts and updates",
+      icon: "notifications",
+      color: Colors.primary,
+      action: () => router.push("/(staff)/notifications"),
+    },
+    {
+      title: "Seed Batches",
+      subtitle: "Manage farmer seed lifecycle",
+      icon: "inventory-2",
+      color: Colors.primary,
+      action: () => router.push("/(staff)/seed-batches"),
+    },
+    {
       title: "Customers",
       subtitle: "Manage customer records",
       icon: "groups",
@@ -307,61 +283,30 @@ export default function StaffDashboard() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+      <FixedHeader
+        title="Dashboard"
+        contentStyle={styles.headerContent}
+        titleStyle={styles.title}
+        userName={userName}
+        userRoleLabel="Staff Member"
+        onLogout={handleLogout}
+        actions={
+          <Pressable
+            onPress={refetch}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && styles.refreshButtonPressed,
+            ]}
+          >
+            <MaterialIcons
+              name={isRefetching ? "refresh" : "refresh"}
+              size={20}
+              color={Colors.white}
+              style={isRefetching ? styles.refreshingIcon : undefined}
+            />
+          </Pressable>
+        }
       >
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.title}>Dashboard</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={refetch}
-              style={({ pressed }) => [
-                styles.refreshButton,
-                pressed && styles.refreshButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name={isRefetching ? "refresh" : "refresh"}
-                size={20}
-                color={Colors.white}
-                style={isRefetching ? styles.refreshingIcon : undefined}
-              />
-            </Pressable>
-            <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [
-                styles.logoutButton,
-                pressed && styles.logoutButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* User Welcome Section - Same as Admin */}
-        <View style={styles.userWelcome}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName}>{userName}</Text>
-            <View style={styles.userDetails}>
-              <View style={styles.roleBadge}>
-                <MaterialIcons name="work" size={12} color={Colors.white} />
-                <Text style={styles.roleText}>Staff Member</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         {/* Stats Summary - Same as Admin */}
         <View style={styles.statsSummary}>
           <View style={styles.statItem}>
@@ -400,7 +345,7 @@ export default function StaffDashboard() {
             </Text>
           </View>
         </View>
-      </LinearGradient>
+      </FixedHeader>
 
       {/* Scrollable Content */}
       <ScrollView

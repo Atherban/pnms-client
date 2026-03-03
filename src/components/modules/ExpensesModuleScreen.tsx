@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ExpenseService } from "../../services/expense.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import type { Expense } from "../../types/expense.types";
 import { formatErrorMessage } from "../../utils/error";
@@ -32,10 +33,10 @@ const EXPENSE_TYPE_OPTIONS = [
   "POT",
   "SOIL",
   "WATER",
-  "ELECTRICTY",
+  "ELECTRICITY",
   "TRANSPORT",
   "TOOLS",
-  "OTHERS",
+  "OTHER",
 ] as const;
 type ExpenseType = (typeof EXPENSE_TYPE_OPTIONS)[number];
 
@@ -49,9 +50,15 @@ export function ExpensesModuleScreen({
   canWrite,
 }: ExpensesModuleScreenProps) {
   const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const showStaffDetails = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
+  const canDeleteExpenses =
+    role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
   const [search, setSearch] = useState("");
   const [type, setType] = useState<ExpenseType | "">("");
   const [description, setDescription] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [productDetails, setProductDetails] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -73,18 +80,34 @@ export function ExpensesModuleScreen({
     return expenses.filter(
       (expense) =>
         expense.type?.toLowerCase().includes(term) ||
-        expense.description?.toLowerCase().includes(term),
+        expense.description?.toLowerCase().includes(term) ||
+        expense.purpose?.toLowerCase().includes(term) ||
+        expense.productDetails?.toLowerCase().includes(term) ||
+        (showStaffDetails && getPurchaserName(expense).toLowerCase().includes(term)),
     );
-  }, [expenses, search]);
+  }, [expenses, search, showStaffDetails]);
 
   // Calculate total expenses
   const totalExpenses = useMemo(() => {
     return filtered.reduce((sum, expense) => sum + (expense.amount || 0), 0);
   }, [filtered]);
 
+  const contributorCount = useMemo(() => {
+    const staffIds = new Set<string>();
+    filtered.forEach((expense) => {
+      const purchaser = expense.purchasedBy;
+      if (purchaser && typeof purchaser === "object" && purchaser._id) {
+        staffIds.add(purchaser._id);
+      }
+    });
+    return staffIds.size;
+  }, [filtered]);
+
   const resetForm = () => {
     setType("");
     setDescription("");
+    setPurpose("");
+    setProductDetails("");
     setAmount("");
     const now = new Date();
     setDate(now.toISOString().slice(0, 10));
@@ -106,6 +129,8 @@ export function ExpensesModuleScreen({
       const payload = {
         type,
         description: description.trim() || undefined,
+        purpose: purpose.trim() || undefined,
+        productDetails: productDetails.trim() || undefined,
         amount: amountValue,
         date: date.trim() || undefined,
       };
@@ -142,6 +167,8 @@ export function ExpensesModuleScreen({
     const editType = (expense.type ?? "") as ExpenseType | "";
     setType(EXPENSE_TYPE_OPTIONS.includes(editType as ExpenseType) ? editType : "");
     setDescription(expense.description ?? "");
+    setPurpose(expense.purpose ?? "");
+    setProductDetails(expense.productDetails ?? "");
     setAmount(expense.amount ? String(expense.amount) : "");
     const nextDate = expense.date ? new Date(expense.date) : new Date();
     setDate(nextDate.toISOString().slice(0, 10));
@@ -152,6 +179,13 @@ export function ExpensesModuleScreen({
   };
 
   const onDelete = (expense: Expense) => {
+    if (!canDeleteExpenses) {
+      Alert.alert(
+        "Not Allowed",
+        "Staff can create and update expenses, but cannot delete them.",
+      );
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       "Delete Expense",
@@ -211,6 +245,12 @@ export function ExpensesModuleScreen({
       year: "numeric",
     });
   };
+
+  function getPurchaserName(expense: Expense) {
+    if (!expense.purchasedBy) return "Unknown staff";
+    if (typeof expense.purchasedBy === "string") return expense.purchasedBy;
+    return expense.purchasedBy.name || "Unknown staff";
+  }
 
   if (isLoading) {
     return (
@@ -292,6 +332,15 @@ export function ExpensesModuleScreen({
             <Text style={styles.statLabel}>Count</Text>
             <Text style={styles.statValue}>{filtered.length}</Text>
           </View>
+          {showStaffDetails && (
+            <>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Staff</Text>
+                <Text style={styles.statValue}>{contributorCount}</Text>
+              </View>
+            </>
+          )}
         </View>
       </LinearGradient>
 
@@ -301,7 +350,11 @@ export function ExpensesModuleScreen({
         <TextInput
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by type or description..."
+          placeholder={
+            showStaffDetails
+              ? "Search by type, reason, product, staff..."
+              : "Search by type, reason, product..."
+          }
           placeholderTextColor={Colors.textTertiary}
           style={styles.searchInput}
         />
@@ -523,6 +576,44 @@ export function ExpensesModuleScreen({
               />
             </View>
 
+            {/* Purpose Field */}
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputLabel}>
+                <MaterialIcons
+                  name="flag"
+                  size={16}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.inputLabelText}>Purpose</Text>
+              </View>
+              <TextInput
+                value={purpose}
+                onChangeText={setPurpose}
+                placeholder="Why this expense was made"
+                placeholderTextColor={Colors.textTertiary}
+                style={styles.input}
+              />
+            </View>
+
+            {/* Product Details Field */}
+            <View style={styles.inputWrapper}>
+              <View style={styles.inputLabel}>
+                <MaterialIcons
+                  name="inventory-2"
+                  size={16}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.inputLabelText}>Product Details</Text>
+              </View>
+              <TextInput
+                value={productDetails}
+                onChangeText={setProductDetails}
+                placeholder="Item details, brand, quantity etc."
+                placeholderTextColor={Colors.textTertiary}
+                style={styles.input}
+              />
+            </View>
+
             {/* Date Field */}
             <View style={styles.inputWrapper}>
               <View style={styles.inputLabel}>
@@ -680,6 +771,30 @@ export function ExpensesModuleScreen({
                     {item.description}
                   </Text>
                 )}
+                {item.purpose && (
+                  <Text style={styles.expensePurpose} numberOfLines={1}>
+                    Purpose: {item.purpose}
+                  </Text>
+                )}
+                {item.productDetails && (
+                  <Text style={styles.expenseMetaText} numberOfLines={1}>
+                    Product: {item.productDetails}
+                  </Text>
+                )}
+                {showStaffDetails && (
+                  <>
+                    <View style={styles.expenseMetaRow}>
+                      <MaterialIcons
+                        name="person"
+                        size={12}
+                        color={Colors.textSecondary}
+                      />
+                      <Text style={styles.expenseMetaText} numberOfLines={1}>
+                        Spent by: {getPurchaserName(item)}
+                      </Text>
+                    </View>
+                  </>
+                )}
                 {item.date && (
                   <View style={styles.expenseDate}>
                     <MaterialIcons
@@ -708,21 +823,23 @@ export function ExpensesModuleScreen({
                   <MaterialIcons name="edit" size={16} color={Colors.primary} />
                   <Text style={styles.editButtonText}>Edit</Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => onDelete(item)}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    styles.deleteButton,
-                    pressed && styles.actionButtonPressed,
-                  ]}
-                >
-                  <MaterialIcons
-                    name="delete-outline"
-                    size={16}
-                    color={Colors.error}
-                  />
-                  <Text style={styles.deleteButtonText}>Delete</Text>
-                </Pressable>
+                {canDeleteExpenses && (
+                  <Pressable
+                    onPress={() => onDelete(item)}
+                    style={({ pressed }) => [
+                      styles.actionButton,
+                      styles.deleteButton,
+                      pressed && styles.actionButtonPressed,
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="delete-outline"
+                      size={16}
+                      color={Colors.error}
+                    />
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </Pressable>
+                )}
               </View>
             )}
           </View>
@@ -740,10 +857,10 @@ const getExpenseIcon = (type: string) => {
   if (typeLower === "pot") return "yard";
   if (typeLower === "soil") return "terrain";
   if (typeLower === "water") return "water-drop";
-  if (typeLower === "electricty") return "bolt";
+  if (typeLower === "electricity" || typeLower === "electricty") return "bolt";
   if (typeLower === "transport") return "local-shipping";
   if (typeLower === "tools") return "build";
-  if (typeLower === "others") return "receipt";
+  if (typeLower === "other" || typeLower === "others") return "receipt";
   if (typeLower.includes("rent")) return "home";
   if (typeLower.includes("salary") || typeLower.includes("wage"))
     return "people";
@@ -1239,6 +1356,24 @@ const styles = {
   expenseDescription: {
     fontSize: 13,
     color: Colors.textSecondary,
+  },
+  expensePurpose: {
+    fontSize: 13,
+    color: Colors.text,
+    fontWeight: "500" as const,
+  },
+  expenseMetaRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+  },
+  expenseMetaText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  expenseMetaMuted: {
+    fontSize: 11,
+    color: Colors.textTertiary,
   },
   expenseDate: {
     flexDirection: "row" as const,

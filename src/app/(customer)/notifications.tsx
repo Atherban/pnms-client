@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeInDown,
   Layout,
@@ -317,9 +317,35 @@ export default function CustomerNotificationsScreen() {
     },
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: () => NotificationService.clearAll(),
+    onError: (err: any) => {
+      Alert.alert("Unable to clear", err?.message || "Please try again");
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
   const handleNotificationPress = (id: string, isRead: boolean) => {
     if (isRead) return;
     markReadMutation.mutate(id);
+  };
+
+  const handleClearAll = () => {
+    if (!notifications.length) return;
+    Alert.alert(
+      "Clear notifications?",
+      "This will permanently remove all notifications.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: () => clearAllMutation.mutate(),
+        },
+      ],
+    );
   };
 
   if (isLoading) {
@@ -342,19 +368,36 @@ export default function CustomerNotificationsScreen() {
         subtitle="Important updates and reminders"
         titleStyle={styles.headerTitle}
         actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={() => refetch()}
-          >
-            <MaterialIcons
-              name={isRefetching ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
-            />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                pressed && styles.headerIconBtnPressed,
+              ]}
+              onPress={() => refetch()}
+            >
+              <MaterialIcons
+                name={isRefetching ? "sync" : "refresh"}
+                size={20}
+                color={Colors.white}
+              />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                styles.headerDangerBtn,
+                pressed && styles.headerIconBtnPressed,
+              ]}
+              onPress={handleClearAll}
+              disabled={!notifications.length || clearAllMutation.isPending}
+            >
+              <MaterialIcons
+                name={clearAllMutation.isPending ? "hourglass-empty" : "delete-sweep"}
+                size={20}
+                color={Colors.white}
+              />
+            </Pressable>
+          </View>
         }
       />
 
@@ -405,6 +448,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  headerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  headerDangerBtn: {
+    backgroundColor: "transparent",
+    borderColor: "rgba(255,255,255,0.32)",
   },
   headerIconBtnPressed: {
     backgroundColor: "rgba(255,255,255,0.2)",

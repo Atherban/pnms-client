@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
+import FixedHeader from "../../../components/common/FixedHeader";
 import { Colors, Spacing } from "../../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -39,6 +40,55 @@ const QUICK_LINKS = [
     description: "Generate reports",
   },
   {
+    title: "Payment Verify",
+    icon: "fact-check",
+    path: "/(admin)/payments/verification",
+    color: "#0EA5E9",
+    description: "Approve payment screenshots",
+  },
+  {
+    title: "Staff Performance",
+    icon: "leaderboard",
+    path: "/(admin)/staff/performance",
+    color: "#6366F1",
+    description: "Sales and collection tracking",
+  },
+  {
+    title: "Staff Accounts",
+    icon: "account-balance-wallet",
+    path: "/(admin)/staff/accounting",
+    color: "#14B8A6",
+    description: "Accounting net balance",
+  },
+  {
+    title: "Banners",
+    icon: "campaign",
+    path: "/(admin)/banners",
+    color: "#0EA5E9",
+    description: "Create and manage banners",
+  },
+  {
+    title: "Notifications",
+    icon: "notifications-active",
+    path: "/(admin)/notifications",
+    color: "#22C55E",
+    description: "Broadcast customer alerts",
+  },
+  {
+    title: "Audit Logs",
+    icon: "history",
+    path: "/(admin)/audit-logs",
+    color: "#F59E0B",
+    description: "Soft-delete history and cleanup",
+  },
+  {
+    title: "Public Profile",
+    icon: "contact-phone",
+    path: "/(admin)/settings/public-profile",
+    color: "#3B82F6",
+    description: "UPI, contacts and social links",
+  },
+  {
     title: "Inventory",
     icon: "inventory",
     path: "/(admin)/inventory",
@@ -65,6 +115,13 @@ const QUICK_LINKS = [
     path: "/(admin)/germination",
     color: "#22C55E",
     description: "View germination records",
+  },
+  {
+    title: "Customer Seed Batches",
+    icon: "inventory-2",
+    path: "/(admin)/seed-batches",
+    color: "#10B981",
+    description: "Lifecycle and service billing",
   },
   {
     title: "Customers",
@@ -97,14 +154,13 @@ export default function MoreScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>More Options</Text>
-          <Text style={styles.subtitle}>Quick access to features</Text>
-        </View>
-        <MaterialIcons name="widgets" size={28} color={Colors.primary} />
-      </View>
+      <FixedHeader
+        title="More Options"
+        subtitle="Quick access to features"
+        titleStyle={styles.title}
+        subtitleStyle={styles.subtitle}
+        actions={<MaterialIcons name="widgets" size={24} color={Colors.white} />}
+      />
 
       {/* Scrollable Content */}
       <ScrollView
@@ -171,24 +227,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.background,
-  },
   title: {
     fontSize: 24,
     fontWeight: "700",
-    color: Colors.text,
+    color: Colors.white,
     marginBottom: 2,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: "rgba(255,255,255,0.92)",
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,

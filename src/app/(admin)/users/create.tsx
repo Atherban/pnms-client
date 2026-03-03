@@ -14,20 +14,24 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { UserService } from "../../../services/user.service";
+import { useAuthStore } from "../../../stores/auth.store";
 import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
+import { isValidIndianUserPhone, normalizeIndianPhone } from "../../../utils/phone";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
 export default function CreateUser() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
 
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"ADMIN" | "STAFF" | "VIEWER">("STAFF");
-  const [showPassword, setShowPassword] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [role, setRole] = useState<"NURSERY_ADMIN" | "STAFF" | "CUSTOMER">("STAFF");
 
   const mutation = useMutation({
     mutationFn: UserService.create,
@@ -54,9 +58,9 @@ export default function CreateUser() {
       return;
     }
 
-    if (!email.trim()) {
+    if (!phoneNumber.trim()) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Validation Error", "Email is required");
+      Alert.alert("Validation Error", "Phone number is required");
       return;
     }
 
@@ -66,20 +70,29 @@ export default function CreateUser() {
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      Alert.alert("Validation Error", "Please enter a valid email address");
-      return;
-    }
-
-    // Password strength validation
-    if (password.length < 6) {
+    if (!isValidIndianUserPhone(phoneNumber.trim())) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
         "Validation Error",
-        "Password must be at least 6 characters long",
+        "Enter valid Indian phone: 9876543210, 919876543210, or +919876543210",
+      );
+      return;
+    }
+
+    if (email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        Alert.alert("Validation Error", "Please enter a valid email address");
+        return;
+      }
+    }
+
+    if (password.length < 5) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        "Validation Error",
+        "Password must be at least 5 characters long",
       );
       return;
     }
@@ -87,32 +100,34 @@ export default function CreateUser() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     mutation.mutate({
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      phoneNumber: normalizeIndianPhone(phoneNumber.trim()),
+      email: email.trim() ? email.trim().toLowerCase() : undefined,
       password: password.trim(),
       role,
+      nurseryId: currentUser?.nurseryId,
     });
   };
 
-  const getRoleDescription = (roleType: "ADMIN" | "STAFF" | "VIEWER") => {
+  const getRoleDescription = (roleType: "NURSERY_ADMIN" | "STAFF" | "CUSTOMER") => {
     switch (roleType) {
-      case "ADMIN":
+      case "NURSERY_ADMIN":
         return "Full access to all features and settings";
       case "STAFF":
         return "Can manage inventory and process sales";
-      case "VIEWER":
+      case "CUSTOMER":
         return "Read-only access to view data";
       default:
         return "";
     }
   };
 
-  const getRoleIcon = (roleType: "ADMIN" | "STAFF" | "VIEWER") => {
+  const getRoleIcon = (roleType: "NURSERY_ADMIN" | "STAFF" | "CUSTOMER") => {
     switch (roleType) {
-      case "ADMIN":
+      case "NURSERY_ADMIN":
         return "security";
       case "STAFF":
         return "person";
-      case "VIEWER":
+      case "CUSTOMER":
         return "visibility";
       default:
         return "person";
@@ -122,10 +137,11 @@ export default function CreateUser() {
   const isFormValid = () => {
     return (
       name.trim() &&
-      email.trim() &&
+      phoneNumber.trim() &&
       password.trim() &&
-      password.length >= 6 &&
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+      password.length >= 5 &&
+      isValidIndianUserPhone(phoneNumber.trim()) &&
+      (!email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
     );
   };
 
@@ -161,6 +177,7 @@ export default function CreateUser() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Form Card */}
         <View style={styles.formCard}>
@@ -197,11 +214,52 @@ export default function CreateUser() {
               )}
             </View>
 
+            {/* Phone Field */}
+            <View style={styles.inputContainer}>
+              <View style={styles.inputLabel}>
+                <MaterialIcons name="phone" size={18} color={Colors.text} />
+                <Text style={styles.inputLabelText}>Phone Number *</Text>
+              </View>
+              <TextInput
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="9876543210 / +919876543210"
+                placeholderTextColor={Colors.textTertiary}
+                keyboardType="phone-pad"
+                style={[
+                  styles.input,
+                  phoneNumber.trim() &&
+                    !isValidIndianUserPhone(phoneNumber.trim()) &&
+                    styles.inputError,
+                ]}
+              />
+              {!phoneNumber.trim() ? (
+                <View style={styles.validationError}>
+                  <MaterialIcons name="error" size={14} color={Colors.error} />
+                  <Text style={styles.validationText}>
+                    Phone number is required
+                  </Text>
+                </View>
+              ) : phoneNumber.trim() &&
+                !isValidIndianUserPhone(phoneNumber.trim()) ? (
+                <View style={styles.validationError}>
+                  <MaterialIcons
+                    name="error"
+                    size={14}
+                    color={Colors.warning}
+                  />
+                  <Text style={styles.validationText}>
+                    Use 9876543210, 919876543210, or +919876543210
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
             {/* Email Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
                 <MaterialIcons name="email" size={18} color={Colors.text} />
-                <Text style={styles.inputLabelText}>Email Address *</Text>
+                <Text style={styles.inputLabelText}>Email Address (Optional)</Text>
               </View>
               <TextInput
                 value={email}
@@ -217,26 +275,6 @@ export default function CreateUser() {
                     styles.inputError,
                 ]}
               />
-              {!email.trim() ? (
-                <View style={styles.validationError}>
-                  <MaterialIcons name="error" size={14} color={Colors.error} />
-                  <Text style={styles.validationText}>
-                    Email address is required
-                  </Text>
-                </View>
-              ) : email.trim() &&
-                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? (
-                <View style={styles.validationError}>
-                  <MaterialIcons
-                    name="error"
-                    size={14}
-                    color={Colors.warning}
-                  />
-                  <Text style={styles.validationText}>
-                    Please enter a valid email address
-                  </Text>
-                </View>
-              ) : null}
             </View>
 
             {/* Password Field */}
@@ -251,21 +289,19 @@ export default function CreateUser() {
                   onChangeText={setPassword}
                   placeholder="Enter password"
                   placeholderTextColor={Colors.textTertiary}
-                  secureTextEntry={!showPassword}
+                  secureTextEntry={!isPasswordVisible}
                   style={[
                     styles.passwordInput,
                     password && password.length < 6 && styles.inputError,
                   ]}
                 />
                 <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setShowPassword(!showPassword);
-                  }}
+                  onPress={() => setIsPasswordVisible((prev) => !prev)}
+                  hitSlop={8}
                   style={styles.passwordToggle}
                 >
                   <MaterialIcons
-                    name={showPassword ? "visibility-off" : "visibility"}
+                    name={isPasswordVisible ? "visibility-off" : "visibility"}
                     size={20}
                     color={Colors.textSecondary}
                   />
@@ -287,7 +323,7 @@ export default function CreateUser() {
                     color={Colors.warning}
                   />
                   <Text style={styles.validationText}>
-                    Password must be at least 6 characters
+                    Password must be at least 5 characters
                   </Text>
                 </View>
               ) : (
@@ -345,7 +381,7 @@ export default function CreateUser() {
             </Text>
 
             <View style={styles.roleGrid}>
-              {(["ADMIN", "STAFF", "VIEWER"] as const).map((roleType) => (
+              {(["NURSERY_ADMIN", "STAFF", "CUSTOMER"] as const).map((roleType) => (
                 <Pressable
                   key={roleType}
                   onPress={() => {
@@ -361,7 +397,7 @@ export default function CreateUser() {
                   <LinearGradient
                     colors={
                       role === roleType
-                        ? roleType === "ADMIN"
+                        ? roleType === "NURSERY_ADMIN"
                           ? [Colors.error, "#F87171"]
                           : roleType === "STAFF"
                             ? [
@@ -441,7 +477,7 @@ export default function CreateUser() {
               </View>
 
               <View style={styles.permissionsList}>
-                {role === "ADMIN" && (
+                {role === "NURSERY_ADMIN" && (
                   <>
                     <View style={styles.permissionItem}>
                       <MaterialIcons
@@ -525,7 +561,7 @@ export default function CreateUser() {
                   </>
                 )}
 
-                {role === "VIEWER" && (
+                {role === "CUSTOMER" && (
                   <>
                     <View style={styles.permissionItem}>
                       <MaterialIcons
@@ -775,7 +811,7 @@ const styles = {
     borderColor: Colors.border,
     borderRadius: 12,
     padding: Spacing.md,
-    paddingRight: 50,
+    paddingRight: Spacing.xl,
     fontSize: 16,
     color: Colors.text,
     backgroundColor: Colors.surface,
@@ -786,6 +822,7 @@ const styles = {
     top: 0,
     bottom: 0,
     justifyContent: "center" as const,
+    alignItems: "center" as const,
   },
   validationError: {
     flexDirection: "row" as const,

@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -14,9 +13,13 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
-import KpiCard from "../../components/admin/KpiCard";
+import FixedHeader from "../../components/common/FixedHeader";
+import KpiCard from "../../components/common/KpiCard";
 import { AuthService } from "../../services/auth.service";
 import { DashboardService } from "../../services/dashboard.service";
 import { useAuthStore } from "../../stores/auth.store";
@@ -30,7 +33,6 @@ export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const actionCardWidth = (width - Spacing.lg * 2 - Spacing.md) / 2;
-  const headerPaddingTop = Spacing.lg;
   const bottomContentPadding = NAV_HEIGHT + insets.bottom + Spacing.lg;
 
   // Get user from auth store
@@ -52,8 +54,7 @@ export default function AdminDashboard() {
   // Use store user first, fallback to storage user
   const user = storeUser || storageUser;
   const userName = user?.name || "Admin User";
-  const userRole = user?.role || "ADMIN";
-  const userInitials = userName?.charAt(0).toUpperCase() || "A";
+  const userRole = user?.role || "NURSERY_ADMIN";
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["dashboard"],
@@ -103,30 +104,22 @@ export default function AdminDashboard() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-            </View>
-            <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [
-                styles.logoutButton,
-                pressed && styles.logoutButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-        </LinearGradient>
+        <FixedHeader
+          title="Dashboard"
+          contentStyle={styles.headerTop}
+          titleStyle={styles.title}
+          userName={userName}
+          userRoleLabel={
+            userRole === "NURSERY_ADMIN" ? "Nursery Admin" : userRole
+          }
+          onLogout={handleLogout}
+        />
         <View style={styles.contentArea}>
           <View
-            style={[styles.loadingContainer, { paddingBottom: bottomContentPadding }]}
+            style={[
+              styles.loadingContainer,
+              { paddingBottom: bottomContentPadding },
+            ]}
           >
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.loadingText}>Loading dashboard...</Text>
@@ -140,33 +133,24 @@ export default function AdminDashboard() {
   if (error || !data) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Dashboard</Text>
-              <Text style={styles.subtitle}>
-                {userName ? `Hi, ${userName}` : "Error loading data"}
-              </Text>
-            </View>
-            <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [
-                styles.logoutButton,
-                pressed && styles.logoutButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-        </LinearGradient>
+        <FixedHeader
+          title="Dashboard"
+          subtitle={userName ? `Hi, ${userName}` : "Error loading data"}
+          contentStyle={styles.headerTop}
+          titleStyle={styles.title}
+          subtitleStyle={styles.subtitle}
+          userName={userName}
+          userRoleLabel={
+            userRole === "NURSERY_ADMIN" ? "Nursery Admin" : userRole
+          }
+          onLogout={handleLogout}
+        />
         <View style={styles.contentArea}>
           <View
-            style={[styles.errorContainer, { paddingBottom: bottomContentPadding }]}
+            style={[
+              styles.errorContainer,
+              { paddingBottom: bottomContentPadding },
+            ]}
           >
             <MaterialIcons
               name="error-outline"
@@ -282,78 +266,32 @@ export default function AdminDashboard() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={[styles.fixedHeader, { paddingTop: headerPaddingTop }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+      <FixedHeader
+        title="Dashboard"
+        contentStyle={styles.headerTop}
+        titleStyle={styles.title}
+        userName={userName}
+        userRoleLabel={
+          userRole === "NURSERY_ADMIN" ? "Nursery Admin" : userRole
+        }
+        onLogout={handleLogout}
+        actions={
+          <Pressable
+            onPress={refetch}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && styles.refreshButtonPressed,
+            ]}
+          >
+            <MaterialIcons
+              name={isRefetching ? "refresh" : "refresh"}
+              size={20}
+              color={Colors.white}
+              style={isRefetching ? styles.refreshingIcon : undefined}
+            />
+          </Pressable>
+        }
       >
-        {/* Header Top Row */}
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.title}>Dashboard</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={refetch}
-              style={({ pressed }) => [
-                styles.refreshButton,
-                pressed && styles.refreshButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name={isRefetching ? "refresh" : "refresh"}
-                size={20}
-                color={Colors.white}
-                style={isRefetching ? styles.refreshingIcon : undefined}
-              />
-            </Pressable>
-            <Pressable
-              onPress={handleLogout}
-              style={({ pressed }) => [
-                styles.logoutButton,
-                pressed && styles.logoutButtonPressed,
-              ]}
-            >
-              <MaterialIcons name="logout" size={20} color={Colors.white} />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* User Profile Display */}
-        <View style={styles.userWelcome}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userAvatarText}>{userInitials}</Text>
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName}>{userName}</Text>
-            <View style={styles.userDetails}>
-              <View style={styles.roleBadge}>
-                <MaterialIcons
-                  name={
-                    userRole === "ADMIN"
-                      ? "security"
-                      : userRole === "STAFF"
-                        ? "work"
-                        : "visibility"
-                  }
-                  size={12}
-                  color={Colors.white}
-                />
-                <Text style={styles.roleText}>
-                  {userRole === "ADMIN"
-                    ? "Administrator"
-                    : userRole === "STAFF"
-                      ? "Staff Member"
-                      : "Viewer"}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         {/* Stats Summary */}
         <View style={styles.statsSummary}>
           <View style={styles.statItem}>
@@ -397,7 +335,7 @@ export default function AdminDashboard() {
             </Text>
           </View>
         </View>
-      </LinearGradient>
+      </FixedHeader>
 
       {/* Scrollable Content */}
       <ScrollView

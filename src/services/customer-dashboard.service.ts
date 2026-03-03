@@ -1,6 +1,7 @@
 import type { NurseryPublicProfile } from "../types/public-profile.types";
 import type { BannerItem } from "./banner.service";
 import { BannerService } from "./banner.service";
+import { CustomerSeedBatchService } from "./customer-seed-batch.service";
 import { GerminationService } from "./germination.service";
 import { NurseryPublicProfileService } from "./nursery-public-profile.service";
 import { PaymentService } from "./payment.service";
@@ -96,6 +97,7 @@ export const CustomerDashboardService = {
       dues,
       sowing,
       germination,
+      customerSeedBatches,
       banners,
       nurseryPublicProfile,
     ] = await Promise.all([
@@ -117,6 +119,7 @@ export const CustomerDashboardService = {
         customerId: user?.id,
         customerPhone: user?.phoneNumber,
       }).catch(() => []),
+      CustomerSeedBatchService.getAll().catch(() => []),
       BannerService.listCustomerBanners().catch(() => []),
       NurseryPublicProfileService.get(user?.nurseryId).catch(
         () =>
@@ -134,29 +137,31 @@ export const CustomerDashboardService = {
       matchCustomer(item, user),
     );
 
-    const sownFromSowing = sowingRows.reduce(
-      (sum, item: any) => sum + getSownQuantity(item),
-      0,
-    );
-    const sownFromGerminationSource = germinationRows.reduce(
-      (sum, item: any) => {
-        const source = item?.sowingId || item?.sowing || {};
-        return sum + getSownQuantity(source);
+    const lifecycleFromBatches = (Array.isArray(customerSeedBatches) ? customerSeedBatches : []).reduce(
+      (acc, batch: any) => {
+        acc.sown += toNumber(batch?.seedsSown);
+        acc.germinated += toNumber(batch?.seedsGerminated);
+        acc.discarded += toNumber(batch?.seedsDiscarded);
+        return acc;
       },
-      0,
+      { sown: 0, germinated: 0, discarded: 0 }
+    );
+
+    const sownFromSowing = sowingRows.reduce((sum, item: any) => sum + getSownQuantity(item), 0);
+    const germinatedFromGermination = germinationRows.reduce(
+      (sum, item: any) => sum + getGerminatedQuantity(item),
+      0
+    );
+    const discardedFromGermination = germinationRows.reduce(
+      (sum, item: any) => sum + getDiscardedQuantity(item),
+      0
     );
 
     const lifecycle: CustomerLifecycleSummary = {
-      sown: Math.max(sownFromSowing, sownFromGerminationSource),
-      germinated: germinationRows.reduce(
-        (sum, item: any) => sum + getGerminatedQuantity(item),
-        0,
-      ),
-      discarded: germinationRows.reduce(
-        (sum, item: any) => sum + getDiscardedQuantity(item),
-        0,
-      ),
-      pending: 0,
+      sown: Math.max(lifecycleFromBatches.sown, sownFromSowing),
+      germinated: Math.max(lifecycleFromBatches.germinated, germinatedFromGermination),
+      discarded: Math.max(lifecycleFromBatches.discarded, discardedFromGermination),
+      pending: 0
     };
     lifecycle.pending = Math.max(
       lifecycle.sown - lifecycle.germinated - lifecycle.discarded,

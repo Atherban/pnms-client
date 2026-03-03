@@ -1,28 +1,36 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Modal,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import EntityThumbnail from "../ui/EntityThumbnail";
+import { type ApiPaymentMode } from "../../constants/api-enums";
+import { PaymentService } from "../../services/payment.service";
 import { SalesService } from "../../services/sales.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
+import { canViewSensitivePricing } from "../../utils/rbac";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
 interface SaleDetailScreenProps {
   id?: string;
   title?: string;
-  routeGroup?: "staff" | "admin" | "viewer";
+  routeGroup?: "staff" | "admin" | "customer";
 }
 
 // ==================== CONSTANTS & TYPES ====================
@@ -102,11 +110,6 @@ const formatTime = (dateString?: string): string => {
   });
 };
 
-const formatId = (id?: string): string => {
-  if (!id) return "—";
-  return `#${id.slice(-6).toUpperCase()}`;
-};
-
 const getPaymentInfo = (mode?: string) => {
   const key = mode?.toUpperCase() as keyof typeof PAYMENT_METHODS;
   return (
@@ -122,6 +125,63 @@ const getPaymentInfo = (mode?: string) => {
 const getStatusInfo = (status?: string) => {
   const key = status?.toUpperCase() as keyof typeof SALE_STATUS;
   return SALE_STATUS[key] || SALE_STATUS.COMPLETED;
+};
+
+const normalizeStatusLabel = (value?: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "—";
+  return raw.replace(/_/g, " ");
+};
+
+const getVerificationState = (sale: any): string => {
+  const verificationRaw = String(
+    sale?.verificationState || sale?.paymentVerificationStatus || "",
+  )
+    .trim()
+    .toUpperCase();
+  if (verificationRaw) return verificationRaw;
+
+  const payments = Array.isArray(sale?.payments) ? sale.payments : [];
+  if (payments.length) {
+    let hasRejected = false;
+    let hasPending = false;
+    let hasVerified = false;
+
+    for (const tx of payments) {
+      const status = String(tx?.status || "")
+        .trim()
+        .toUpperCase();
+      if (status === "REJECTED" || status === "CANCELLED") {
+        hasRejected = true;
+        continue;
+      }
+      if (
+        status === "PENDING" ||
+        status === "PENDING_VERIFICATION" ||
+        status === "SYNC_QUEUED"
+      ) {
+        hasPending = true;
+        continue;
+      }
+      if (
+        status === "VERIFIED" ||
+        status === "APPROVED" ||
+        status === "ACCEPTED" ||
+        tx?.verifiedAt ||
+        tx?.verifiedBy
+      ) {
+        hasVerified = true;
+      }
+    }
+
+    if (hasPending) return "PENDING_VERIFICATION";
+    if (hasRejected && !hasVerified) return "REJECTED";
+    if (hasVerified) return "VERIFIED";
+  }
+
+  const paidAmount = Number(sale?.paidAmount ?? 0) || 0;
+  if (paidAmount <= 0) return "NOT_REQUIRED";
+  return "VERIFIED";
 };
 
 const getItemDisplayData = (item: any) => {
@@ -329,11 +389,46 @@ export function SaleDetailScreen({
   routeGroup = "staff",
 }: SaleDetailScreenProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const showFinancialInsights = canViewSensitivePricing(role);
+  const canManageSale = routeGroup !== "customer";
+  const [showWalkInPaymentModal, setShowWalkInPaymentModal] = useState(false);
+  const [walkInAmount, setWalkInAmount] = useState("");
+  const [walkInMode, setWalkInMode] = useState<ApiPaymentMode>("CASH");
+  const [walkInUtr, setWalkInUtr] = useState("");
+  const [walkInReference, setWalkInReference] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["sale", id],
     queryFn: () => SalesService.getById(id),
     enabled: !!id,
+  });
+  const addWalkInPaymentMutation = useMutation({
+    mutationFn: async (payload: {
+      saleId: string;
+      amount: number;
+      mode: ApiPaymentMode;
+      utrNumber?: string;
+      transactionRef?: string;
+    }) => PaymentService.recordWalkInPayment(payload),
+    onSuccess: async () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowWalkInPaymentModal(false);
+      setWalkInAmount("");
+      setWalkInMode("CASH");
+      setWalkInUtr("");
+      setWalkInReference("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sales"] }),
+        queryClient.invalidateQueries({ queryKey: ["sale", id] }),
+      ]);
+      Alert.alert("Payment Updated", "Walk-in payment has been recorded successfully.");
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Unable to Update Payment", err?.message || "Failed to record payment.");
+    },
   });
 
   const handleBack = () => {
@@ -350,6 +445,20 @@ export function SaleDetailScreen({
     if (!id) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(`/(${routeGroup})/sales/bill/${id}` as any);
+  };
+
+  const handleReturn = () => {
+    if (!id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(`/(${routeGroup})/sales/returns/${id}` as any);
+  };
+
+  const handleOpenWalkInPaymentModal = (currentDue: number) => {
+    setWalkInAmount(String(Math.max(0, Math.round(currentDue))));
+    setWalkInMode("CASH");
+    setWalkInUtr("");
+    setWalkInReference("");
+    setShowWalkInPaymentModal(true);
   };
 
   if (isLoading) {
@@ -375,12 +484,24 @@ export function SaleDetailScreen({
 
   // Calculate metrics
   const totalAmount = Number(data.totalAmount ?? 0);
+  const discountAmount = Number(data.discountAmount ?? 0);
+  const netAmount = Number(data.netAmount ?? totalAmount - discountAmount);
+  const paidAmount = Number(data.paidAmount ?? 0);
+  const dueAmount = Number(data.dueAmount ?? Math.max(0, netAmount - paidAmount));
+  const paymentStatus = String(
+    data.paymentStatus || (dueAmount > 0 ? "PARTIALLY_PAID" : "PAID"),
+  )
+    .trim()
+    .toUpperCase();
+  const verificationState = getVerificationState(data);
   const totalProfit = Number(data.totalProfit ?? 0);
   const profitMargin = totalAmount > 0 ? (totalProfit / totalAmount) * 100 : 0;
+  const isWalkInSale = !data.customer;
+  const canStaffUpdateWalkInPayment =
+    role === "STAFF" && isWalkInSale && dueAmount > 0;
 
   const paymentInfo = getPaymentInfo(data.paymentMode);
   const statusInfo = getStatusInfo(data.status);
-  const saleId = formatId(data._id);
   const saleDate = formatDate(data.createdAt);
   const saleTime = formatTime(data.createdAt);
 
@@ -391,7 +512,35 @@ export function SaleDetailScreen({
   );
   const uniqueItems = items.length;
 
-  const sellerName = data.performedBy?.name || "Unknown Staff";
+  const sellerName =
+    typeof data.performedBy === "string"
+      ? data.performedBy
+      : data.performedBy?.name || "Unknown Staff";
+
+  const handleSubmitWalkInPayment = () => {
+    if (!id) return;
+    const amount = Number(walkInAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      Alert.alert("Invalid Amount", "Enter a valid amount greater than 0.");
+      return;
+    }
+    if (amount > dueAmount) {
+      Alert.alert("Invalid Amount", "Amount cannot exceed pending due.");
+      return;
+    }
+    if (walkInMode !== "CASH" && !walkInUtr.trim()) {
+      Alert.alert("Missing UTR", "UTR/transaction ID is required for non-cash payments.");
+      return;
+    }
+
+    addWalkInPaymentMutation.mutate({
+      saleId: id,
+      amount,
+      mode: walkInMode,
+      utrNumber: walkInMode === "CASH" ? undefined : walkInUtr.trim(),
+      transactionRef: walkInReference.trim() || walkInUtr.trim() || undefined,
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -410,7 +559,7 @@ export function SaleDetailScreen({
               <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
-              <Text style={styles.headerTitle}>{title} {saleId}</Text>
+              <Text style={styles.headerTitle}>{title}</Text>
               <View style={styles.headerMetaRow}>
                 <View
                   style={[
@@ -481,26 +630,53 @@ export function SaleDetailScreen({
             icon="receipt"
             color={Colors.primary}
           />
-          <MetricCard
-            label="Total Profit"
-            value={formatCurrency(totalProfit)}
-            sublabel={`${profitMargin.toFixed(1)}% margin`}
-            icon="trending-up"
-            color={totalProfit >= 0 ? "#059669" : "#DC2626"}
-            trend={totalProfit >= 0 ? "up" : "down"}
-          />
+          {showFinancialInsights && (
+            <MetricCard
+              label="Total Profit"
+              value={formatCurrency(totalProfit)}
+              sublabel={`${profitMargin.toFixed(1)}% margin`}
+              icon="trending-up"
+              color={totalProfit >= 0 ? "#059669" : "#DC2626"}
+              trend={totalProfit >= 0 ? "up" : "down"}
+            />
+          )}
         </View>
 
         {/* Sale Summary */}
         <View style={styles.summaryCard}>
-          <TouchableOpacity
-            onPress={handleGenerateBill}
-            style={styles.generateBillButton}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="receipt-long" size={16} color={Colors.white} />
-            <Text style={styles.generateBillText}>Generate Bill</Text>
-          </TouchableOpacity>
+          {canManageSale && (
+            <>
+              <TouchableOpacity
+                onPress={handleGenerateBill}
+                style={styles.generateBillButton}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="receipt-long" size={16} color={Colors.white} />
+                <Text style={styles.generateBillText}>Generate Bill</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleReturn}
+                style={[styles.generateBillButton, { backgroundColor: Colors.warning, marginTop: 8 }]}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="assignment-return" size={16} color={Colors.white} />
+                <Text style={styles.generateBillText}>Create Return</Text>
+              </TouchableOpacity>
+              {canStaffUpdateWalkInPayment && (
+                <TouchableOpacity
+                  onPress={() => handleOpenWalkInPaymentModal(dueAmount)}
+                  style={[
+                    styles.generateBillButton,
+                    { backgroundColor: Colors.success, marginTop: 8 },
+                  ]}
+                  activeOpacity={0.85}
+                >
+                  <MaterialIcons name="payments" size={16} color={Colors.white} />
+                  <Text style={styles.generateBillText}>Update Walk-in Payment</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
 
           <View style={styles.summaryHeader}>
             <View style={styles.summaryHeaderLeft}>
@@ -534,22 +710,60 @@ export function SaleDetailScreen({
                 {formatCurrency(totalAmount)}
               </Text>
             </View>
-
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Profit</Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  {
-                    color: totalProfit >= 0 ? "#059669" : "#DC2626",
-                    fontWeight: "600",
-                  },
-                ]}
-              >
-                {totalProfit >= 0 ? "+" : ""}
-                {formatCurrency(totalProfit)}
+              <Text style={styles.summaryLabel}>Discount</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(discountAmount)}
               </Text>
             </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Net Amount</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(netAmount)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Paid</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrency(paidAmount)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryLabel, { color: Colors.error }]}>Due</Text>
+              <Text style={[styles.summaryValue, { color: Colors.error }]}>
+                {formatCurrency(dueAmount)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Payment Status</Text>
+              <Text style={styles.summaryValue}>
+                {normalizeStatusLabel(paymentStatus)}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Verification</Text>
+              <Text style={styles.summaryValue}>
+                {normalizeStatusLabel(verificationState)}
+              </Text>
+            </View>
+
+            {showFinancialInsights && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Profit</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    {
+                      color: totalProfit >= 0 ? "#059669" : "#DC2626",
+                      fontWeight: "600",
+                    },
+                  ]}
+                >
+                  {totalProfit >= 0 ? "+" : ""}
+                  {formatCurrency(totalProfit)}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Staff Info */}
@@ -612,7 +826,154 @@ export function SaleDetailScreen({
             <ItemCard key={getItemKey(item, index)} item={item} />
           ))}
         </View>
+
+        <View style={styles.itemsSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionHeaderLeft}>
+              <View
+                style={[
+                  styles.sectionIcon,
+                  { backgroundColor: `${Colors.warning}10` },
+                ]}
+              >
+                <MaterialIcons
+                  name="assignment-return"
+                  size={16}
+                  color={Colors.warning}
+                />
+              </View>
+              <Text style={styles.sectionTitle}>Returns Timeline</Text>
+            </View>
+            <Text style={styles.sectionCount}>
+              {(Array.isArray(data.returns) ? data.returns.length : 0)} entries
+            </Text>
+          </View>
+          {(Array.isArray(data.returns) ? data.returns : []).length === 0 ? (
+            <Text style={{ color: Colors.textSecondary, marginTop: 8 }}>
+              No returns recorded.
+            </Text>
+          ) : (
+            (data.returns || []).map((entry: any, idx: number) => (
+              <View
+                key={entry?._id || idx}
+                style={[
+                  styles.summaryCard,
+                  { marginTop: 8, marginBottom: 0, padding: 12 },
+                ]}
+              >
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Quantity</Text>
+                  <Text style={styles.summaryValue}>{Number(entry?.quantity || 0)}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Refund</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatCurrency(Number(entry?.refundAmount || 0))}
+                  </Text>
+                </View>
+                <Text style={[styles.summaryLabel, { marginTop: 6 }]}>
+                  {entry?.reason || "No reason provided"}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
+
+      <Modal
+        visible={showWalkInPaymentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowWalkInPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Update Walk-in Payment</Text>
+            <Text style={styles.modalSubTitle}>
+              Pending due: {formatCurrency(dueAmount)}
+            </Text>
+
+            <Text style={styles.modalLabel}>Amount</Text>
+            <TextInput
+              value={walkInAmount}
+              onChangeText={(text) => setWalkInAmount(text.replace(/[^0-9.]/g, ""))}
+              placeholder="Enter amount"
+              keyboardType="decimal-pad"
+              placeholderTextColor={Colors.textTertiary}
+              style={styles.modalInput}
+            />
+
+            <Text style={styles.modalLabel}>Mode</Text>
+            <View style={styles.modeRow}>
+              {(["CASH", "UPI", "ONLINE"] as ApiPaymentMode[]).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => setWalkInMode(mode)}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.modeChip,
+                    walkInMode === mode && styles.modeChipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.modeChipText,
+                      walkInMode === mode && styles.modeChipTextActive,
+                    ]}
+                  >
+                    {mode.replace("_", " ")}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {walkInMode !== "CASH" && (
+              <>
+                <Text style={styles.modalLabel}>UTR / Transaction ID</Text>
+                <TextInput
+                  value={walkInUtr}
+                  onChangeText={setWalkInUtr}
+                  placeholder="Enter UTR"
+                  placeholderTextColor={Colors.textTertiary}
+                  style={styles.modalInput}
+                  autoCapitalize="characters"
+                />
+              </>
+            )}
+
+            <Text style={styles.modalLabel}>Reference (Optional)</Text>
+            <TextInput
+              value={walkInReference}
+              onChangeText={setWalkInReference}
+              placeholder="Reference note"
+              placeholderTextColor={Colors.textTertiary}
+              style={styles.modalInput}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setShowWalkInPaymentModal(false)}
+                style={styles.modalCancelButton}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSubmitWalkInPayment}
+                style={styles.modalSaveButton}
+                disabled={addWalkInPaymentMutation.isPending}
+                activeOpacity={0.8}
+              >
+                {addWalkInPaymentMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save Payment</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -771,6 +1132,101 @@ const styles = {
     gap: 6,
   },
   generateBillText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: "700" as const,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center" as const,
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: "#111827",
+  },
+  modalSubTitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: "#374151",
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#111827",
+    backgroundColor: Colors.white,
+  },
+  modeRow: {
+    flexDirection: "row" as const,
+    gap: 8,
+  },
+  modeChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: "center" as const,
+    backgroundColor: "#F9FAFB",
+  },
+  modeChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: `${Colors.primary}12`,
+  },
+  modeChipText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: "#6B7280",
+  },
+  modeChipTextActive: {
+    color: Colors.primary,
+  },
+  modalActions: {
+    flexDirection: "row" as const,
+    justifyContent: "flex-end" as const,
+    gap: 10,
+    marginTop: 8,
+  },
+  modalCancelButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    backgroundColor: "#F9FAFB",
+  },
+  modalCancelText: {
+    color: "#374151",
+    fontSize: 13,
+    fontWeight: "600" as const,
+  },
+  modalSaveButton: {
+    minWidth: 120,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+  },
+  modalSaveText: {
     color: Colors.white,
     fontSize: 13,
     fontWeight: "700" as const,

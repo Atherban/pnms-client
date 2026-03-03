@@ -2,31 +2,139 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Animated, { FadeInDown, FadeInUp, Layout } from "react-native-reanimated";
+import { useMemo, useCallback, useState } from "react";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  RefreshControl,
+  Dimensions,
+  ActivityIndicator,
+} from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  Layout,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  interpolate,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 
 import FixedHeader from "../../../components/common/FixedHeader";
+import BannerCardImage from "../../../components/ui/BannerCardImage";
 import { SalesService } from "../../../services/sales.service";
 import { useAuthStore } from "../../../stores/auth.store";
 import { Colors, Spacing } from "../../../theme";
+import { toImageUrl } from "../../../utils/image";
+
+const BOTTOM_NAV_HEIGHT = 80;
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// ==================== UTILITIES ====================
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const clamp = (value: number, min = 0, max = Number.POSITIVE_INFINITY) =>
+  Math.min(Math.max(value, min), max);
+
+const computeSaleFinancials = (sale: any, fallbackGrossTotal: number) => {
+  const gross = Math.max(
+    0,
+    toNumber(sale?.grossAmount) || toNumber(sale?.totalAmount) || fallbackGrossTotal,
+  );
+  const discount = clamp(toNumber(sale?.discountAmount), 0, gross);
+  const net = Math.max(0, toNumber(sale?.netAmount) || gross - discount);
+  const paidRaw = Math.max(0, toNumber(sale?.paidAmount) || toNumber(sale?.amountPaid));
+  const dueRaw = Math.max(0, toNumber(sale?.dueAmount));
+
+  let paid = clamp(paidRaw, 0, net);
+  let due = dueRaw > 0 ? clamp(dueRaw, 0, net) : clamp(net - paid, 0, net);
+  if (paid + due > net) {
+    due = clamp(net - paid, 0, net);
+  } else if (paid + due < net) {
+    paid = clamp(net - due, 0, net);
+  }
+
+  return { gross, discount, net, paid, due };
+};
+
 const formatMoney = (amount: number) => `₹${Math.round(amount).toLocaleString("en-IN")}`;
 
-interface ProductSummary {
-  id: string;
-  name: string;
-  quantity: number;
-  lineAmount: number;
-  paidAmount: number;
-  expectedSeedQtyPerBatch?: number;
+const resolveEntityImage = (entity: any): string | undefined => {
+  if (!entity || typeof entity !== "object") return undefined;
+  const direct = toImageUrl(
+    entity.imageUrl ??
+      entity.image ??
+      entity.fileUrl ??
+      entity.url ??
+      entity.path ??
+      entity.fileName,
+  );
+  if (direct) return direct;
+  const images = Array.isArray(entity.images) ? entity.images : [];
+  for (const img of images) {
+    const uri = toImageUrl(
+      img?.imageUrl ?? img?.fileUrl ?? img?.url ?? img?.path ?? img?.fileName,
+    );
+    if (uri) return uri;
+  }
+  return undefined;
+};
+
+// ==================== STATS CARD ====================
+
+interface StatsCardProps {
+  totalProducts: number;
+  totalAmount: number;
+  totalDue: number;
 }
+
+const StatsCard = ({ totalProducts, totalAmount, totalDue }: StatsCardProps) => {
+  const paidPercentage = totalAmount > 0 ? ((totalAmount - totalDue) / totalAmount) * 100 : 0;
+
+  return (
+    <Animated.View entering={FadeInDown.springify().damping(35)} style={styles.statsCard}>
+      <View style={styles.statsHeader}>
+        <Text style={styles.statsTitle}>Purchase Summary</Text>
+        <View style={styles.statsBadge}>
+          <Text style={styles.statsBadgeText}>{totalProducts} Products</Text>
+        </View>
+      </View>
+
+      <View style={styles.statsGrid}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Total Spent</Text>
+          <Text style={styles.statValue}>{formatMoney(totalAmount)}</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Pending</Text>
+          <Text style={[styles.statValue, { color: Colors.error }]}>{formatMoney(totalDue)}</Text>
+        </View>
+      </View>
+
+      <View style={styles.progressContainer}>
+        <View style={styles.progressHeader}>
+          <Text style={styles.progressLabel}>Payment Progress</Text>
+          <Text style={styles.progressPercentage}>{paidPercentage.toFixed(0)}%</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${paidPercentage}%` }]} />
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
+
+// ==================== PRODUCT CARD ====================
 
 interface ProductCardProps {
   item: ProductSummary;
@@ -38,72 +146,188 @@ const ProductCard = ({ item, index, onOpen }: ProductCardProps) => {
   const paid = Math.min(item.lineAmount, item.paidAmount);
   const due = Math.max(0, item.lineAmount - paid);
   const paidPct = item.lineAmount > 0 ? (paid / item.lineAmount) * 100 : 0;
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+  };
 
   return (
     <Animated.View
       entering={FadeInUp.delay(index * 80).springify().damping(35)}
       layout={Layout.springify().damping(35)}
-      style={styles.card}
+      style={styles.cardWrapper}
     >
-      <LinearGradient colors={[Colors.white, Colors.surface]} style={styles.cardGradient}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={styles.cardIcon}>
-              <MaterialIcons name="inventory" size={16} color={Colors.primary} />
+      <Pressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onPress={() => onOpen(item.id)}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.cardPressed,
+        ]}
+      >
+        <Animated.View style={[styles.cardInner, animatedStyle]}>
+          <LinearGradient colors={[Colors.white, Colors.surface]} style={styles.cardGradient}>
+            {/* Image Banner */}
+            <View style={styles.imageContainer}>
+              <BannerCardImage
+                uri={item.imageUri}
+                iconName="inventory"
+                minHeight={140}
+                containerStyle={styles.cardImageBanner}
+              />
+              <View style={[styles.statusBadge, due > 0 ? styles.statusDue : styles.statusPaid]}>
+                <MaterialIcons
+                  name={due > 0 ? "pending" : "check-circle"}
+                  size={12}
+                  color={due > 0 ? Colors.error : Colors.success}
+                />
+                <Text style={[styles.statusText, due > 0 ? styles.statusDueText : styles.statusPaidText]}>
+                  {due > 0 ? "Pending" : "Paid"}
+                </Text>
+              </View>
             </View>
-            <Text style={styles.productName} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </View>
-          <Text style={[styles.statusTag, due > 0 ? styles.statusDue : styles.statusPaid]}>
-            {due > 0 ? "Pending" : "Paid"}
-          </Text>
-        </View>
 
-        <View style={styles.qtyRow}>
-          <Text style={styles.qtyLabel}>Purchased</Text>
-          <Text style={styles.qtyValue}>{item.quantity} units</Text>
-        </View>
-        {item.expectedSeedQtyPerBatch ? (
-          <View style={styles.qtyRow}>
-            <Text style={styles.qtyLabel}>Expected Seeds / Batch</Text>
-            <Text style={styles.qtyValue}>{item.expectedSeedQtyPerBatch}</Text>
-          </View>
-        ) : null}
+            <View style={styles.cardContent}>
+              {/* Header */}
+              <View style={styles.cardHeader}>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+              </View>
 
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.min(100, Math.max(0, paidPct))}%` }]} />
-        </View>
+              {/* Quantity Info */}
+              <View style={styles.infoRow}>
+                <View style={styles.infoItem}>
+                  <MaterialIcons name="shopping-bag" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.infoLabel}>Purchased</Text>
+                  <Text style={styles.infoValue}>{item.quantity} units</Text>
+                </View>
+                {item.expectedSeedQtyPerBatch ? (
+                  <View style={styles.infoItem}>
+                    <MaterialIcons name="grass" size={14} color={Colors.textSecondary} />
+                    <Text style={styles.infoLabel}>Seeds/Batch</Text>
+                    <Text style={styles.infoValue}>{item.expectedSeedQtyPerBatch}</Text>
+                  </View>
+                ) : null}
+              </View>
 
-        <View style={styles.amountRow}>
-          <Text style={styles.amountLabel}>Total</Text>
-          <Text style={styles.amountValue}>{formatMoney(item.lineAmount)}</Text>
-        </View>
-        <View style={styles.amountRow}>
-          <Text style={styles.amountLabel}>Paid</Text>
-          <Text style={[styles.amountValue, { color: Colors.success }]}>{formatMoney(paid)}</Text>
-        </View>
-        <View style={styles.amountRow}>
-          <Text style={styles.amountLabel}>Balance</Text>
-          <Text style={[styles.amountValue, due > 0 ? { color: Colors.error } : { color: Colors.success }]}>
-            {formatMoney(due)}
-          </Text>
-        </View>
+              {/* Progress Bar */}
+              <View style={styles.progressContainer}>
+                <View style={styles.progressHeader}>
+                  <Text style={styles.progressLabel}>Payment Progress</Text>
+                  <Text style={styles.progressPercentage}>{paidPct.toFixed(0)}%</Text>
+                </View>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${paidPct}%` }]} />
+                </View>
+              </View>
 
-        <Pressable onPress={() => onOpen(item.id)} style={({ pressed }) => [styles.openBtn, pressed && styles.openBtnPressed]}>
-          <MaterialIcons name="fact-check" size={16} color={Colors.primary} />
-          <Text style={styles.openBtnText}>View Details</Text>
-        </Pressable>
-      </LinearGradient>
+              {/* Financial Summary */}
+              <View style={styles.financialGrid}>
+                <View style={styles.financialItem}>
+                  <Text style={styles.financialLabel}>Total</Text>
+                  <Text style={styles.financialValue}>{formatMoney(item.lineAmount)}</Text>
+                </View>
+                <View style={styles.financialDivider} />
+                <View style={styles.financialItem}>
+                  <Text style={styles.financialLabel}>Paid</Text>
+                  <Text style={[styles.financialValue, { color: Colors.success }]}>{formatMoney(paid)}</Text>
+                </View>
+                <View style={styles.financialDivider} />
+                <View style={styles.financialItem}>
+                  <Text style={styles.financialLabel}>Balance</Text>
+                  <Text style={[styles.financialValue, due > 0 ? { color: Colors.error } : { color: Colors.success }]}>
+                    {formatMoney(due)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* View Details Button */}
+              <View style={styles.buttonContainer}>
+                <LinearGradient
+                  colors={[Colors.primary + "10", Colors.primary + "05"]}
+                  style={styles.buttonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Pressable
+                    onPress={() => onOpen(item.id)}
+                    style={({ pressed }) => [
+                      styles.detailsButton,
+                      pressed && styles.detailsButtonPressed,
+                    ]}
+                  >
+                    <MaterialIcons name="visibility" size={16} color={Colors.primary} />
+                    <Text style={styles.detailsButtonText}>View Details</Text>
+                  </Pressable>
+                </LinearGradient>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      </Pressable>
     </Animated.View>
   );
 };
 
+// ==================== EMPTY STATE ====================
+
+const EmptyState = () => (
+  <Animated.View entering={FadeInUp.springify().damping(35)} style={styles.emptyContainer}>
+    <View style={styles.emptyIconContainer}>
+      <LinearGradient
+        colors={[Colors.surface, Colors.background]}
+        style={styles.emptyIconGradient}
+      >
+        <MaterialIcons name="inventory" size={48} color={Colors.textTertiary} />
+      </LinearGradient>
+    </View>
+    <Text style={styles.emptyTitle}>No Products Yet</Text>
+    <Text style={styles.emptyMessage}>
+      Your purchased products will appear here once you make your first purchase.
+    </Text>
+  </Animated.View>
+);
+
+// ==================== LOADING STATE ====================
+
+const LoadingState = () => (
+  <View style={styles.centerContainer}>
+    <View style={styles.loadingCard}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+      <Text style={styles.loadingText}>Loading your products...</Text>
+    </View>
+  </View>
+);
+
+// ==================== MAIN COMPONENT ====================
+
+interface ProductSummary {
+  id: string;
+  name: string;
+  imageUri?: string;
+  quantity: number;
+  lineAmount: number;
+  paidAmount: number;
+  expectedSeedQtyPerBatch?: number;
+}
+
 export default function CustomerProductsIndexScreen() {
   const user = useAuthStore((s) => s.user);
   const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ["customer-products", user?.id, user?.phoneNumber, user?.nurseryId],
     queryFn: async (): Promise<ProductSummary[]> => {
       const sales = await SalesService.getAll({
@@ -116,13 +340,20 @@ export default function CustomerProductsIndexScreen() {
 
       for (const sale of Array.isArray(sales) ? sales : []) {
         const items = Array.isArray((sale as any)?.items) ? (sale as any).items : [];
-        const saleTotal = items.reduce((sum: number, row: any) => {
+        const saleGrossFromItems = items.reduce((sum: number, row: any) => {
           const qty = toNumber(row?.quantity);
           const price = toNumber(row?.priceAtSale ?? row?.unitPrice ?? row?.price);
           return sum + qty * price;
         }, 0);
-        const salePaid = toNumber((sale as any)?.paidAmount ?? (sale as any)?.amountPaid);
-        const paidRatio = saleTotal > 0 ? Math.min(1, salePaid / saleTotal) : 0;
+        const saleFinancials = computeSaleFinancials(sale, saleGrossFromItems);
+        const discountRatio =
+          saleFinancials.gross > 0
+            ? clamp(saleFinancials.discount / saleFinancials.gross, 0, 1)
+            : 0;
+        const paidRatio =
+          saleFinancials.net > 0
+            ? clamp(saleFinancials.paid / saleFinancials.net, 0, 1)
+            : 0;
 
         for (const row of items) {
           const productId = String(
@@ -133,6 +364,7 @@ export default function CustomerProductsIndexScreen() {
               id: productId,
               name:
                 row?.inventory?.plantType?.name || row?.plantType?.name || row?.name || "Product",
+              imageUri: undefined,
               quantity: 0,
               lineAmount: 0,
               paidAmount: 0,
@@ -143,11 +375,21 @@ export default function CustomerProductsIndexScreen() {
           const product = byProduct.get(productId)!;
           const qty = toNumber(row?.quantity);
           const unitPrice = toNumber(row?.priceAtSale ?? row?.unitPrice ?? row?.price);
-          const lineAmount = qty * unitPrice;
+          const lineGross = Math.max(0, qty * unitPrice);
+          const discountShare = Math.min(lineGross, lineGross * discountRatio);
+          const lineNet = Math.max(0, lineGross - discountShare);
 
           product.quantity += qty;
-          product.lineAmount += lineAmount;
-          product.paidAmount += lineAmount * paidRatio;
+          product.lineAmount += lineNet;
+          product.paidAmount += Math.min(lineNet, lineNet * paidRatio);
+          if (!product.imageUri) {
+            const imageUri =
+              resolveEntityImage(row?.inventory?.plantType) ||
+              resolveEntityImage(row?.plantType) ||
+              resolveEntityImage(row?.inventory) ||
+              resolveEntityImage(row);
+            if (imageUri) product.imageUri = imageUri;
+          }
 
           const expectedSeeds = toNumber(row?.inventory?.plantType?.expectedSeedQtyPerBatch);
           if (expectedSeeds > 0) product.expectedSeedQtyPerBatch = expectedSeeds;
@@ -159,6 +401,7 @@ export default function CustomerProductsIndexScreen() {
   });
 
   const products = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  
   const stats = useMemo(() => {
     const totalProducts = products.length;
     const totalAmount = products.reduce((sum, item) => sum + item.lineAmount, 0);
@@ -167,111 +410,369 @@ export default function CustomerProductsIndexScreen() {
     return { totalProducts, totalAmount, totalDue };
   }, [products]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
+  const handleProductPress = useCallback((productId: string) => {
+    router.push(`/(customer)/products/${productId}` as any);
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+        <FixedHeader title="My Products" subtitle="All product-wise purchase details" />
+        <LoadingState />
+      </SafeAreaView>
+    );
+  }
+
+  const hasProducts = products.length > 0;
+
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <FixedHeader title="My Products" subtitle="All product-wise purchase details" titleStyle={styles.headerTitle} />
+    <View style={styles.container}>
+      <FixedHeader title="My Products" subtitle="All product-wise purchase details" />
 
-      {isLoading ? (
-        <View style={styles.loadingWrap}>
-          <Text style={styles.loadingText}>Loading products...</Text>
-        </View>
-      ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-          <Animated.View entering={FadeInDown.springify().damping(35)} style={styles.statsCard}>
-            <Text style={styles.statsText}>Products: {stats.totalProducts}</Text>
-            <Text style={styles.statsText}>Total: {formatMoney(stats.totalAmount)}</Text>
-            <Text style={styles.statsText}>Pending: {formatMoney(stats.totalDue)}</Text>
-          </Animated.View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        {hasProducts && (
+          <StatsCard
+            totalProducts={stats.totalProducts}
+            totalAmount={stats.totalAmount}
+            totalDue={stats.totalDue}
+          />
+        )}
 
-          {products.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <MaterialIcons name="inventory" size={44} color={Colors.textTertiary} />
-              <Text style={styles.emptyTitle}>No products yet</Text>
-            </View>
-          ) : (
-            products.map((item, index) => (
-              <ProductCard
-                key={item.id}
-                item={item}
-                index={index}
-                onOpen={(productId) => router.push(`/(customer)/products/${productId}` as any)}
-              />
-            ))
-          )}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+        {!hasProducts ? (
+          <EmptyState />
+        ) : (
+          products.map((item, index) => (
+            <ProductCard
+              key={item.id}
+              item={item}
+              index={index}
+              onOpen={handleProductPress}
+            />
+          ))
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
+// ==================== STYLES ====================
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB" },
-  headerTitle: { fontSize: 24 },
-  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
-  loadingText: { fontSize: 14, color: "#6B7280" },
-  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 110, gap: Spacing.md },
-  statsCard: {
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 16,
-    padding: Spacing.md,
-    gap: 4,
+  container: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
   },
-  statsText: { color: "#374151", fontSize: 13, fontWeight: "600" },
-  emptyCard: {
-    paddingVertical: 48,
-    borderRadius: 16,
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 20,
+    gap: 16,
+  },
+  centerContainer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
+  },
+
+  // Stats Card
+  statsCard: {
     backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  emptyTitle: { fontSize: 16, fontWeight: "600", color: "#111827" },
+  statsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  statsTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  statsBadge: {
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  statsBadgeText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  statsGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 12,
+  },
+  progressContainer: {
+    gap: 6,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  progressPercentage: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.primary,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: Colors.primary,
+    borderRadius: 3,
+  },
+
+  // Card
+  cardWrapper: {
+    marginBottom: 12,
+  },
   card: {
-    borderRadius: 18,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E5E7EB",
     backgroundColor: Colors.white,
   },
-  cardGradient: { padding: Spacing.lg, gap: Spacing.sm },
-  cardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  cardHeaderLeft: { flexDirection: "row", alignItems: "center", flex: 1, gap: Spacing.sm },
-  cardIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.primary + "12",
+  cardPressed: {
+    opacity: 0.98,
   },
-  productName: { flex: 1, fontSize: 15, fontWeight: "600", color: "#111827" },
-  statusTag: { fontSize: 11, fontWeight: "700", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
-  statusPaid: { color: Colors.success, backgroundColor: Colors.success + "14" },
-  statusDue: { color: Colors.error, backgroundColor: Colors.error + "12" },
-  qtyRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  qtyLabel: { color: "#6B7280", fontSize: 12 },
-  qtyValue: { color: "#111827", fontSize: 13, fontWeight: "600" },
-  progressTrack: { height: 4, borderRadius: 999, backgroundColor: "#E5E7EB", overflow: "hidden" },
-  progressFill: { height: "100%", backgroundColor: Colors.primary },
-  amountRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  amountLabel: { color: "#6B7280", fontSize: 12 },
-  amountValue: { color: "#111827", fontSize: 13, fontWeight: "700" },
-  openBtn: {
-    marginTop: 2,
-    borderRadius: 10,
+  cardInner: {
+    width: "100%",
+  },
+  cardGradient: {
+    padding: 0,
+  },
+  imageContainer: {
+    position: "relative",
+  },
+  cardImageBanner: {
+    width: "100%",
+    minHeight: 140,
+    borderRadius: 0,
+  },
+  statusBadge: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.primary + "30",
-    backgroundColor: Colors.primary + "08",
+  },
+  statusPaid: {
+    backgroundColor: Colors.success + "10",
+    borderColor: Colors.success + "30",
+  },
+  statusDue: {
+    backgroundColor: Colors.error + "10",
+    borderColor: Colors.error + "30",
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  statusPaidText: {
+    color: Colors.success,
+  },
+  statusDueText: {
+    color: Colors.error,
+  },
+  cardContent: {
+    padding: 16,
+    gap: 12,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
+  },
+  infoRow: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  infoLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  infoValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  financialGrid: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+  },
+  financialItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  financialLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  financialValue: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  financialDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "#E5E7EB",
+    marginHorizontal: 8,
+  },
+  buttonContainer: {
+    marginTop: 4,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  buttonGradient: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + "20",
+  },
+  detailsButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     paddingVertical: 10,
   },
-  openBtnPressed: { opacity: 0.85 },
-  openBtnText: { fontSize: 13, fontWeight: "600", color: Colors.primary },
+  detailsButtonPressed: {
+    opacity: 0.7,
+  },
+  detailsButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.primary,
+  },
+
+  // Empty State
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 48,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 20,
+    overflow: "hidden",
+  },
+  emptyIconGradient: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    paddingHorizontal: 20,
+    lineHeight: 20,
+  },
+
+  // Loading State
+  loadingCard: {
+    backgroundColor: Colors.white,
+    padding: 24,
+    borderRadius: 20,
+    alignItems: "center",
+    gap: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  loadingText: {
+    fontSize: 15,
+    color: "#6B7280",
+    fontWeight: "500",
+  },
 });

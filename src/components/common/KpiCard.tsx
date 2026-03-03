@@ -1,6 +1,6 @@
 // components/admin/KpiCard.tsx
 import { LinearGradient } from "expo-linear-gradient";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Colors, Spacing } from "../../theme";
 
 interface KpiCardProps {
@@ -9,7 +9,8 @@ interface KpiCardProps {
   accent?: "positive" | "negative";
   icon?: string;
   color?: string;
-  gradient?: string[];
+  gradient?: readonly [string, string, ...string[]];
+  onPress?: () => void;
 }
 
 export default function KpiCard({
@@ -19,15 +20,16 @@ export default function KpiCard({
   icon = "📊",
   color = Colors.primary,
   gradient,
+  onPress,
 }: KpiCardProps) {
-  const gradientColors = gradient || [
+  const gradientColors: readonly [string, string, ...string[]] = gradient || [
     color + "40",
     color + "20",
     "transparent",
   ];
 
   return (
-    <View style={styles.container}>
+    <Pressable style={styles.container} onPress={onPress} disabled={!onPress}>
       {/* Gradient Background */}
       <LinearGradient
         colors={gradientColors}
@@ -87,7 +89,7 @@ export default function KpiCard({
           style={[styles.decorativeLine, { backgroundColor: color + "20" }]}
         />
       </View>
-    </View>
+    </Pressable>
   );
 }
 

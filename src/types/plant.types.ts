@@ -25,6 +25,8 @@ export interface PlantType {
   sellingPrice?: number;
   minStockLevel?: number;
   defaultCostPrice?: number;
+  expectedSeedQtyPerBatch?: number;
+  expectedSeedUnit?: string;
   description?: string;
   growthStages?: PlantTypeGrowthStage[];
   imageUrl?: string;

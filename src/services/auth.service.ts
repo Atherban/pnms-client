@@ -8,7 +8,7 @@ import {
   saveUser,
 } from "../utils/storage";
 import { api, apiPath, unwrap } from "./api";
-import { getApiMessage, getApiPayload } from "./api-contract.service";
+import { getApiPayload } from "./api-contract.service";
 import { PushNotificationService } from "./push-notification.service";
 
 /* Types */
@@ -31,13 +31,6 @@ export interface AuthUser {
 export interface LoginResponse {
   token: string;
   user: AuthUser;
-}
-
-export interface RequestOtpResponse {
-  otpSessionId?: string;
-  expiresInSec?: number;
-  otpCode?: string;
-  message?: string;
 }
 
 export const AuthService = {
@@ -66,51 +59,6 @@ export const AuthService = {
     await saveUser(user);
     
     return { token, user };
-  },
-
-  async requestOtp(phoneNumber: string): Promise<RequestOtpResponse> {
-    const response = await api.post(apiPath("/auth/request-otp"), { phoneNumber });
-    const data = unwrap<any>(response);
-    const payload = getApiPayload<any>(data);
-    return {
-      otpSessionId: payload?.otpSessionId,
-      expiresInSec: payload?.expiresInSec,
-      otpCode: payload?.otpCode,
-      message: payload?.message ?? getApiMessage(data),
-    };
-  },
-
-  async verifyOtp(payload: {
-    phoneNumber: string;
-    code?: string;
-    otp?: string;
-    otpSessionId?: string;
-  }): Promise<LoginResponse> {
-    const response = await api.post(apiPath("/auth/verify-otp"), {
-      phoneNumber: payload.phoneNumber,
-      code: payload.code ?? payload.otp,
-      otpSessionId: payload.otpSessionId,
-    });
-    const data = unwrap<any>(response);
-    const normalized = this.normalizeAuthResponse(data);
-    await saveToken(normalized.token);
-    await saveUser(normalized.user);
-    return normalized;
-  },
-
-  async forgotPassword(payload: { email?: string; phoneNumber?: string }) {
-    const response = await api.post(apiPath("/auth/forgot-password"), payload);
-    return unwrap<any>(response);
-  },
-
-  async resetPassword(payload: {
-    token?: string;
-    phoneNumber?: string;
-    otp?: string;
-    newPassword: string;
-  }) {
-    const response = await api.post(apiPath("/auth/reset-password"), payload);
-    return unwrap<any>(response);
   },
 
   async changePassword(payload: {

@@ -328,14 +328,12 @@ export default function SuperAdminDashboard() {
             value={formatMoney(totalRevenue)}
             icon="payments"
             color={Colors.primary}
-            trend={12.5}
           />
           <StatCard
             label="Total Sales"
             value={formatNumber(totalSales)}
             icon="shopping-cart"
             color={Colors.success}
-            trend={8.2}
           />
           <StatCard
             label="Active Nurseries"

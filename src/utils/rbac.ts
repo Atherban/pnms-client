@@ -30,3 +30,9 @@ export const canReadSales = (role?: Role | null) => canReadPlantTypes(role) || r
 export const canReadCustomers = canReadSales;
 export const canReadExpenses = canReadPlantTypes;
 export const canReadLabours = canReadPlantTypes;
+
+export const canViewSensitivePricing = (role?: Role | null) =>
+  role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
+
+export const canViewSourcingDetails = (role?: Role | null) =>
+  role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";

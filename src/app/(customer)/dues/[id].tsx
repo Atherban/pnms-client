@@ -272,6 +272,12 @@ export default function CustomerDueDetailScreen() {
     router.back();
   };
 
+  const handleGenerateBill = () => {
+    if (!id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(`/(customer)/sales/bill/${id}` as any);
+  };
+
   if (!id) return null;
 
   if (isLoading) {
@@ -319,13 +325,16 @@ export default function CustomerDueDetailScreen() {
     );
   }
 
-  const paymentProgress = (data.paidAmount / data.totalAmount) * 100;
+  const paymentProgress =
+    data.totalAmount > 0
+      ? Math.min(Math.max((data.paidAmount / data.totalAmount) * 100, 0), 100)
+      : 0;
 
   return (
     <View style={styles.container}>
       <FixedHeader
         title="Payment Details"
-        subtitle={`Order #${id.slice(-6).toUpperCase()}`}
+        subtitle="Invoice payment summary"
         showBackButton
         onBackPress={handleBack}
       />
@@ -428,6 +437,20 @@ export default function CustomerDueDetailScreen() {
         </View>
 
         {/* Back Link */}
+        <TouchableOpacity
+          onPress={handleGenerateBill}
+          style={styles.billButton}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+            style={styles.billButtonGradient}
+          >
+            <MaterialIcons name="receipt-long" size={18} color={Colors.white} />
+            <Text style={styles.billButtonText}>Generate Full Bill</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => router.push("/(customer)/dues")}
           style={styles.backLink}
@@ -721,6 +744,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.primary,
     fontWeight: "500",
+  },
+  billButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  billButtonGradient: {
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  billButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   // Error State

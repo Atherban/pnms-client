@@ -39,6 +39,7 @@ type BannerForm = {
   title: string;
   subtitle: string;
   cta: string;
+  color: string;
   redirectUrl: string;
   priority: string;
   status: "ACTIVE" | "INACTIVE";
@@ -59,6 +60,7 @@ const defaultForm: BannerForm = {
   title: "",
   subtitle: "",
   cta: "",
+  color: "#0EA5E9",
   redirectUrl: "",
   priority: "0",
   status: "ACTIVE",
@@ -138,6 +140,7 @@ const toPayload = (form: BannerForm, role: BannerRole): BannerPayload => ({
   title: form.title.trim(),
   subtitle: form.subtitle.trim() || undefined,
   cta: form.cta.trim() || undefined,
+  color: form.color.trim() || "#0EA5E9",
   redirectUrl: form.redirectUrl.trim() || undefined,
   priority: Number(form.priority) || 0,
   status: form.status,
@@ -151,6 +154,7 @@ const toForm = (banner: BannerItem): BannerForm => ({
   title: banner.title || "",
   subtitle: banner.subtitle || "",
   cta: banner.cta || "",
+  color: banner.color || "#0EA5E9",
   redirectUrl: banner.redirectUrl || "",
   priority: String(banner.priority ?? 0),
   status: banner.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
@@ -158,6 +162,15 @@ const toForm = (banner: BannerItem): BannerForm => ({
   startAt: toDateInput(banner.startAt),
   endAt: toDateInput(banner.endAt),
 });
+
+const TEXT_BANNER_COLORS = [
+  "#0EA5E9",
+  "#16A34A",
+  "#EA580C",
+  "#DC2626",
+  "#7C3AED",
+  "#334155",
+] as const;
 
 // ==================== STATS CARD ====================
 
@@ -672,6 +685,48 @@ const BannerFormModal = ({
                 </Pressable>
               </View>
             ) : null}
+
+            {!form.imageUrl ? (
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Text Banner Color</Text>
+                <View style={styles.colorSwatches}>
+                  {TEXT_BANNER_COLORS.map((swatch) => {
+                    const isSelected =
+                      form.color.trim().toLowerCase() === swatch.toLowerCase();
+                    return (
+                      <Pressable
+                        key={swatch}
+                        onPress={() => onFormChange({ ...form, color: swatch })}
+                        style={[
+                          styles.colorSwatch,
+                          { backgroundColor: swatch },
+                          isSelected && styles.colorSwatchSelected,
+                        ]}
+                      >
+                        {isSelected ? (
+                          <MaterialIcons name="check" size={14} color={Colors.white} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  value={form.color}
+                  onChangeText={(v) => onFormChange({ ...form, color: v })}
+                  style={styles.input}
+                  placeholder="#0EA5E9"
+                  placeholderTextColor="#9CA3AF"
+                  autoCapitalize="characters"
+                />
+                <Text style={styles.imageHint}>
+                  Applies only when no image is uploaded. Use hex color like #0EA5E9.
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.imageHint}>
+                Image banners are shown as image-only on customer dashboard.
+              </Text>
+            )}
 
             {/* Form Actions */}
             <View style={styles.modalActions}>
@@ -1589,6 +1644,25 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 2,
     marginLeft: 4,
+  },
+  colorSwatches: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginVertical: 6,
+  },
+  colorSwatch: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  colorSwatchSelected: {
+    borderColor: Colors.primary,
+    borderWidth: 2,
   },
   previewContainer: {
     position: "relative",

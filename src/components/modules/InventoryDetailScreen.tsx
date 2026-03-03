@@ -3,19 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
-  ScrollView,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InventoryService } from "../../services/inventory.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
-import { resolveInventoryPricing } from "../../utils/inventory-pricing";
 import { resolveEntityImage } from "../../utils/image";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { resolveInventoryPricing } from "../../utils/inventory-pricing";
+import { formatQuantityUnit } from "../../utils/units";
+import BannerCardImage from "../ui/BannerCardImage";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -24,154 +27,275 @@ interface InventoryDetailScreenProps {
   title?: string;
 }
 
-export function InventoryDetailScreen({
-  id,
-  title = "Inventory Details",
-}: InventoryDetailScreenProps) {
-  const router = useRouter();
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["inventory", id],
-    queryFn: () => InventoryService.getById(id),
-    enabled: !!id,
-  });
+// Animation constants
+const SPRING_CONFIG = {
+  tension: 300,
+  friction: 25,
+  useNativeDriver: true,
+};
 
-  const handleBack = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
-  };
+// Utility functions
+const formatDate = (dateString?: string) => {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "—";
 
-  const handleRefresh = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    refetch();
-  };
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
-  const getStockStatus = (quantity: number) => {
-    if (quantity <= 0)
-      return { label: "Out of Stock", color: Colors.error, icon: "block" };
-    if (quantity <= 10)
-      return { label: "Low Stock", color: Colors.warning, icon: "warning" };
-    return { label: "In Stock", color: Colors.success, icon: "check-circle" };
-  };
-
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "—";
-    return new Date(dateString).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const formatCurrency = (value?: number) => {
-    if (value === undefined || value === null) return "—";
-    return `₹${value.toLocaleString("en-IN")}`;
-  };
-
-  const formatSourceType = (sourceType?: string) => {
-    if (!sourceType) return "Unknown";
-    return sourceType
-      .toLowerCase()
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
-  };
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <Pressable
-            onPress={handleBack}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
-          >
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <Text style={styles.headerSubtitle}>
-              Loading item information...
-            </Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </LinearGradient>
-
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading inventory details...</Text>
-        </View>
-      </SafeAreaView>
-    );
+  if (date.toDateString() === today.toDateString()) {
+    return `Today`;
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    return `Yesterday`;
   }
 
-  if (error || !data) {
-    return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <Pressable
-            onPress={handleBack}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
-          >
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <Text style={styles.headerSubtitle}>Unable to load data</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </LinearGradient>
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
-        <View style={styles.errorContainer}>
-          <View style={styles.errorIconContainer}>
-            <MaterialIcons name="inventory" size={64} color={Colors.error} />
-          </View>
-          <Text style={styles.errorTitle}>Failed to Load Item</Text>
-          <Text style={styles.errorMessage}>
-            {(error as any)?.message ||
-              "Unable to fetch inventory details. Please try again."}
-          </Text>
-          <Pressable
-            onPress={handleRefresh}
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && styles.retryButtonPressed,
-            ]}
-          >
+const formatCurrency = (value?: number) => {
+  if (value === undefined || value === null) return "—";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatNumber = (value?: number) => {
+  if (value === undefined || value === null) return "—";
+  return value.toLocaleString("en-IN");
+};
+
+const getStockStatus = (quantity: number) => {
+  if (quantity <= 0)
+    return {
+      label: "Out of Stock",
+      color: "#EF4444",
+      icon: "block",
+      bg: "#FEF2F2",
+    };
+  if (quantity <= 10)
+    return {
+      label: "Low Stock",
+      color: "#F59E0B",
+      icon: "warning",
+      bg: "#FFFBEB",
+    };
+  return {
+    label: "In Stock",
+    color: "#10B981",
+    icon: "check-circle",
+    bg: "#ECFDF5",
+  };
+};
+
+// Stat Card Component
+const StatCard = ({
+  label,
+  value,
+  color,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  color: string;
+  icon: string;
+}) => {
+  return (
+    <View style={styles.statItem}>
+      <View
+        style={[styles.statIconContainer, { backgroundColor: color + "10" }]}
+      >
+        <MaterialIcons name={icon as any} size={20} color={color} />
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
+  );
+};
+
+// Loading State
+const LoadingState = () => (
+  <View style={styles.centerContainer}>
+    <View style={styles.loadingCard}>
+      <ActivityIndicator size="large" color={Colors.primary} />
+      <Text style={styles.loadingText}>Loading inventory details...</Text>
+    </View>
+  </View>
+);
+
+// Error State
+const ErrorState = ({
+  error,
+  onRetry,
+  onBack,
+}: {
+  error: any;
+  onRetry: () => void;
+  onBack: () => void;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      ...SPRING_CONFIG,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      ...SPRING_CONFIG,
+    }).start();
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+        style={styles.headerGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+      >
+        <Pressable
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed,
+          ]}
+        >
+          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+        </Pressable>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Inventory Details</Text>
+          <Text style={styles.headerSubtitle}>Unable to load data</Text>
+        </View>
+        <View style={styles.headerSpacer} />
+      </LinearGradient>
+
+      <View style={styles.errorContainer}>
+        <View style={styles.errorIconContainer}>
+          <MaterialIcons name="inventory" size={48} color="#EF4444" />
+        </View>
+        <Text style={styles.errorTitle}>Failed to Load Item</Text>
+        <Text style={styles.errorMessage}>
+          {error?.message || "Unable to fetch inventory details"}
+        </Text>
+        <Pressable
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={onRetry}
+        >
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
             <LinearGradient
               colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
               style={styles.retryGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <MaterialIcons name="refresh" size={20} color={Colors.white} />
+              <MaterialIcons name="refresh" size={18} color={Colors.white} />
               <Text style={styles.retryButtonText}>Try Again</Text>
             </LinearGradient>
-          </Pressable>
-        </View>
+          </Animated.View>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+// Main Component
+export function InventoryDetailScreen({
+  id,
+  title = "Inventory Details",
+}: InventoryDetailScreenProps) {
+  const router = useRouter();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const backButtonScale = useRef(new Animated.Value(1)).current;
+  const refreshButtonScale = useRef(new Animated.Value(1)).current;
+  const role = useAuthStore((state) => state.user?.role);
+  const isAdmin = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["inventory", id],
+    queryFn: () => InventoryService.getById(id as string),
+    enabled: !!id,
+  });
+
+  // Fade in animation
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
+
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  }, [router]);
+
+  const handleRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    refetch();
+  }, [refetch]);
+
+  const handlePressIn = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 0.98,
+      ...SPRING_CONFIG,
+    }).start();
+  }, []);
+
+  const handlePressOut = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 1,
+      ...SPRING_CONFIG,
+    }).start();
+  }, []);
+
+  // Memoized values
+  const stockStatus = useMemo(
+    () => getStockStatus(data?.quantity || 0),
+    [data?.quantity],
+  );
+
+  const pricing = useMemo(() => resolveInventoryPricing(data), [data]);
+
+  const thumbnailUri = useMemo(
+    () => resolveEntityImage(data?.plantType ?? data),
+    [data],
+  );
+
+  const quantityUnit = useMemo(
+    () =>
+      formatQuantityUnit(
+        data?.quantityUnit ?? data?.plantType?.expectedSeedUnit,
+        "UNITS",
+      ),
+    [data],
+  );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
+        <LoadingState />
       </SafeAreaView>
     );
   }
 
-  const stockStatus = getStockStatus(data.quantity || 0);
-  const pricing = resolveInventoryPricing(data);
-  const thumbnailUri = resolveEntityImage(data?.plantType ?? data);
+  if (error || !data) {
+    return (
+      <ErrorState error={error} onRetry={handleRefresh} onBack={handleBack} />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -182,71 +306,67 @@ export function InventoryDetailScreen({
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <Pressable
-          onPress={handleBack}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>{title}</Text>
-          <Text style={styles.headerSubtitle}>View item information</Text>
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={handleBack}
+            onPressIn={() => handlePressIn(backButtonScale)}
+            onPressOut={() => handlePressOut(backButtonScale)}
+          >
+            <Animated.View
+              style={[
+                styles.backButton,
+                { transform: [{ scale: backButtonScale }] },
+              ]}
+            >
+              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+            </Animated.View>
+          </Pressable>
+
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>{title}</Text>
+            <Text style={styles.headerSubtitle}>Stock summary</Text>
+          </View>
+
+          <Pressable
+            onPress={handleRefresh}
+            onPressIn={() => handlePressIn(refreshButtonScale)}
+            onPressOut={() => handlePressOut(refreshButtonScale)}
+          >
+            <Animated.View
+              style={[
+                styles.refreshButton,
+                { transform: [{ scale: refreshButtonScale }] },
+              ]}
+            >
+              <MaterialIcons name="refresh" size={20} color={Colors.white} />
+            </Animated.View>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={handleRefresh}
-          style={({ pressed }) => [
-            styles.refreshButton,
-            pressed && styles.refreshButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="refresh" size={20} color={Colors.white} />
-        </Pressable>
       </LinearGradient>
 
-      <ScrollView
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        style={{ opacity: fadeAnim }}
       >
         {/* Hero Section */}
         <View style={styles.heroCard}>
-          <View style={styles.heroContent}>
-            <EntityThumbnail
-              uri={thumbnailUri}
-              label={data.plantType?.name}
-              size={80}
-              iconName="local-florist"
-              style={styles.heroThumbnail}
-            />
-            <View style={styles.heroInfo}>
-              <Text style={styles.plantName}>
-                {data.plantType?.name || "Unknown Plant"}
-              </Text>
-              <View style={styles.categoryBadge}>
-                <MaterialIcons
-                  name="category"
-                  size={14}
-                  color={Colors.primary}
-                />
-                <Text style={styles.categoryText}>
-                  {data.plantType?.category || "Uncategorized"}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.stockStatusContainer}>
+          <BannerCardImage
+            uri={thumbnailUri}
+            label={data.plantType?.name}
+            iconName="local-florist"
+            minHeight={140}
+            containerStyle={styles.heroBanner}
+          >
             <View
               style={[
                 styles.stockStatusBadge,
-                { backgroundColor: stockStatus.color + "20" },
+                { backgroundColor: stockStatus.bg },
               ]}
             >
               <MaterialIcons
                 name={stockStatus.icon as any}
-                size={20}
+                size={16}
                 color={stockStatus.color}
               />
               <Text
@@ -255,203 +375,168 @@ export function InventoryDetailScreen({
                 {stockStatus.label}
               </Text>
             </View>
+          </BannerCardImage>
+
+          <View style={styles.heroInfo}>
+            <Text style={styles.plantName}>
+              {data.plantType?.name || "Unknown Plant"}
+            </Text>
+            <View style={styles.heroMetaRow}>
+              <View style={styles.metaChip}>
+                <MaterialIcons
+                  name="category"
+                  size={13}
+                  color={Colors.textSecondary}
+                />
+                <Text style={styles.metaChipText}>
+                  {data.plantType?.category || "Uncategorized"}
+                </Text>
+              </View>
+              <View style={styles.metaChip}>
+                <MaterialIcons name="inventory" size={13} color={Colors.textSecondary} />
+                <Text style={styles.metaChipText}>
+                  {data.sourceType === "PURCHASED"
+                    ? "Purchased"
+                    : data.sourceType === "GERMINATION"
+                      ? "Germinated"
+                      : data.sourceType === "TRANSFER"
+                        ? "Transferred"
+                        : "Unknown"}
+                </Text>
+              </View>
+              <View style={styles.metaChip}>
+                <MaterialIcons name="sell" size={13} color={Colors.textSecondary} />
+                <Text style={styles.metaChipText}>
+                  Sell:{" "}
+                  {pricing.sellingPrice !== null
+                    ? formatCurrency(pricing.sellingPrice)
+                    : "—"}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Stock Overview Card */}
-        <View style={styles.statsCard}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Current Stock</Text>
-            <Text
-              style={[
-                styles.statValue,
-                data.quantity <= 0 && styles.statValueZero,
-                data.quantity > 0 && data.quantity <= 10 && styles.statValueLow,
-              ]}
-            >
-              {data.quantity ?? 0}
-            </Text>
-            <Text style={styles.statUnit}>units</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Initial Stock</Text>
-            <Text style={styles.statValue}>{data.initialQuantity ?? 0}</Text>
-            <Text style={styles.statUnit}>units</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Inventory Value</Text>
-            <Text style={[styles.statValue, styles.statValueSuccess]}>
-              {formatCurrency(pricing.inventoryValue ?? undefined)}
-            </Text>
-            <Text style={styles.statUnit}>estimated</Text>
-          </View>
-        </View>
-
-        {/* Pricing Information Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons
-              name="attach-money"
-              size={20}
-              color={Colors.primary}
+        {/* Stock Overview Stats - Removed unit price for staff */}
+        <View style={styles.statsGrid}>
+          <StatCard
+            label="Current Stock"
+            value={`${formatNumber(data.quantity)} ${quantityUnit}`}
+            icon="inventory"
+            color="#2563EB"
+          />
+          <StatCard
+            label="Initial Stock"
+            value={`${formatNumber(data.initialQuantity)} ${quantityUnit}`}
+            icon="storage"
+            color="#10B981"
+          />
+          {isAdmin && (
+            <StatCard
+              label="Inventory Value"
+              value={formatCurrency(pricing.inventoryValue ?? undefined)}
+              icon="account-balance-wallet"
+              color="#8B5CF6"
             />
-            <Text style={styles.cardTitle}>Pricing Information</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="price-change"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Unit Cost</Text>
-            </View>
-            <Text style={styles.infoValue}>
-              {formatCurrency(pricing.unitCost ?? undefined)}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="sell"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Selling Price</Text>
-            </View>
-            <Text style={styles.infoValue}>
-              {formatCurrency(pricing.sellingPrice ?? undefined)}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="account-balance-wallet"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Potential Revenue</Text>
-            </View>
-            <Text style={styles.infoValueHighlight}>
-              {formatCurrency(pricing.potentialRevenue ?? undefined)}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="calculate"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Potential Gross Profit</Text>
-            </View>
-            <Text
-              style={[
-                styles.infoValueHighlight,
-                pricing.grossProfit !== null && pricing.grossProfit < 0
-                  ? styles.infoValueNegative
-                  : null,
-              ]}
-            >
-              {formatCurrency(pricing.grossProfit ?? undefined)}
-            </Text>
-          </View>
+          )}
         </View>
 
-        {/* Source Information Card */}
+        {/* Source Information - Only essential info */}
         <View style={styles.infoCard}>
           <View style={styles.cardHeader}>
-            <MaterialIcons name="inventory" size={20} color={Colors.primary} />
+            <View
+              style={[
+                styles.cardIcon,
+                { backgroundColor: `${Colors.primary}10` },
+              ]}
+            >
+              <MaterialIcons
+                name="inventory"
+                size={18}
+                color={Colors.primary}
+              />
+            </View>
             <Text style={styles.cardTitle}>Source Information</Text>
           </View>
 
-          <View style={styles.infoRow}>
+          <View style={styles.sourceRow}>
             <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="category"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Source Type</Text>
+              <MaterialIcons name="category" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Source</Text>
             </View>
-            <View style={styles.sourceBadge}>
+            <View
+              style={[
+                styles.sourceBadge,
+                { backgroundColor: `${Colors.primary}10` },
+              ]}
+            >
               <MaterialIcons
                 name="inventory"
-                size={14}
+                size={12}
                 color={Colors.primary}
               />
               <Text style={styles.sourceBadgeText}>
-                {formatSourceType(data.sourceType)}
+                {data.sourceType === "PURCHASED"
+                  ? "Purchased"
+                  : data.sourceType === "GERMINATION"
+                    ? "Germinated"
+                    : data.sourceType === "TRANSFER"
+                      ? "Transferred"
+                      : "Unknown"}
               </Text>
             </View>
           </View>
 
-          <View style={styles.infoRow}>
+          <View style={styles.dateRow}>
             <View style={styles.infoLabelContainer}>
-              <MaterialIcons
-                name="calendar-month"
-                size={16}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.infoLabel}>Received Date</Text>
+              <MaterialIcons name="calendar-month" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Received</Text>
             </View>
             <View style={styles.dateContainer}>
-              <MaterialIcons
-                name="event"
-                size={14}
-                color={Colors.textSecondary}
-              />
+              <MaterialIcons name="event" size={14} color="#6B7280" />
               <Text style={styles.dateText}>{formatDate(data.receivedAt)}</Text>
             </View>
           </View>
         </View>
 
-        {/* Metadata Card */}
-        <View style={styles.metadataCard}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="info" size={20} color={Colors.textSecondary} />
-            <Text style={styles.metadataTitle}>System Information</Text>
-          </View>
-
-          <View style={styles.metadataRow}>
-            <Text style={styles.metadataLabel}>Created</Text>
-            <Text style={styles.metadataValue}>
-              {formatDate(data.createdAt)}
-            </Text>
-          </View>
-
-          <View style={styles.metadataRow}>
-            <Text style={styles.metadataLabel}>Last Updated</Text>
-            <Text style={styles.metadataValue}>
-              {formatDate(data.updatedAt)}
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
+        {/* Bottom Spacing */}
+        <View style={{ height: Spacing.xl }} />
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
+
 /* -------------------- Styles -------------------- */
 
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: "#F9FAFB",
   },
+  centerContainer: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: Spacing.xl,
+    backgroundColor: "#F9FAFB",
+  },
+
+  // Header Styles
   headerGradient: {
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  headerRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
   },
   backButton: {
     width: 44,
@@ -472,7 +557,6 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginLeft: Spacing.sm,
   },
   refreshButtonPressed: {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
@@ -480,203 +564,152 @@ const styles = {
   },
   headerContent: {
     flex: 1,
-    marginLeft: Spacing.md,
+    marginHorizontal: Spacing.md,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700" as const,
     color: Colors.white,
     marginBottom: 2,
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: "rgba(255, 255, 255, 0.9)",
     fontWeight: "500" as const,
   },
   headerSpacer: {
     width: 44,
   },
+
+  // Scroll Content
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
   },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: Spacing.xl,
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: Spacing.xl,
-  },
-  errorIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.error + "10",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.error,
-    marginBottom: Spacing.sm,
-  },
-  errorMessage: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    textAlign: "center" as const,
-    marginBottom: Spacing.xl,
-    lineHeight: 22,
-    paddingHorizontal: Spacing.xl,
-  },
-  retryButton: {
-    borderRadius: 16,
-    overflow: "hidden" as const,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  retryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  retryGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  retryButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: "700" as const,
-  },
+
+  // Hero Card
   heroCard: {
     backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: Spacing.lg,
+    borderRadius: 24,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: "#F3F4F6",
+    overflow: "hidden" as const,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
   },
-  heroContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-  },
-  heroThumbnail: {
-    borderRadius: 16,
+  heroBanner: {
+    width: "100%",
+    minHeight: 148,
+    borderRadius: 0,
   },
   heroInfo: {
-    flex: 1,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   plantName: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    color: "#111827",
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
-  categoryBadge: {
+  heroMetaRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    paddingTop: Spacing.sm,
+  },
+  metaChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
   },
-  categoryText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: "600" as const,
-  },
-  stockStatusContainer: {
-    marginTop: Spacing.md,
-    alignItems: "flex-start" as const,
+  metaChipText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: "500" as const,
   },
   stockStatusBadge: {
+    position: "absolute" as const,
+    top: Spacing.md,
+    right: Spacing.md,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 6,
     borderRadius: 30,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   stockStatusText: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+  },
+
+  // Stats Grid - Simplified
+  statsGrid: {
+    flexDirection: "row" as const,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  statItem: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: 20,
+    padding: Spacing.md,
+    alignItems: "center" as const,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  statIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: Spacing.sm,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#6B7280",
+    marginBottom: 4,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.3,
+    textAlign: "center",
+  },
+  statValue: {
     fontSize: 16,
     fontWeight: "700" as const,
+    color: "#111827",
+    textAlign: "center" as const,
   },
-  statsCard: {
-    flexDirection: "row" as const,
+
+  // Info Card
+  infoCard: {
     backgroundColor: Colors.white,
     borderRadius: 20,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center" as const,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.text,
-  },
-  statValueZero: {
-    color: Colors.error,
-  },
-  statValueLow: {
-    color: Colors.warning,
-  },
-  statValueSuccess: {
-    color: Colors.success,
-  },
-  statUnit: {
-    fontSize: 11,
-    color: Colors.textTertiary,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: Colors.borderLight,
-    marginHorizontal: Spacing.md,
-  },
-  infoCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: "row" as const,
@@ -684,10 +717,17 @@ const styles = {
     gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
+  cardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: "#111827",
   },
   infoRow: {
     flexDirection: "row" as const,
@@ -695,7 +735,21 @@ const styles = {
     alignItems: "center" as const,
     paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: "#F3F4F6",
+  },
+  sourceRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  dateRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    paddingVertical: Spacing.sm,
   },
   infoLabelContainer: {
     flexDirection: "row" as const,
@@ -703,29 +757,20 @@ const styles = {
     gap: Spacing.sm,
   },
   infoLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    color: "#6B7280",
   },
   infoValue: {
     fontSize: 14,
-    color: Colors.text,
+    color: "#111827",
     fontWeight: "500" as const,
-  },
-  infoValueHighlight: {
-    fontSize: 16,
-    color: Colors.success,
-    fontWeight: "700" as const,
-  },
-  infoValueNegative: {
-    color: Colors.error,
   },
   sourceBadge: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary + "10",
     paddingHorizontal: Spacing.sm,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 20,
     gap: 4,
   },
   sourceBadgeText: {
@@ -739,65 +784,108 @@ const styles = {
     gap: 4,
   },
   dateText: {
-    fontSize: 14,
-    color: Colors.text,
+    fontSize: 13,
+    color: "#111827",
     fontWeight: "500" as const,
   },
+
+  // Metadata Card
   metadataCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 20,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: "#F3F4F6",
   },
   metadataTitle: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: "#374151",
   },
   metadataRow: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
   },
   metadataLabel: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: "#6B7280",
   },
   metadataValue: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: "#111827",
     fontWeight: "500" as const,
-    maxWidth: "60%" as const,
   },
-  actionsContainer: {
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  editButton: {
-    borderRadius: 16,
-    overflow: "hidden" as const,
-    shadowColor: Colors.primary,
+
+  // Loading State
+  loadingCard: {
+    backgroundColor: Colors.white,
+    padding: Spacing.xl,
+    borderRadius: 24,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    borderWidth: 1,
+    borderColor: "#F3F4F6",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
     elevation: 4,
   },
-  editButtonPressed: {
-    transform: [{ scale: 0.98 }],
+  loadingText: {
+    marginTop: Spacing.md,
+    fontSize: 15,
+    color: "#6B7280",
+    fontWeight: "500" as const,
   },
-  editGradient: {
+
+  // Error State
+  errorContainer: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: Spacing.xl,
+  },
+  errorIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: Spacing.lg,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: "#EF4444",
+    marginBottom: Spacing.sm,
+    letterSpacing: -0.5,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center" as const,
+    marginBottom: Spacing.xl,
+    lineHeight: 20,
+    paddingHorizontal: Spacing.xl,
+  },
+  retryGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
     gap: Spacing.sm,
+    borderRadius: 16,
   },
-  editButtonText: {
-    fontSize: 16,
-    fontWeight: "700" as const,
+  retryButtonText: {
     color: Colors.white,
+    fontSize: 15,
+    fontWeight: "600" as const,
   },
-};
+} as const;

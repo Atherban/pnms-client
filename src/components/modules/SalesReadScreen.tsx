@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ActivityIndicator, FlatList, Text, TextInput, View } from "react-native";
 import { useMemo, useState } from "react";
 import { SalesService } from "../../services/sales.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
+import { canViewSensitivePricing } from "../../utils/rbac";
 import EntityThumbnail from "../ui/EntityThumbnail";
 
 const getAmount = (sale: any) =>
@@ -21,6 +23,8 @@ const getAmount = (sale: any) =>
   ) || 0;
 
 export function SalesReadScreen({ title }: { title: string }) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSensitivePricing = canViewSensitivePricing(role);
   const [search, setSearch] = useState("");
   const { data, isLoading, error } = useQuery({
     queryKey: ["sales"],
@@ -103,11 +107,13 @@ export function SalesReadScreen({ title }: { title: string }) {
                   style={styles.thumbnail}
                 />
                 <View style={styles.cardInfo}>
-                  <Text style={styles.name}>Sale #{String(item._id ?? "").slice(-6) || "—"}</Text>
+                  <Text style={styles.name}>{item.saleNumber || "Sale"}</Text>
                   <Text style={styles.meta}>Amount: ₹ {amount.toLocaleString("en-IN")}</Text>
-                  <Text style={[styles.meta, { color: profit >= 0 ? Colors.success : Colors.error }]}>
-                    Profit: ₹ {profit.toLocaleString("en-IN")}
-                  </Text>
+                  {showSensitivePricing && (
+                    <Text style={[styles.meta, { color: profit >= 0 ? Colors.success : Colors.error }]}>
+                      Profit: ₹ {profit.toLocaleString("en-IN")}
+                    </Text>
+                  )}
                   <Text style={styles.meta}>Mode: {item.paymentMode || "—"}</Text>
                   <Text style={styles.meta}>Date: {item.createdAt ? String(item.createdAt).slice(0, 10) : "—"}</Text>
                 </View>

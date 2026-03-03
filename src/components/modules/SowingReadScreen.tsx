@@ -17,18 +17,18 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GerminationService } from "../../services/germination.service";
 import { SowingService } from "../../services/sowing.service";
-import { Colors } from "../../theme";
+import { useAuthStore } from "../../stores/auth.store";
+import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
-import EntityThumbnail from "../ui/EntityThumbnail";
+import { canViewSourcingDetails } from "../../utils/rbac";
+import BannerCardImage from "../ui/BannerCardImage";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
 type DateFilter = "ALL" | "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
-type RoleFilter = "ALL" | "ADMIN" | "STAFF";
 
 type SowingFilters = {
   dateRange: DateFilter;
-  role: RoleFilter;
   category: string;
 };
 
@@ -44,8 +44,9 @@ type SowingDetails = {
   quantityDiscarded: number;
   quantityPendingGermination: number;
   performedBy: string;
-  performerRole: "ADMIN" | "STAFF";
-  performerRoles: ("ADMIN" | "STAFF")[];
+  performerRole: "NURSERY_ADMIN" | "SUPER_ADMIN" | "STAFF";
+  performerRoles: ("NURSERY_ADMIN" | "SUPER_ADMIN" | "STAFF")[];
+  expectedSeedQtyPerBatch: number | null;
   sowingDate?: string;
   thumbnail?: string;
   sourceCount: number;
@@ -182,7 +183,11 @@ const extractSowingDetails = (
     0,
     quantitySown - quantityGerminated - quantityDiscarded,
   );
-  const performerRole = item?.roleAtTime === "ADMIN" ? "ADMIN" : "STAFF";
+  const rawRole = String(item?.roleAtTime || "").toUpperCase();
+  const performerRole: SowingDetails["performerRole"] =
+    rawRole === "NURSERY_ADMIN" || rawRole === "SUPER_ADMIN"
+      ? rawRole
+      : "STAFF";
 
   return {
     id: String(item?._id ?? item?.id ?? ""),
@@ -195,6 +200,10 @@ const extractSowingDetails = (
     quantityGerminated,
     quantityDiscarded,
     quantityPendingGermination,
+    expectedSeedQtyPerBatch:
+      Number(plantObj?.expectedSeedQtyPerBatch) > 0
+        ? Number(plantObj?.expectedSeedQtyPerBatch)
+        : null,
     performedBy: item?.performedBy?.name ?? "Unknown Staff",
     performerRole,
     performerRoles: [performerRole],
@@ -235,7 +244,7 @@ const mergeSowingDetails = (rows: SowingDetails[]): SowingDetails[] => {
 
     const mergedRoles = Array.from(
       new Set([...existing.performerRoles, ...row.performerRoles]),
-    ) as ("ADMIN" | "STAFF")[];
+    ) as ("NURSERY_ADMIN" | "SUPER_ADMIN" | "STAFF")[];
     const latestDate = [existing.sowingDate, row.sowingDate]
       .filter(Boolean)
       .sort(
@@ -324,6 +333,7 @@ interface SearchBarProps {
   resultCount: number;
   onFilterPress: () => void;
   activeFilterCount: number;
+  showSourcingDetails: boolean;
 }
 
 const SearchBar = ({
@@ -333,6 +343,7 @@ const SearchBar = ({
   resultCount,
   onFilterPress,
   activeFilterCount,
+  showSourcingDetails,
 }: SearchBarProps) => (
   <View style={styles.searchWrapper}>
     <View style={styles.searchRow}>
@@ -340,7 +351,11 @@ const SearchBar = ({
         <MaterialIcons name="search" size={18} color="rgba(255,255,255,0.8)" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search seed, plant, supplier, staff..."
+          placeholder={
+            showSourcingDetails
+              ? "Search seed, plant, supplier, staff..."
+              : "Search seed, plant, staff..."
+          }
           placeholderTextColor="rgba(255,255,255,0.6)"
           value={value}
           onChangeText={onChangeText}
@@ -384,22 +399,24 @@ const SearchBar = ({
   </View>
 );
 
-const SowingCard = ({ details }: { details: SowingDetails }) => {
-  const roleColor =
-    details.performerRole === "ADMIN" ? "#8B5CF6" : Colors.primary;
-  const roleBg = details.performerRole === "ADMIN" ? "#F5F3FF" : "#EFF6FF";
-
+const SowingCard = ({
+  details,
+  showSourcingDetails,
+}: {
+  details: SowingDetails;
+  showSourcingDetails: boolean;
+}) => {
   return (
     <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <EntityThumbnail
-            uri={details.thumbnail}
-            label={details.plantName}
-            size={40}
-            iconName="spa"
-            style={styles.plantIcon}
-          />
+      <BannerCardImage
+        uri={details.thumbnail}
+        label={details.plantName}
+        iconName="spa"
+        containerStyle={styles.cardImageBanner}
+      />
+
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
           <View style={styles.titleBlock}>
             <Text style={styles.plantName} numberOfLines={1}>
               {details.plantName}
@@ -407,86 +424,68 @@ const SowingCard = ({ details }: { details: SowingDetails }) => {
             </Text>
             <Text style={styles.seedName} numberOfLines={1}>
               {details.seedName}
-              {details.supplierName ? ` • ${details.supplierName}` : ""}
+              {showSourcingDetails && details.supplierName
+                ? ` • ${details.supplierName}`
+                : ""}
             </Text>
           </View>
         </View>
-        <View style={[styles.roleBadge, { backgroundColor: roleBg }]}>
-          <MaterialIcons
-            name={
-              details.performerRole === "ADMIN" ? "verified-user" : "person"
-            }
-            size={12}
-            color={roleColor}
-          />
-          <Text style={[styles.roleText, { color: roleColor }]}>
-            {details.performerRole}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.metricsRow}>
-        <View style={styles.metricBlock}>
-          <Text style={styles.metricLabel}>Sown</Text>
-          <Text style={styles.metricValue}>
-            {formatNumber(details.quantitySown)}
-          </Text>
+        <View style={styles.metricsRow}>
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Sown</Text>
+            <Text style={styles.metricValue}>
+              {formatNumber(details.quantitySown)}
+            </Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Germinated</Text>
+            <Text style={styles.metricValue}>
+              {formatNumber(details.quantityGerminated)}
+            </Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Discarded</Text>
+            <Text style={styles.metricValue}>
+              {formatNumber(details.quantityDiscarded)}
+            </Text>
+          </View>
+          <View style={styles.metricDivider} />
+          <View style={styles.metricBlock}>
+            <Text style={styles.metricLabel}>Pending</Text>
+            <Text style={styles.metricValue}>
+              {formatNumber(details.quantityPendingGermination)}
+            </Text>
+          </View>
         </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricBlock}>
-          <Text style={styles.metricLabel}>Germinated</Text>
-          <Text style={styles.metricValue}>
-            {formatNumber(details.quantityGerminated)}
-          </Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricBlock}>
-          <Text style={styles.metricLabel}>Discarded</Text>
-          <Text style={styles.metricValue}>
-            {formatNumber(details.quantityDiscarded)}
-          </Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricBlock}>
-          <Text style={styles.metricLabel}>Pending</Text>
-          <Text style={styles.metricValue}>
-            {formatNumber(details.quantityPendingGermination)}
-          </Text>
-        </View>
-      </View>
 
-      <View style={styles.footerRow}>
-        {details.sourceCount > 1 && (
+        <View style={styles.footerRow}>
           <View style={styles.footerItem}>
-            <MaterialIcons name="merge-type" size={12} color={Colors.primary} />
-            <Text style={[styles.footerText, { color: Colors.primary }]}>
-              Merged {details.sourceCount} entries
+            <MaterialIcons
+              name="category"
+              size={12}
+              color={Colors.textTertiary}
+            />
+            <Text style={styles.footerText}>
+              {details.category || "Uncategorized"}
             </Text>
           </View>
-        )}
-        <View style={styles.footerItem}>
-          <MaterialIcons
-            name="category"
-            size={12}
-            color={Colors.textTertiary}
-          />
-          <Text style={styles.footerText}>
-            {details.category || "Uncategorized"}
-          </Text>
-        </View>
-        <View style={styles.footerItem}>
-          <MaterialIcons name="person" size={12} color={Colors.textTertiary} />
-          <Text style={styles.footerText}>{details.performedBy}</Text>
-        </View>
-        <View style={styles.footerItem}>
-          <MaterialIcons
-            name="calendar-today"
-            size={12}
-            color={Colors.textTertiary}
-          />
-          <Text style={styles.footerText}>
-            {formatDate(details.sowingDate)}
-          </Text>
+          <View style={styles.footerItem}>
+            <MaterialIcons name="person" size={12} color={Colors.textTertiary} />
+            <Text style={styles.footerText}>{details.performedBy}</Text>
+          </View>
+          <View style={styles.footerItem}>
+            <MaterialIcons
+              name="calendar-today"
+              size={12}
+              color={Colors.textTertiary}
+            />
+            <Text style={styles.footerText}>
+              {formatDate(details.sowingDate)}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -611,29 +610,6 @@ const SowingFilterModal = ({
               ))}
             </View>
 
-            <Text style={styles.filterSectionTitle}>Role</Text>
-            <View style={styles.filterChipsRow}>
-              {["ALL", "ADMIN", "STAFF"].map((role) => (
-                <Pressable
-                  key={role}
-                  onPress={() => setField("role", role as RoleFilter)}
-                  style={[
-                    styles.filterChip,
-                    local.role === role && styles.filterChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      local.role === role && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {role === "ALL" ? "All Roles" : role}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
             <Text style={styles.filterSectionTitle}>Category</Text>
             <View style={styles.filterChipsRow}>
               <Pressable
@@ -712,12 +688,13 @@ export function SowingReadScreen({
   canCreate = false,
   onCreatePress,
 }: SowingReadScreenProps) {
+  const role = useAuthStore((state) => state.user?.role);
+  const showSourcingDetails = canViewSourcingDetails(role);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [filters, setFilters] = useState<SowingFilters>({
     dateRange: "ALL",
-    role: "ALL",
     category: "ALL",
   });
 
@@ -798,7 +775,7 @@ export function SowingReadScreen({
         !term ||
         [
           item.seedName,
-          item.supplierName,
+          showSourcingDetails ? item.supplierName : "",
           item.plantName,
           item.variety,
           item.category,
@@ -809,14 +786,12 @@ export function SowingReadScreen({
           .includes(term);
 
       const matchesDate = isInDateRange(item.sowingDate, filters.dateRange);
-      const matchesRole =
-        filters.role === "ALL" || item.performerRoles.includes(filters.role);
       const matchesCategory =
         filters.category === "ALL" || item.category === filters.category;
 
-      return matchesSearch && matchesDate && matchesRole && matchesCategory;
+      return matchesSearch && matchesDate && matchesCategory;
     });
-  }, [mergedRecords, searchQuery, filters]);
+  }, [mergedRecords, searchQuery, filters, showSourcingDetails]);
 
   const stats = useMemo(() => {
     const totalSowings = mergedRecords.length;
@@ -837,13 +812,12 @@ export function SowingReadScreen({
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.dateRange !== "ALL") count += 1;
-    if (filters.role !== "ALL") count += 1;
     if (filters.category !== "ALL") count += 1;
     return count;
   }, [filters]);
 
   const clearFilters = useCallback(() => {
-    setFilters({ dateRange: "ALL", role: "ALL", category: "ALL" });
+    setFilters({ dateRange: "ALL", category: "ALL" });
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -917,6 +891,7 @@ export function SowingReadScreen({
             resultCount={filtered.length}
             onFilterPress={() => setIsFilterVisible(true)}
             activeFilterCount={activeFilterCount}
+            showSourcingDetails={showSourcingDetails}
           />
 
           {activeFilterCount > 0 && (
@@ -946,7 +921,9 @@ export function SowingReadScreen({
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <SowingCard details={item} />}
+        renderItem={({ item }) => (
+          <SowingCard details={item} showSourcingDetails={showSourcingDetails} />
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1175,24 +1152,38 @@ const styles = {
   },
   card: {
     backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 20,
+    marginBottom: Spacing.md,
+    overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: Colors.borderLight,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardContent: {
+    padding: Spacing.lg,
   },
   cardHeader: {
-    flexDirection: "row" as const,
-    alignItems: "flex-start" as const,
-    justifyContent: "space-between" as const,
     marginBottom: 10,
-    gap: 8,
+  },
+  cardImageBanner: {
+    width: "100%" as const,
+    minHeight: 140,
+    borderRadius: 0,
+    marginBottom: 0,
+  },
+  bannerRoleBadge: {
+    position: "absolute" as const,
+    top: 8,
+    right: 8,
   },
   cardHeaderLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    flex: 1,
-    gap: 10,
+    justifyContent: "space-between" as const,
   },
   plantIcon: {
     width: 40,

@@ -34,7 +34,7 @@ import { resolveEntityImage } from "../../../utils/image";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% of screen height for better visibility
-const CART_FOOTER_BOTTOM_GAP = -12;
+const CART_FOOTER_BOTTOM_GAP = 90;
 
 // ==================== CONSTANTS & TYPES ====================
 
@@ -565,7 +565,9 @@ const CartItemComponent = ({
 }: CartItemProps) => {
   const plantName = item.inventory.plantType?.name || "Unknown Plant";
   const unitPrice = item.unitPrice;
-  const thumbnailUri = resolveEntityImage(item?.inventory?.plantType ?? item?.inventory);
+  const thumbnailUri = resolveEntityImage(
+    item?.inventory?.plantType ?? item?.inventory,
+  );
 
   return (
     <View style={styles.cartItem}>
@@ -721,6 +723,10 @@ export default function StaffSalesCreate() {
     string | undefined
   >();
   const [selectedPayment, setSelectedPayment] = useState<PaymentModeId>("CASH");
+  const [discountAmount, setDiscountAmount] = useState("0");
+  const [amountPaid, setAmountPaid] = useState("0");
+  const [utrNumber, setUtrNumber] = useState("");
+  const [transactionRef, setTransactionRef] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isQuantityModalVisible, setIsQuantityModalVisible] = useState(false);
@@ -780,9 +786,7 @@ export default function StaffSalesCreate() {
         const mobile = String(customer?.mobileNumber ?? "").toLowerCase();
         const address = String(customer?.address ?? "").toLowerCase();
         return (
-          name.includes(term) ||
-          mobile.includes(term) ||
-          address.includes(term)
+          name.includes(term) || mobile.includes(term) || address.includes(term)
         );
       })
       .slice(0, 100);
@@ -829,18 +833,75 @@ export default function StaffSalesCreate() {
     });
     return { subtotal, totalItems };
   }, [cart]);
+  const discountValue = useMemo(
+    () => Math.max(0, Number(discountAmount) || 0),
+    [discountAmount],
+  );
+  const paidValue = useMemo(
+    () => Math.max(0, Number(amountPaid) || 0),
+    [amountPaid],
+  );
+  const netAmount = useMemo(
+    () => Math.max(0, cartSummary.subtotal - discountValue),
+    [cartSummary.subtotal, discountValue],
+  );
+  const duePreview = useMemo(
+    () => Math.max(0, netAmount - paidValue),
+    [netAmount, paidValue],
+  );
+  const autoLinkedCustomerContext = useMemo(() => {
+    const ids = new Set<string>();
+    cart.forEach((cartItem) => {
+      const inventory = cartItem?.inventory || {};
+      const directCustomer =
+        typeof inventory.customerId === "object"
+          ? inventory.customerId?._id
+          : inventory.customerId;
+      const batchCustomer =
+        typeof inventory.customerSeedBatch === "object"
+          ? typeof inventory.customerSeedBatch?.customerId === "object"
+            ? inventory.customerSeedBatch.customerId?._id
+            : inventory.customerSeedBatch?.customerId
+          : undefined;
+      const resolved = directCustomer || batchCustomer;
+      if (resolved) ids.add(String(resolved));
+    });
+    const list = Array.from(ids);
+    return {
+      customerId: list.length === 1 ? list[0] : undefined,
+      hasConflict: list.length > 1
+    };
+  }, [cart]);
+  const autoLinkedCustomerId = autoLinkedCustomerContext.customerId;
+  const hasCustomerConflict = autoLinkedCustomerContext.hasConflict;
+
+  useEffect(() => {
+    if (autoLinkedCustomerId) {
+      setSelectedCustomer(autoLinkedCustomerId);
+    }
+  }, [autoLinkedCustomerId]);
   const cartFooterHeight = useMemo(() => {
     const baseHeight = 254;
     const perItemHeight = 40;
     return Math.min(400, baseHeight + cart.length * perItemHeight);
   }, [cart.length]);
 
+  useEffect(() => {
+    if (selectedPayment === "CASH") {
+      setUtrNumber("");
+    }
+  }, [selectedPayment]);
+
   // Mutation
   const mutation = useMutation({
     mutationFn: () =>
       SalesService.create({
-        customer: selectedCustomer,
+        customer: autoLinkedCustomerId || selectedCustomer,
         paymentMode: selectedPayment,
+        amountPaid: paidValue,
+        discountAmount: discountValue,
+        utrNumber: utrNumber.trim() || undefined,
+        transactionRef: transactionRef.trim() || undefined,
         items: cart.map((item) => ({
           inventoryId: item.inventory._id,
           quantity: item.quantity,
@@ -870,6 +931,10 @@ export default function StaffSalesCreate() {
               setCart([]);
               setSelectedCustomer(undefined);
               setSearchQuery("");
+              setAmountPaid("0");
+              setDiscountAmount("0");
+              setUtrNumber("");
+              setTransactionRef("");
             },
           },
         ],
@@ -884,8 +949,11 @@ export default function StaffSalesCreate() {
   });
 
   const createCustomerMutation = useMutation({
-    mutationFn: (payload: { name: string; mobileNumber?: string; address?: string }) =>
-      CustomerService.create(payload),
+    mutationFn: (payload: {
+      name: string;
+      mobileNumber?: string;
+      address?: string;
+    }) => CustomerService.create(payload),
     onSuccess: async (response: any) => {
       const created = response?.data ?? response;
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
@@ -898,7 +966,10 @@ export default function StaffSalesCreate() {
       setIsCustomerPickerVisible(false);
       setCustomerForm({ name: "", mobileNumber: "", address: "" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Customer Added", "Customer created and selected for this sale.");
+      Alert.alert(
+        "Customer Added",
+        "Customer created and selected for this sale.",
+      );
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -1000,10 +1071,13 @@ export default function StaffSalesCreate() {
 
     const hasDuplicate = customers.some((customer: any) => {
       const sameName =
-        String(customer?.name ?? "").trim().toLowerCase() === name.toLowerCase();
+        String(customer?.name ?? "")
+          .trim()
+          .toLowerCase() === name.toLowerCase();
       const sameMobile =
         mobileDigits.length === 10 &&
-        String(customer?.mobileNumber ?? "").replace(/[^\d]/g, "") === mobileDigits;
+        String(customer?.mobileNumber ?? "").replace(/[^\d]/g, "") ===
+          mobileDigits;
       return sameName || sameMobile;
     });
 
@@ -1032,6 +1106,24 @@ export default function StaffSalesCreate() {
       Alert.alert("Empty Cart", "Add items to cart before creating a sale");
       return;
     }
+    if (paidValue > netAmount) {
+      Alert.alert("Validation", "Amount paid cannot be greater than net amount.");
+      return;
+    }
+    if (hasCustomerConflict) {
+      Alert.alert(
+        "Validation",
+        "Cart contains customer-linked inventory from multiple customers. Please split this sale.",
+      );
+      return;
+    }
+    if (selectedPayment !== "CASH" && paidValue > 0 && !utrNumber.trim()) {
+      Alert.alert(
+        "Validation",
+        "UTR is required for UPI/Online payment when amount paid is greater than 0.",
+      );
+      return;
+    }
     Alert.alert(
       "Confirm Sale",
       `${cartSummary.totalItems} items • Total ${formatCurrency(cartSummary.subtotal)}\nPayment: ${selectedPayment}`,
@@ -1040,7 +1132,7 @@ export default function StaffSalesCreate() {
         { text: "Confirm", onPress: () => mutation.mutate() },
       ],
     );
-  }, [cart, cartSummary, selectedPayment, mutation]);
+  }, [cart, cartSummary, hasCustomerConflict, mutation, netAmount, paidValue, selectedPayment, utrNumber]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={refetch} />;
@@ -1135,6 +1227,67 @@ export default function StaffSalesCreate() {
                   </TouchableOpacity>
                 ))}
               </View>
+              <View style={styles.paymentMetaCard}>
+                <TextInput
+                  style={styles.paymentMetaInput}
+                  placeholder="Discount amount"
+                  placeholderTextColor={Colors.textTertiary}
+                  keyboardType="numeric"
+                  value={discountAmount}
+                  onChangeText={setDiscountAmount}
+                />
+                <TextInput
+                  style={styles.paymentMetaInput}
+                  placeholder="Amount paid now"
+                  placeholderTextColor={Colors.textTertiary}
+                  keyboardType="numeric"
+                  value={amountPaid}
+                  onChangeText={setAmountPaid}
+                />
+                <TextInput
+                  style={styles.paymentMetaInput}
+                  placeholder={
+                    selectedPayment === "CASH"
+                      ? "UTR not required for cash"
+                      : "UTR number (required if paid > 0)"
+                  }
+                  placeholderTextColor={Colors.textTertiary}
+                  value={utrNumber}
+                  onChangeText={setUtrNumber}
+                  autoCapitalize="characters"
+                />
+                <TextInput
+                  style={styles.paymentMetaInput}
+                  placeholder="Transaction reference (optional)"
+                  placeholderTextColor={Colors.textTertiary}
+                  value={transactionRef}
+                  onChangeText={setTransactionRef}
+                />
+                <View style={styles.paymentPreviewRow}>
+                  <Text style={styles.paymentPreviewLabel}>Net</Text>
+                  <Text style={styles.paymentPreviewValue}>
+                    {formatCurrency(netAmount)}
+                  </Text>
+                </View>
+                <View style={styles.paymentPreviewRow}>
+                  <Text
+                    style={[
+                      styles.paymentPreviewLabel,
+                      { color: Colors.error },
+                    ]}
+                  >
+                    Due
+                  </Text>
+                  <Text
+                    style={[
+                      styles.paymentPreviewValue,
+                      { color: Colors.error },
+                    ]}
+                  >
+                    {formatCurrency(duePreview)}
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Customer Section */}
@@ -1143,12 +1296,22 @@ export default function StaffSalesCreate() {
               <View style={styles.customerSelectionCard}>
                 <View style={styles.customerSelectionRow}>
                   <View style={styles.customerSelectionIcon}>
-                    <MaterialIcons name="person" size={18} color={Colors.primary} />
+                    <MaterialIcons
+                      name="person"
+                      size={18}
+                      color={Colors.primary}
+                    />
                   </View>
                   <View style={styles.customerSelectionInfo}>
-                    <Text style={styles.customerSelectionLabel}>Selected Customer</Text>
-                    <Text style={styles.customerSelectionValue} numberOfLines={1}>
-                      {selectedCustomerInfo?.name || "Walk-in Customer"}
+                    <Text style={styles.customerSelectionLabel}>
+                      Selected Customer
+                    </Text>
+                    <Text
+                      style={styles.customerSelectionValue}
+                      numberOfLines={1}
+                    >
+                      {selectedCustomerInfo?.name ||
+                        (autoLinkedCustomerId ? "Auto-linked customer" : "Walk-in Customer")}
                     </Text>
                     {selectedCustomerInfo?.mobileNumber ? (
                       <Text style={styles.customerSelectionMeta}>
@@ -1156,35 +1319,62 @@ export default function StaffSalesCreate() {
                       </Text>
                     ) : null}
                   </View>
-                  {selectedCustomer ? (
+                  {selectedCustomer && !autoLinkedCustomerId ? (
                     <TouchableOpacity
                       onPress={() => setSelectedCustomer(undefined)}
                       style={styles.customerClearButton}
                       activeOpacity={0.7}
                     >
-                      <MaterialIcons name="close" size={16} color={Colors.textSecondary} />
+                      <MaterialIcons
+                        name="close"
+                        size={16}
+                        color={Colors.textSecondary}
+                      />
                     </TouchableOpacity>
                   ) : null}
                 </View>
 
-                <View style={styles.customerActionRow}>
-                  <TouchableOpacity
-                    onPress={handleOpenCustomerPicker}
-                    style={styles.customerActionButton}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="search" size={16} color={Colors.primary} />
-                    <Text style={styles.customerActionButtonText}>Choose Customer</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={handleOpenCreateCustomer}
-                    style={styles.customerActionButton}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="person-add" size={16} color={Colors.primary} />
-                    <Text style={styles.customerActionButtonText}>Add Customer</Text>
-                  </TouchableOpacity>
-                </View>
+                {autoLinkedCustomerId ? (
+                  <View style={styles.customerActionRow}>
+                    <View style={styles.customerActionButton}>
+                      <MaterialIcons name="link" size={16} color={Colors.primary} />
+                      <Text style={styles.customerActionButtonText}>
+                        Auto-linked from customer seed batch inventory
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.customerActionRow}>
+                    <TouchableOpacity
+                      onPress={handleOpenCustomerPicker}
+                      style={styles.customerActionButton}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons
+                        name="search"
+                        size={16}
+                        color={Colors.primary}
+                      />
+                      <Text style={styles.customerActionButtonText}>
+                        Choose Customer
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleOpenCreateCustomer}
+                      style={styles.customerActionButton}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons
+                        name="person-add"
+                        size={16}
+                        color={Colors.primary}
+                      />
+                      <Text style={styles.customerActionButtonText}>
+                        Add Customer
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -1295,6 +1485,13 @@ export default function StaffSalesCreate() {
                 {formatCurrency(cartSummary.subtotal)}
               </Text>
             </View>
+            <View style={styles.cartSummaryDivider} />
+            <View>
+              <Text style={styles.cartSummaryLabel}>Net / Due</Text>
+              <Text style={styles.cartSummaryAmount}>
+                {formatCurrency(netAmount)} / {formatCurrency(duePreview)}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             onPress={handleSubmit}
@@ -1363,14 +1560,20 @@ export default function StaffSalesCreate() {
               style={styles.walkInOption}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="person-outline" size={16} color={Colors.textSecondary} />
+              <MaterialIcons
+                name="person-outline"
+                size={16}
+                color={Colors.textSecondary}
+              />
               <Text style={styles.walkInOptionText}>Use Walk-in Customer</Text>
             </TouchableOpacity>
 
             {isCustomersFetching ? (
               <View style={styles.customerPickerLoading}>
                 <ActivityIndicator size="small" color={Colors.primary} />
-                <Text style={styles.customerPickerLoadingText}>Loading customers...</Text>
+                <Text style={styles.customerPickerLoadingText}>
+                  Loading customers...
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -1379,7 +1582,9 @@ export default function StaffSalesCreate() {
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.pickerListContent}
                 ListEmptyComponent={
-                  <Text style={styles.pickerEmptyText}>No customers found.</Text>
+                  <Text style={styles.pickerEmptyText}>
+                    No customers found.
+                  </Text>
                 }
                 renderItem={({ item }) => {
                   const isSelected = selectedCustomer === item._id;
@@ -1401,16 +1606,26 @@ export default function StaffSalesCreate() {
                         </Text>
                       </View>
                       <View style={styles.pickerCustomerInfo}>
-                        <Text style={styles.pickerCustomerName} numberOfLines={1}>
+                        <Text
+                          style={styles.pickerCustomerName}
+                          numberOfLines={1}
+                        >
                           {item?.name || "Unnamed Customer"}
                         </Text>
-                        <Text style={styles.pickerCustomerMeta} numberOfLines={1}>
+                        <Text
+                          style={styles.pickerCustomerMeta}
+                          numberOfLines={1}
+                        >
                           {item?.mobileNumber || "No mobile"}{" "}
                           {item?.address ? `• ${item.address}` : ""}
                         </Text>
                       </View>
                       {isSelected ? (
-                        <MaterialIcons name="check-circle" size={18} color={Colors.primary} />
+                        <MaterialIcons
+                          name="check-circle"
+                          size={18}
+                          color={Colors.primary}
+                        />
                       ) : null}
                     </TouchableOpacity>
                   );
@@ -1480,7 +1695,10 @@ export default function StaffSalesCreate() {
                 }
                 placeholder="Address (optional)"
                 placeholderTextColor="#9CA3AF"
-                style={[styles.createCustomerInput, styles.createCustomerInputMultiline]}
+                style={[
+                  styles.createCustomerInput,
+                  styles.createCustomerInputMultiline,
+                ]}
                 multiline
                 numberOfLines={3}
               />
@@ -1505,7 +1723,9 @@ export default function StaffSalesCreate() {
                 {createCustomerMutation.isPending ? (
                   <ActivityIndicator size="small" color={Colors.white} />
                 ) : (
-                  <Text style={styles.createCustomerSubmitText}>Create & Select</Text>
+                  <Text style={styles.createCustomerSubmitText}>
+                    Create & Select
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1628,6 +1848,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     fontWeight: "500",
+  },
+  paymentMetaCard: {
+    marginTop: 12,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    padding: 12,
+    gap: 8,
+  },
+  paymentMetaInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: Colors.text,
+    backgroundColor: Colors.surfaceDark,
+  },
+  paymentPreviewRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paymentPreviewLabel: {
+    color: Colors.textSecondary,
+    fontWeight: "600",
+  },
+  paymentPreviewValue: {
+    color: Colors.text,
+    fontWeight: "700",
   },
 
   // Customer

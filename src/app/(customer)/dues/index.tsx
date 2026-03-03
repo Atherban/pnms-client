@@ -25,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import FixedHeader from "../../../components/common/FixedHeader";
+import BannerCardImage from "../../../components/ui/BannerCardImage";
 import { PaymentService } from "../../../services/payment.service";
 import { useAuthStore } from "../../../stores/auth.store";
 import { Colors, Spacing } from "../../../theme";
@@ -197,13 +198,17 @@ interface DueCardProps {
 }
 
 const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
-  const duePercentage =
-    item.totalAmount > 0
-      ? ((item.totalAmount - item.paidAmount) / item.totalAmount) * 100
-      : 0;
-
-  const recentTransactions = item.transactions.slice(0, 2);
-  const orderDate = item.saleDate || item.createdAt;
+  const paidRatio =
+    item.totalAmount > 0 ? (item.paidAmount / item.totalAmount) * 100 : 0;
+  const transactions = Array.isArray(item.transactions) ? item.transactions : [];
+  const recentTransactions = [...transactions]
+    .sort((a: any, b: any) => {
+      const aTime = new Date(a?.paymentAt || a?.createdAt || 0).getTime();
+      const bTime = new Date(b?.paymentAt || b?.createdAt || 0).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, 2);
+  const orderDate = item.issuedAt || item.saleDate || item.createdAt;
   const formattedDate = orderDate
     ? new Date(orderDate).toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -235,6 +240,16 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
   };
 
   const status = getStatusDisplay();
+  const getTransactionStatusDisplay = (status?: string) => {
+    const value = String(status || "").toUpperCase();
+    if (value === "VERIFIED" || value === "APPROVED") {
+      return { label: "Verified", color: Colors.success, icon: "check-circle" };
+    }
+    if (value === "REJECTED" || value === "CANCELLED") {
+      return { label: "Rejected", color: Colors.error, icon: "cancel" };
+    }
+    return { label: "Pending", color: Colors.warning, icon: "hourglass-empty" };
+  };
 
   return (
     <Animated.View
@@ -250,7 +265,14 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       >
-        {/* Header - Order Info */}
+        <BannerCardImage
+          uri={item.imageUri}
+          iconName="receipt-long"
+          minHeight={140}
+          containerStyle={styles.cardImageBanner}
+        />
+        <View style={styles.cardContent}>
+        {/* Header */}
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
             <View
@@ -260,13 +282,16 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
               ]}
             >
               <MaterialIcons
-                name="shopping-bag"
+                name="receipt-long"
                 size={16}
                 color={Colors.primary}
               />
             </View>
             <View>
-              <Text style={styles.orderLabel}>Order</Text>
+              <Text style={styles.orderLabel}>{item.itemTitle || "Invoice"}</Text>
+              {item.itemSubtitle ? (
+                <Text style={styles.orderDate}>{item.itemSubtitle}</Text>
+              ) : null}
               {formattedDate && (
                 <Text style={styles.orderDate}>{formattedDate}</Text>
               )}
@@ -323,15 +348,15 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
               style={[
                 styles.dueProgressFill,
                 {
-                  width: `${100 - duePercentage}%`,
+                  width: `${Math.min(Math.max(paidRatio, 0), 100)}%`,
                   backgroundColor:
-                    duePercentage > 50 ? Colors.warning : Colors.success,
+                    paidRatio < 50 ? Colors.warning : Colors.success,
                 },
               ]}
             />
           </View>
           <Text style={styles.dueProgressText}>
-            {Math.round(100 - duePercentage)}% paid
+            {Math.round(Math.min(Math.max(paidRatio, 0), 100))}% paid
           </Text>
         </View>
 
@@ -341,48 +366,39 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
             <Text style={styles.activityTitle}>Recent Activity</Text>
             {recentTransactions.map((tx: any) => (
               <View key={tx.id} style={styles.activityItem}>
-                <View style={styles.activityLeft}>
-                  <View
-                    style={[
-                      styles.activityIcon,
-                      {
-                        backgroundColor:
-                          tx.status === "VERIFIED"
-                            ? Colors.success + "10"
-                            : Colors.warning + "10",
-                      },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={
-                        tx.status === "VERIFIED"
-                          ? "check-circle"
-                          : "hourglass-empty"
-                      }
-                      size={12}
-                      color={
-                        tx.status === "VERIFIED"
-                          ? Colors.success
-                          : Colors.warning
-                      }
-                    />
-                  </View>
-                  <View>
-                    <Text style={styles.activityAmount}>
-                      {formatMoney(tx.amount)}
-                    </Text>
-                    <Text style={styles.activityMeta}>
-                      {tx.mode?.replace("_", " ")} •{" "}
-                      {tx.status === "VERIFIED" ? "Verified" : "Pending"}
-                    </Text>
-                  </View>
-                </View>
+                {(() => {
+                  const txStatus = getTransactionStatusDisplay(tx.status);
+                  return (
+                    <View style={styles.activityLeft}>
+                      <View
+                        style={[
+                          styles.activityIcon,
+                          { backgroundColor: txStatus.color + "10" },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name={txStatus.icon as any}
+                          size={12}
+                          color={txStatus.color}
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.activityAmount}>
+                          {formatMoney(tx.amount)}
+                        </Text>
+                        <Text style={styles.activityMeta}>
+                          {tx.mode?.replace("_", " ")} • {txStatus.label}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
               </View>
             ))}
-            {item.transactions.length > 2 && (
+            {transactions.length > 2 && (
               <Text style={styles.moreActivity}>
-                +{item.transactions.length - 2} more payment
-                {item.transactions.length - 2 > 1 ? "s" : ""}
+                +{transactions.length - 2} more payment
+                {transactions.length - 2 > 1 ? "s" : ""}
               </Text>
             )}
           </View>
@@ -419,6 +435,7 @@ const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
               </LinearGradient>
             </Pressable>
           )}
+        </View>
         </View>
       </LinearGradient>
     </Animated.View>
@@ -473,9 +490,9 @@ const PaymentModal = ({
   isSubmitting,
 }: PaymentModalProps) => {
   const dueAmount = selectedSale?.dueAmount || 0;
-  const orderDate = selectedSale?.saleDate || selectedSale?.createdAt;
-  const formattedOrderDate = orderDate
-    ? new Date(orderDate).toLocaleDateString("en-IN", {
+  const invoiceDate = selectedSale?.issuedAt || selectedSale?.saleDate || selectedSale?.createdAt;
+  const formattedInvoiceDate = invoiceDate
+    ? new Date(invoiceDate).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -495,7 +512,7 @@ const PaymentModal = ({
             <View>
               <Text style={styles.modalTitle}>Make a Payment</Text>
               <Text style={styles.modalSubtitle}>
-                Order from {formattedOrderDate || "Unknown date"}
+                Invoice from {formattedInvoiceDate || "Unknown date"}
               </Text>
             </View>
             <Pressable onPress={onClose} style={styles.modalClose}>
@@ -808,20 +825,33 @@ export default function CustomerDuesScreen() {
     [data, selectedSaleId],
   );
 
+  const sortedDues = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    return [...rows].sort((a, b) => {
+      const aOutstanding = Number(a?.dueAmount ?? 0) > 0 ? 1 : 0;
+      const bOutstanding = Number(b?.dueAmount ?? 0) > 0 ? 1 : 0;
+      if (aOutstanding !== bOutstanding) return bOutstanding - aOutstanding;
+      return String(b?.issuedAt || "").localeCompare(String(a?.issuedAt || ""));
+    });
+  }, [data]);
+
   // Calculate stats
   const stats = useMemo(() => {
-    const dues = data || [];
+    const dues = sortedDues;
     const totalDue = dues.reduce((sum, item) => sum + item.dueAmount, 0);
     const totalPaid = dues.reduce((sum, item) => sum + item.paidAmount, 0);
     const pendingCount = dues.filter((item) =>
-      item.transactions.some((tx: any) => tx.status === "PENDING"),
+      item.transactions.some((tx: any) => {
+        const value = String(tx?.status || "").toUpperCase();
+        return value === "PENDING" || value === "PENDING_VERIFICATION" || value === "SYNC_QUEUED";
+      }),
     ).length;
     return { totalDue, totalPaid, pendingCount };
-  }, [data]);
+  }, [sortedDues]);
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSale) throw new Error("Please select an order to pay for");
+      if (!selectedSale) throw new Error("Please select an invoice to pay for");
       const numericAmount = Number(amount);
 
       if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -899,7 +929,7 @@ export default function CustomerDuesScreen() {
     <View style={styles.container}>
       <FixedHeader
         title="Payments"
-        subtitle="Track and manage your payments"
+        subtitle="Track and settle your nursery bills"
         titleStyle={styles.headerTitle}
         actions={
           <View style={styles.headerActions}>
@@ -937,7 +967,7 @@ export default function CustomerDuesScreen() {
         contentContainerStyle={styles.content}
       >
         {/* Stats Card */}
-        {(data || []).length > 0 && (
+        {sortedDues.length > 0 && (
           <StatsCard
             totalDue={stats.totalDue}
             totalPaid={stats.totalPaid}
@@ -945,8 +975,8 @@ export default function CustomerDuesScreen() {
           />
         )}
 
-        {/* Orders List */}
-        {(data || []).length === 0 ? (
+        {/* Bills List */}
+        {sortedDues.length === 0 ? (
           <Animated.View
             entering={FadeInDown.springify()}
             style={styles.emptyCard}
@@ -964,7 +994,7 @@ export default function CustomerDuesScreen() {
             </Text>
           </Animated.View>
         ) : (
-          (data || []).map((item, index) => (
+          sortedDues.map((item, index) => (
             <DueCard
               key={item.saleId}
               item={item}
@@ -1142,13 +1172,22 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardGradient: {
+    padding: 0,
+  },
+  cardImageBanner: {
+    width: "100%",
+    minHeight: 140,
+    borderRadius: 0,
+    marginBottom: 0,
+  },
+  cardContent: {
     padding: Spacing.lg,
+    gap: Spacing.sm,
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.md,
   },
   cardHeaderLeft: {
     flexDirection: "row",
@@ -1163,13 +1202,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   orderLabel: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111827",
   },
   orderDate: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "500",
-    color: "#111827",
+    color: "#6B7280",
   },
   statusBadge: {
     flexDirection: "row",

@@ -14,7 +14,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { NurseryPublicProfileService } from "../../services/nursery-public-profile.service";
 import { SalesService } from "../../services/sales.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import {
   buildBillDataFromSale,
@@ -24,7 +26,7 @@ import {
 import { ErrorView } from "../ui/ErrorView";
 import { Loader } from "../ui/Loader";
 
-type RouteGroup = "staff" | "admin" | "viewer";
+type RouteGroup = "staff" | "admin" | "customer";
 
 interface SaleBillScreenProps {
   id?: string;
@@ -42,6 +44,7 @@ const formatCurrency = (amount: number): string =>
 export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const userNurseryId = useAuthStore((state) => state.user?.nurseryId);
   const { width } = useWindowDimensions();
   const isCompact = width < 420;
 
@@ -51,6 +54,18 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
     enabled: !!id,
   });
 
+  const saleNurseryId = (() => {
+    if (!data?.nurseryId) return userNurseryId;
+    if (typeof data.nurseryId === "string") return data.nurseryId;
+    return data.nurseryId._id || data.nurseryId.id || userNurseryId;
+  })();
+
+  const { data: nurseryProfile } = useQuery({
+    queryKey: ["nursery-public-profile", saleNurseryId],
+    enabled: !!saleNurseryId,
+    queryFn: () => NurseryPublicProfileService.get(saleNurseryId),
+  });
+
   const onBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
@@ -58,12 +73,16 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
 
   const onOpenSale = () => {
     if (!id) return;
+    if (routeGroup === "customer") {
+      router.push(`/(customer)/dues/${id}` as any);
+      return;
+    }
     router.push(`/(${routeGroup})/sales/${id}` as any);
   };
 
   const onShareBill = async () => {
     if (!data) return;
-    const bill = buildBillDataFromSale(data);
+    const bill = buildBillDataFromSale(data, { nurseryProfile });
     const message = formatBillShareText(bill);
     await Share.share({ message, title: bill.billNumber });
   };
@@ -75,7 +94,7 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
       const fsPackage = "expo-file-system/legacy";
       const Print = await import(printPackage);
       const FileSystem = await import(fsPackage);
-      const bill = buildBillDataFromSale(data);
+      const bill = buildBillDataFromSale(data, { nurseryProfile });
       const html = formatBillHtml(bill);
       const printed = await Print.printToFileAsync({ html });
       const safeFileName = bill.billNumber.replace(/[^a-zA-Z0-9-_]/g, "_");
@@ -167,7 +186,7 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
     );
   }
 
-  const bill = buildBillDataFromSale(data);
+  const bill = buildBillDataFromSale(data, { nurseryProfile });
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -203,19 +222,33 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
         <View style={styles.billCard}>
           <View style={[styles.invoiceHeader, isCompact && styles.invoiceHeaderCompact]}>
             <View style={styles.companyBlock}>
-              <Text style={styles.companyName}>PNMS</Text>
-              <Text style={styles.companySub}>Plant Nursery Management System</Text>
-              <Text style={styles.companySub}>Nursery Operations & Sales</Text>
+              <Text style={styles.companyName}>{bill.nursery.name}</Text>
+              {bill.nursery.code ? (
+                <Text style={styles.companySub}>Code: {bill.nursery.code}</Text>
+              ) : null}
+              {bill.nursery.address ? (
+                <Text style={styles.companySub}>{bill.nursery.address}</Text>
+              ) : null}
+              {bill.nursery.phoneNumber ? (
+                <Text style={styles.companySub}>Phone: {bill.nursery.phoneNumber}</Text>
+              ) : null}
+              {bill.nursery.email ? (
+                <Text style={styles.companySub}>Email: {bill.nursery.email}</Text>
+              ) : null}
             </View>
             <View style={[styles.invoiceMeta, isCompact && styles.invoiceMetaCompact]}>
               <Text style={styles.invoiceTitle}>TAX INVOICE</Text>
               <Text style={styles.invoiceMetaText}>No: {bill.billNumber}</Text>
+              <Text style={styles.invoiceMetaText}>Sale: {bill.saleNumber}</Text>
               <Text style={styles.invoiceMetaText}>
                 Date: {new Date(bill.issuedAt).toLocaleDateString("en-IN")}
               </Text>
-              <Text style={styles.invoiceMetaText}>
-                Due: {new Date(bill.dueDate).toLocaleDateString("en-IN")}
-              </Text>
+              {bill.dueDate ? (
+                <Text style={styles.invoiceMetaText}>
+                  Due: {new Date(bill.dueDate).toLocaleDateString("en-IN")}
+                </Text>
+              ) : null}
+              <Text style={styles.invoiceMetaText}>Status: {bill.paymentStatus}</Text>
             </View>
           </View>
 
@@ -229,9 +262,11 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
             </View>
             <View style={styles.infoBox}>
               <Text style={styles.infoBoxTitle}>Bill Details</Text>
-              <Text style={styles.metaText}>Sale Ref: {bill.saleId}</Text>
               <Text style={styles.metaText}>Payment: {bill.paymentMode}</Text>
               <Text style={styles.metaText}>Handled By: {bill.sellerName}</Text>
+              {bill.nursery.upiId ? (
+                <Text style={styles.metaText}>UPI: {bill.nursery.upiId}</Text>
+              ) : null}
             </View>
           </View>
 
@@ -270,6 +305,25 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
               <Text style={styles.totalLabel}>Tax ({bill.taxPercent}%)</Text>
               <Text style={styles.totalValue}>{formatCurrency(bill.taxAmount)}</Text>
             </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Net Amount</Text>
+              <Text style={styles.totalValue}>{formatCurrency(bill.netAmount)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Paid Amount</Text>
+              <Text style={styles.totalValue}>{formatCurrency(bill.paidAmount)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Due Amount</Text>
+              <Text
+                style={[
+                  styles.totalValue,
+                  { color: bill.dueAmount > 0 ? Colors.error : Colors.success },
+                ]}
+              >
+                {formatCurrency(bill.dueAmount)}
+              </Text>
+            </View>
             <View style={styles.totalRowGrand}>
               <Text style={styles.grandTotalLabel}>Grand Total</Text>
               <Text style={styles.grandTotalValue}>
@@ -277,11 +331,38 @@ export function SaleBillScreen({ id, routeGroup }: SaleBillScreenProps) {
               </Text>
             </View>
           </View>
+
+          <View style={styles.divider} />
+          <Text style={styles.sectionTitle}>Payment Entries</Text>
+          {bill.payments.length === 0 ? (
+            <Text style={styles.metaText}>No payment entries recorded yet.</Text>
+          ) : (
+            bill.payments.map((payment) => (
+              <View key={payment.id} style={styles.paymentEntryRow}>
+                <View style={styles.lineLeft}>
+                  <Text style={styles.lineName}>{formatCurrency(payment.amount)}</Text>
+                  <Text style={styles.lineQty}>
+                    {payment.mode} • {payment.status}
+                  </Text>
+                  {payment.reference ? (
+                    <Text style={styles.lineQty}>Ref: {payment.reference}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.lineTotal}>
+                  {payment.paidAt
+                    ? new Date(payment.paidAt).toLocaleDateString("en-IN")
+                    : "—"}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
 
         <TouchableOpacity onPress={onOpenSale} style={styles.secondaryButton}>
           <MaterialIcons name="receipt-long" size={18} color={Colors.primary} />
-          <Text style={styles.secondaryButtonText}>Open Sale Details</Text>
+          <Text style={styles.secondaryButtonText}>
+            {routeGroup === "customer" ? "Open Payment Details" : "Open Sale Details"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -467,6 +548,17 @@ const styles = {
     fontSize: 14,
     fontWeight: "700" as const,
     color: Colors.text,
+  },
+  paymentEntryRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "flex-start" as const,
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    borderRadius: 10,
+    padding: Spacing.sm,
+    backgroundColor: Colors.background,
   },
   totalRow: {
     flexDirection: "row" as const,

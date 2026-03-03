@@ -25,6 +25,10 @@ export interface DueSale {
   customerId?: string;
   customerName: string;
   customerPhone?: string;
+  itemTitle?: string;
+  itemSubtitle?: string;
+  saleKind?: string;
+  imageUri?: string;
   issuedAt: string;
   totalAmount: number;
   paidAmount: number;
@@ -36,6 +40,8 @@ export interface DueSale {
 export interface PaymentProof {
   id: string;
   saleId: string;
+  saleNumber?: string;
+  customerId?: string;
   customerName: string;
   customerPhone?: string;
   amount: number;

@@ -6,6 +6,7 @@ export interface Inventory {
   _id: string;
   plantType?: PlantType;
   quantity: number;
+  quantityUnit?: string;
   sourceType?: InventorySourceType;
   sourceRef?: string | Record<string, unknown>;
   sourceModel?: string | Record<string, unknown>;
@@ -24,6 +25,7 @@ export interface Inventory {
 export interface CreatePurchasedInventoryPayload {
   plantType: string;
   quantity: number;
+  quantityUnit?: string;
   unitCost: number;
   growthStage?: string;
   sourceType?: "PURCHASE";

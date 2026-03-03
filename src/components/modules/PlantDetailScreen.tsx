@@ -18,9 +18,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PlantTypeService } from "../../services/plant-type.service";
 import { UploadService } from "../../services/upload.service";
+import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { formatErrorMessage } from "../../utils/error";
 import { toImageUrl } from "../../utils/image";
+import { canViewSensitivePricing } from "../../utils/rbac";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -48,6 +50,8 @@ export function PlantDetailScreen({
 }: PlantDetailScreenProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const role = useAuthStore((state) => state.user?.role);
+  const showSensitivePricing = canViewSensitivePricing(role);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<{
     uri: string;
@@ -358,12 +362,14 @@ export function PlantDetailScreen({
             </View>
           </View>
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailKey}>Default Cost</Text>
-            <Text style={styles.detailValue}>
-              {formatCurrency(item.defaultCostPrice)}
-            </Text>
-          </View>
+          {showSensitivePricing && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailKey}>Default Cost</Text>
+              <Text style={styles.detailValue}>
+                {formatCurrency(item.defaultCostPrice)}
+              </Text>
+            </View>
+          )}
           <View style={styles.detailRow}>
             <Text style={styles.detailKey}>Growth Stages</Text>
             <Text style={styles.detailValue}>{growthStages.length || "—"}</Text>

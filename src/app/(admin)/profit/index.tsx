@@ -147,13 +147,27 @@ export default function AdminProfit() {
   /* -------------------- Normalize Response -------------------- */
 
   const result = mutation.data ?? {
+    totalGrossSales: 0,
+    totalDiscount: 0,
     totalSales: 0,
+    totalCollected: 0,
+    totalDue: 0,
     totalExpenses: 0,
+    totalLabourCost: 0,
+    totalCost: 0,
+    accruedProfit: 0,
     profit: 0,
   };
 
+  const totalGrossSales = Number(result.totalGrossSales) || 0;
+  const totalDiscount = Number(result.totalDiscount) || 0;
   const totalSales = Number(result.totalSales) || 0;
+  const totalCollected = Number(result.totalCollected) || 0;
+  const totalDue = Number(result.totalDue) || 0;
   const totalExpenses = Number(result.totalExpenses) || 0;
+  const totalLabourCost = Number(result.totalLabourCost) || 0;
+  const totalCost = Number(result.totalCost) || 0;
+  const accruedProfit = Number(result.accruedProfit) || 0;
   const profit = Number(result.profit) || 0;
 
   const profitMargin =
@@ -164,9 +178,10 @@ export default function AdminProfit() {
       ? getInclusiveDays(startDate, endDate)
       : 0;
 
-  const isDateRangeInvalid =
-    Boolean(startDate && endDate) &&
-    (startDate > endDate || getInclusiveDays(startDate, endDate) > 366);
+  const isDateRangeInvalid = (() => {
+    if (!startDate || !endDate) return false;
+    return startDate > endDate || getInclusiveDays(startDate, endDate) > 366;
+  })();
 
   /* -------------------- UI -------------------- */
 
@@ -451,7 +466,7 @@ export default function AdminProfit() {
             </View>
 
             <View style={styles.resultsContent}>
-              {/* Total Sales */}
+              {/* Net Sales */}
               <View style={styles.metricCard}>
                 <LinearGradient
                   colors={[Colors.success + "20", Colors.success + "10"]}
@@ -467,18 +482,45 @@ export default function AdminProfit() {
                         color={Colors.success}
                       />
                     </View>
-                    <Text style={styles.metricLabel}>Total Sales</Text>
+                    <Text style={styles.metricLabel}>Net Sales</Text>
                   </View>
                   <Text style={styles.metricValue}>
                     ₹ {totalSales.toLocaleString("en-IN")}
                   </Text>
                   <Text style={styles.metricSubtext}>
-                    Revenue generated from sales
+                    Gross: ₹ {totalGrossSales.toLocaleString("en-IN")} • Discount: ₹ {totalDiscount.toLocaleString("en-IN")}
                   </Text>
                 </LinearGradient>
               </View>
 
-              {/* Total Expenses */}
+              {/* Collections */}
+              <View style={styles.metricCard}>
+                <LinearGradient
+                  colors={[Colors.info + "20", Colors.info + "10"]}
+                  style={styles.metricGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <View style={styles.metricHeader}>
+                    <View style={styles.metricIcon}>
+                      <MaterialIcons
+                        name="payments"
+                        size={20}
+                        color={Colors.info}
+                      />
+                    </View>
+                    <Text style={styles.metricLabel}>Collected</Text>
+                  </View>
+                  <Text style={styles.metricValue}>
+                    ₹ {totalCollected.toLocaleString("en-IN")}
+                  </Text>
+                  <Text style={styles.metricSubtext}>
+                    Pending due: ₹ {totalDue.toLocaleString("en-IN")}
+                  </Text>
+                </LinearGradient>
+              </View>
+
+              {/* Total Cost */}
               <View style={styles.metricCard}>
                 <LinearGradient
                   colors={[Colors.warning + "20", Colors.warning + "10"]}
@@ -494,13 +536,13 @@ export default function AdminProfit() {
                         color={Colors.warning}
                       />
                     </View>
-                    <Text style={styles.metricLabel}>Total Expenses</Text>
+                    <Text style={styles.metricLabel}>Total Cost</Text>
                   </View>
                   <Text style={styles.metricValue}>
-                    ₹ {totalExpenses.toLocaleString("en-IN")}
+                    ₹ {totalCost.toLocaleString("en-IN")}
                   </Text>
                   <Text style={styles.metricSubtext}>
-                    Costs and operational expenses
+                    Expenses: ₹ {totalExpenses.toLocaleString("en-IN")} • Labour: ₹ {totalLabourCost.toLocaleString("en-IN")}
                   </Text>
                 </LinearGradient>
               </View>
@@ -521,7 +563,7 @@ export default function AdminProfit() {
                         color={Colors.primary}
                       />
                     </View>
-                    <Text style={styles.metricLabel}>Net Profit</Text>
+                    <Text style={styles.metricLabel}>Realized Profit</Text>
                   </View>
                   <Text
                     style={[
@@ -533,7 +575,7 @@ export default function AdminProfit() {
                     ₹ {profit.toLocaleString("en-IN")}
                   </Text>
                   <Text style={styles.metricSubtext}>
-                    {profit >= 0 ? "Profit earned" : "Loss incurred"}
+                    {profit >= 0 ? "Collected profit earned" : "Collected loss"}
                   </Text>
                 </LinearGradient>
               </View>
@@ -550,6 +592,18 @@ export default function AdminProfit() {
                   ]}
                 >
                   {profitMargin}%
+                </Text>
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Accrued Profit</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    { color: accruedProfit >= 0 ? Colors.success : Colors.error },
+                  ]}
+                >
+                  ₹ {accruedProfit.toLocaleString("en-IN")}
                 </Text>
               </View>
               <View style={styles.summaryDivider} />

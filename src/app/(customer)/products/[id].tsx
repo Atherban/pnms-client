@@ -27,6 +27,31 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const clamp = (value: number, min = 0, max = Number.POSITIVE_INFINITY) =>
+  Math.min(Math.max(value, min), max);
+
+const computeSaleFinancials = (sale: any, fallbackGrossTotal: number) => {
+  const gross = Math.max(
+    0,
+    toNumber(sale?.grossAmount) || toNumber(sale?.totalAmount) || fallbackGrossTotal,
+  );
+  const discount = clamp(toNumber(sale?.discountAmount), 0, gross);
+  const net = Math.max(0, toNumber(sale?.netAmount) || gross - discount);
+  const paidRaw = Math.max(0, toNumber(sale?.paidAmount) || toNumber(sale?.amountPaid));
+  const dueRaw = Math.max(0, toNumber(sale?.dueAmount));
+
+  // Keep figures internally consistent even with partially-missing backend fields.
+  let paid = clamp(paidRaw, 0, net);
+  let due = dueRaw > 0 ? clamp(dueRaw, 0, net) : clamp(net - paid, 0, net);
+  if (paid + due > net) {
+    due = clamp(net - paid, 0, net);
+  } else if (paid + due < net) {
+    paid = clamp(net - due, 0, net);
+  }
+
+  return { gross, discount, net, paid, due };
+};
+
 const formatMoney = (amount: number) =>
   `₹${Math.round(amount).toLocaleString("en-IN")}`;
 
@@ -64,7 +89,9 @@ interface ProductSaleRow {
   saleId: string;
   soldAt: string;
   quantity: number;
-  amount: number;
+  amount: number; // discounted line amount
+  grossAmount: number;
+  discountShare: number;
   paidShare: number;
   dueShare: number;
 }
@@ -95,9 +122,14 @@ const StatCard = ({ label, value, icon, color, subValue }: StatCardProps) => (
 interface PurchaseRowCardProps {
   row: ProductSaleRow;
   onPress: (saleId: string) => void;
+  onGenerateBill: (saleId: string) => void;
 }
 
-const PurchaseRowCard = ({ row, onPress }: PurchaseRowCardProps) => {
+const PurchaseRowCard = ({
+  row,
+  onPress,
+  onGenerateBill,
+}: PurchaseRowCardProps) => {
   const isFullyPaid = row.dueShare <= 0;
 
   return (
@@ -156,22 +188,32 @@ const PurchaseRowCard = ({ row, onPress }: PurchaseRowCardProps) => {
         </View>
       </View>
 
-      {/* Payment Button */}
-      <TouchableOpacity
-        onPress={() => onPress(row.saleId)}
-        style={styles.paymentButton}
-        activeOpacity={0.7}
-      >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.paymentButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+      {/* Actions */}
+      <View style={styles.rowActions}>
+        <TouchableOpacity
+          onPress={() => onPress(row.saleId)}
+          style={styles.paymentButton}
+          activeOpacity={0.7}
         >
-          <MaterialIcons name="payment" size={16} color={Colors.white} />
-          <Text style={styles.paymentButtonText}>View Payment Details</Text>
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+            style={styles.paymentButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <MaterialIcons name="payment" size={16} color={Colors.white} />
+            <Text style={styles.paymentButtonText}>View Payment</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => onGenerateBill(row.saleId)}
+          style={styles.billButton}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="receipt-long" size={15} color={Colors.primary} />
+          <Text style={styles.billButtonText}>Generate Bill</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -213,17 +255,26 @@ export default function CustomerProductDetailScreen() {
         const items = Array.isArray((sale as any)?.items)
           ? (sale as any).items
           : [];
-        const saleTotal = items.reduce((sum: number, row: any) => {
+        const saleGrossFromItems = items.reduce((sum: number, row: any) => {
           const qty = toNumber(row?.quantity);
           const price = toNumber(
             row?.priceAtSale ?? row?.unitPrice ?? row?.price,
           );
           return sum + qty * price;
         }, 0);
-        const salePaid = toNumber(
-          (sale as any)?.paidAmount ?? (sale as any)?.amountPaid,
-        );
-        const paidRatio = saleTotal > 0 ? Math.min(1, salePaid / saleTotal) : 0;
+        const saleFinancials = computeSaleFinancials(sale, saleGrossFromItems);
+        const discountRatio =
+          saleFinancials.gross > 0
+            ? clamp(saleFinancials.discount / saleFinancials.gross, 0, 1)
+            : 0;
+        const paidRatio =
+          saleFinancials.net > 0
+            ? clamp(saleFinancials.paid / saleFinancials.net, 0, 1)
+            : 0;
+        const dueRatio =
+          saleFinancials.net > 0
+            ? clamp(saleFinancials.due / saleFinancials.net, 0, 1)
+            : 0;
 
         for (const item of items) {
           const itemId = String(
@@ -245,12 +296,14 @@ export default function CustomerProductDetailScreen() {
           const unitPrice = toNumber(
             item?.priceAtSale ?? item?.unitPrice ?? item?.price,
           );
-          const amount = qty * unitPrice;
-          const paidShare = amount * paidRatio;
-          const dueShare = Math.max(0, amount - paidShare);
+          const lineGross = Math.max(0, qty * unitPrice);
+          const discountShare = Math.min(lineGross, lineGross * discountRatio);
+          const lineNet = Math.max(0, lineGross - discountShare);
+          const paidShare = Math.min(lineNet, lineNet * paidRatio);
+          const dueShare = Math.min(lineNet, Math.max(0, lineNet * dueRatio));
 
           totalQty += qty;
-          totalAmount += amount;
+          totalAmount += lineNet;
           totalPaid += paidShare;
 
           rows.push({
@@ -261,7 +314,9 @@ export default function CustomerProductDetailScreen() {
                 new Date().toISOString(),
             ),
             quantity: qty,
-            amount,
+            amount: lineNet,
+            grossAmount: lineGross,
+            discountShare,
             paidShare,
             dueShare,
           });
@@ -296,6 +351,11 @@ export default function CustomerProductDetailScreen() {
   const handleViewPayment = (saleId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push(`/(customer)/dues/${saleId}` as any);
+  };
+
+  const handleGenerateBill = (saleId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(`/(customer)/sales/bill/${saleId}` as any);
   };
 
   if (!id) return null;
@@ -434,6 +494,7 @@ export default function CustomerProductDetailScreen() {
                 key={`${row.saleId}_${row.soldAt}`}
                 row={row}
                 onPress={handleViewPayment}
+                onGenerateBill={handleGenerateBill}
               />
             ))
           )}
@@ -626,6 +687,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
 
+  // Row Actions
+  rowActions: {
+    gap: 8,
+  },
+
   // Payment Button
   paymentButton: {
     borderRadius: 10,
@@ -640,6 +706,22 @@ const styles = StyleSheet.create({
   },
   paymentButtonText: {
     color: Colors.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  billButton: {
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+    backgroundColor: Colors.white,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  billButtonText: {
+    color: Colors.primary,
     fontSize: 13,
     fontWeight: "600",
   },
