@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "696361991662",
+    "project_id": "pnms-398bb",
+    "storage_bucket": "pnms-398bb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:696361991662:android:d0a5266c29c802c31da2ff",
+        "android_client_info": {
+          "package_name": "com.mhlp.pnms"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAk4q1azd9Y3xGRXDipx6Kt541gVReY8d8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
