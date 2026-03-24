@@ -63,6 +63,7 @@ const normalizePaymentConfig = (settings: any): NurseryPaymentConfig => {
 
 const toProfile = (nurseryId: string, raw: any): NurseryPublicProfile => {
   const settings = raw?.settings || {};
+  const branding = settings?.branding || raw?.branding || {};
   const contact = settings?.contact || settings?.contactDetails || {};
   const social = settings?.social || settings?.socialHandles || {};
   const contactList = Array.isArray(settings?.contactDetails)
@@ -74,12 +75,25 @@ const toProfile = (nurseryId: string, raw: any): NurseryPublicProfile => {
 
   return {
     nurseryId,
+    name: raw?.name,
+    code: raw?.code,
+    phoneNumber: raw?.phoneNumber,
     paymentConfig,
     contactDetails: contactList,
+    logoImageUrl: toImageUrl(
+      branding?.logoImageUrl ||
+        branding?.logoImage ||
+        branding?.logoUrl ||
+        branding?.logo ||
+        raw?.logoImageUrl ||
+        raw?.logoUrl ||
+        raw?.logoImage ||
+        raw?.logo,
+    ),
     // Backward-compatible projections used in existing customer/admin screens.
     upiId: paymentConfig.upiId,
     qrImageUrl: paymentConfig.qrImageUrl,
-    primaryPhone: contact?.primaryPhone || contactList[0]?.phoneNumber,
+    primaryPhone: contact?.primaryPhone || raw?.phoneNumber || contactList[0]?.phoneNumber,
     secondaryPhone: contact?.secondaryPhone,
     whatsappPhone: contact?.whatsappPhone || contactList[0]?.whatsappNumber,
     website: social?.website,
@@ -152,6 +166,21 @@ export const NurseryPublicProfileService = {
 
     const profile = normalizeProfileResponse(id, payload);
     return { qrImageUrl: profile.paymentConfig?.qrImageUrl || profile.qrImageUrl, raw: payload };
+  },
+
+  async uploadLogoImage(nurseryId: string | undefined, file: MultipartFile) {
+    const id = resolveNurseryId(nurseryId);
+    const formData = new FormData();
+    appendMultipartFile(formData, "image", file);
+    const payload = await sendMultipart<any>({
+      path: `/nurseries/${id}/logo-image`,
+      method: "POST",
+      formData,
+      nurseryId: id,
+    });
+
+    const profile = normalizeProfileResponse(id, payload);
+    return { logoImageUrl: profile.logoImageUrl, raw: payload };
   },
 
   async createPublicContact(

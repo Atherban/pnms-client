@@ -5,7 +5,10 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SalesService } from "../../services/sales.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
+import StitchCard from "../common/StitchCard";
+import StitchSectionHeader from "../common/StitchSectionHeader";
 
 interface SaleReturnScreenProps {
   saleId: string;
@@ -105,18 +108,21 @@ export function SaleReturnScreen({ saleId, routeGroup }: SaleReturnScreenProps) 
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Sales Returns</Text>
-        <Text style={styles.subtitle}>Request, approve and complete sale returns</Text>
-      </View>
+      <StitchHeader
+        title="Sales Returns"
+        subtitle="Request, approve and complete sale returns"
+        variant="gradient"
+        showBackButton
+        onBackPress={() => router.back()}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.card}>
+        <StitchCard style={styles.card}>
           <Text style={styles.meta}>Sale: {sale?.saleNumber || saleId}</Text>
           <Text style={styles.meta}>Sale Status: {sale?.status || "COMPLETED"}</Text>
           <Text style={styles.meta}>Paid: {formatCurrency(Number(sale?.paidAmount || 0))}</Text>
           <Text style={styles.meta}>Due: {formatCurrency(Number(sale?.dueAmount || 0))}</Text>
-          <Text style={styles.sectionTitle}>Select Item</Text>
+          <StitchSectionHeader title="Select Item" />
           <View style={styles.rowActions}>
             {saleItems.map((item: any, index: number) => {
               const label = item?.inventory?.plantType?.name || `Item ${index + 1}`;
@@ -142,7 +148,7 @@ export function SaleReturnScreen({ saleId, routeGroup }: SaleReturnScreenProps) 
             style={styles.input}
             keyboardType="numeric"
             placeholder={`Returned quantity (max ${selectedSoldQty})`}
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={AdminTheme.colors.textSoft}
           />
           <TextInput
             value={reason}
@@ -150,16 +156,16 @@ export function SaleReturnScreen({ saleId, routeGroup }: SaleReturnScreenProps) 
             style={[styles.input, styles.reason]}
             multiline
             placeholder="Return reason"
-            placeholderTextColor={Colors.textTertiary}
+            placeholderTextColor={AdminTheme.colors.textSoft}
           />
 
           <Pressable style={styles.button} onPress={() => createMutation.mutate()}>
             <Text style={styles.buttonText}>{createMutation.isPending ? "Submitting..." : "Submit Return Request"}</Text>
           </Pressable>
-        </View>
+        </StitchCard>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Return History</Text>
+        <StitchCard style={styles.card}>
+          <StitchSectionHeader title="Return History" />
           {!Array.isArray(returns) || returns.length === 0 ? (
             <Text style={styles.empty}>No return requests found.</Text>
           ) : (
@@ -196,67 +202,63 @@ export function SaleReturnScreen({ saleId, routeGroup }: SaleReturnScreenProps) 
           >
             <Text style={styles.buttonText}>Back to Sale</Text>
           </Pressable>
-        </View>
+        </StitchCard>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.lg },
-  title: { color: Colors.text, fontWeight: "700", fontSize: 22 },
-  subtitle: { color: Colors.textSecondary, marginTop: 4 },
-  content: { paddingHorizontal: Spacing.lg, paddingBottom: 100, gap: Spacing.md },
+  container: { flex: 1, backgroundColor: AdminTheme.colors.background },
+  content: { paddingHorizontal: AdminTheme.spacing.lg, paddingBottom: 100, gap: AdminTheme.spacing.md },
   card: {
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.surface,
+    borderColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 14,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    padding: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
-  meta: { color: Colors.textSecondary },
-  sectionTitle: { color: Colors.text, fontWeight: "700", fontSize: 16 },
-  empty: { color: Colors.textSecondary },
+  meta: { color: AdminTheme.colors.textMuted },
+  empty: { color: AdminTheme.colors.textMuted },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 10,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    color: Colors.text,
-    backgroundColor: Colors.surfaceDark,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.surface,
   },
   reason: { minHeight: 80, textAlignVertical: "top" },
   button: {
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     borderRadius: 10,
     alignItems: "center",
-    paddingVertical: Spacing.md,
+    paddingVertical: AdminTheme.spacing.md,
   },
   secondaryButton: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: AdminTheme.colors.primaryDark,
   },
-  buttonText: { color: Colors.white, fontWeight: "700" },
+  buttonText: { color: AdminTheme.colors.surface, fontWeight: "700" },
   returnItem: {
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 10,
-    padding: Spacing.sm,
+    padding: AdminTheme.spacing.sm,
     gap: 4,
   },
-  returnTitle: { color: Colors.text, fontWeight: "700" },
-  returnMeta: { color: Colors.textSecondary },
-  rowActions: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.xs },
+  returnTitle: { color: AdminTheme.colors.text, fontWeight: "700" },
+  returnMeta: { color: AdminTheme.colors.textMuted },
+  rowActions: { flexDirection: "row", gap: AdminTheme.spacing.sm, marginTop: AdminTheme.spacing.xs },
   smallButton: {
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     alignItems: "center",
   },
-  smallButtonText: { color: Colors.white, fontWeight: "700" },
-  approve: { backgroundColor: Colors.primary },
-  reject: { backgroundColor: Colors.error },
-  complete: { backgroundColor: Colors.success },
+  smallButtonText: { color: AdminTheme.colors.surface, fontWeight: "700" },
+  approve: { backgroundColor: AdminTheme.colors.primary },
+  reject: { backgroundColor: AdminTheme.colors.danger },
+  complete: { backgroundColor: AdminTheme.colors.success },
 });

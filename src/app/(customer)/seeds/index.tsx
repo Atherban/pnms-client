@@ -1,485 +1,330 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
+  ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
+  StyleSheet,
   Text,
   View,
-  ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+
+import {
+  CustomerCard,
+  CustomerEmptyState,
+  CustomerScreen,
+  SectionHeader,
+  StatPill,
+  StatusChip,
+} from "@/src/components/common/StitchScreen";
+import { CustomerDashboardService } from "@/src/services/customer-dashboard.service";
 import { CustomerSeedBatchService } from "@/src/services/customer-seed-batch.service";
-import { Colors, Spacing } from "@/src/theme";
+import { useAuthStore } from "@/src/stores/auth.store";
+import { CustomerColors, Spacing } from "@/src/theme";
 
-type BatchStatus = "SOWN" | "GERMINATING" | "READY" | "COLLECTED" | "CLOSED";
+const formatNumber = (num: number) => num.toLocaleString("en-IN");
 
-const getStatusConfig = (status?: string) => {
+const getStatusTone = (status?: string): "success" | "warning" | "info" | "default" => {
   switch (String(status || "").toUpperCase()) {
     case "READY":
-      return {
-        color: Colors.success,
-        bg: "#D1FAE5",
-        icon: "check-circle",
-        label: "Ready",
-      };
-    case "GERMINATING":
-      return {
-        color: "#92400E",
-        bg: "#FEF3C7",
-        icon: "sprout",
-        label: "Germinating",
-      };
-    case "SOWN":
-      return {
-        color: "#1E40AF",
-        bg: "#EFF6FF",
-        icon: "grass",
-        label: "Sown",
-      };
     case "COLLECTED":
-      return {
-        color: "#374151",
-        bg: "#E5E7EB",
-        icon: "inventory",
-        label: "Collected",
-      };
-    case "CLOSED":
-      return {
-        color: "#6B7280",
-        bg: "#F3F4F6",
-        icon: "check-circle",
-        label: "Closed",
-      };
+      return "success";
+    case "GERMINATING":
+      return "warning";
+    case "SOWN":
+      return "info";
     default:
-      return {
-        color: Colors.textSecondary,
-        bg: Colors.surface,
-        icon: "help",
-        label: status || "Unknown",
-      };
+      return "default";
   }
-};
-
-const formatNumber = (num: number) => {
-  return num.toLocaleString("en-IN");
 };
 
 export default function CustomerSeedBatchIndexScreen() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+
+  const { data: overview } = useQuery({
+    queryKey: ["customer-dashboard-lifecycle", user?.id, user?.phoneNumber, user?.nurseryId],
+    enabled: Boolean(user?.id || user?.phoneNumber),
+    queryFn: () =>
+      CustomerDashboardService.getOverview({
+        id: user?.id,
+        phoneNumber: user?.phoneNumber,
+        role: user?.role,
+        nurseryId: user?.nurseryId,
+      }),
+  });
+
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["customer-seed-batches"],
     queryFn: CustomerSeedBatchService.getAll,
   });
 
   const batches = Array.isArray(data) ? data : [];
-
-  const getProgressPercentage = (batch: any) => {
-    const total = Number(batch.seedsSown || 0);
-    if (total === 0) return 0;
-    const germinated = Number(batch.germinatedQuantity ?? batch.seedsGerminated ?? 0);
-    return (germinated / total) * 100;
-  };
+  const activeCount = batches.filter((batch) => !["COLLECTED", "CLOSED"].includes(String(batch.status || "").toUpperCase())).length;
+  const readyCount = batches.filter((batch) => String(batch.status || "").toUpperCase() === "READY").length;
+  const lifecycle = overview?.lifecycle || { sown: 0, germinated: 0, discarded: 0, pending: 0 };
+  const germinationRate =
+    lifecycle.sown > 0 ? Math.round((Number(lifecycle.germinated || 0) / Number(lifecycle.sown || 0)) * 100) : 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-      >
-        <Text style={styles.headerTitle}>Seed Progress</Text>
-        <Text style={styles.headerSubtitle}>
-          Track your seed batch lifecycle in nursery
-        </Text>
-      </LinearGradient>
+    <CustomerScreen
+      title="Seed Progress"
+      subtitle="Track nursery batches and their growing stages."
+      onBackPress={() => router.back()}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          colors={[CustomerColors.primary]}
+          tintColor={CustomerColors.primary}
+        />
+      }
+    >
+      <View style={styles.summaryGrid}>
+        <StatPill label="Total batches" value={String(batches.length)} />
+        <StatPill label="Active" value={String(activeCount)} />
+        <StatPill label="Ready" value={String(readyCount)} />
+      </View>
 
-      {/* Content */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-      >
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+      <CustomerCard style={styles.lifecycleCard}>
+        <SectionHeader
+          title="Lifecycle snapshot"
+          subtitle="Aggregated counts based on nursery lifecycle updates."
+          trailing={<StatusChip label={`${germinationRate}% rate`} tone="success" />}
+        />
+        <View style={styles.lifecycleGrid}>
+          <View style={styles.lifecycleTile}>
+            <Text style={styles.lifecycleValue}>{formatNumber(Number(lifecycle.sown || 0))}</Text>
+            <Text style={styles.lifecycleLabel}>Seeds given</Text>
+          </View>
+          <View style={styles.lifecycleTile}>
+            <Text style={[styles.lifecycleValue, styles.successText]}>
+              {formatNumber(Number(lifecycle.germinated || 0))}
+            </Text>
+            <Text style={styles.lifecycleLabel}>Germinated</Text>
+          </View>
+          <View style={styles.lifecycleTile}>
+            <Text style={[styles.lifecycleValue, styles.warningText]}>
+              {formatNumber(Number(lifecycle.pending || 0))}
+            </Text>
+            <Text style={styles.lifecycleLabel}>In progress</Text>
+          </View>
+          <View style={styles.lifecycleTile}>
+            <Text style={styles.lifecycleValue}>{formatNumber(Number(lifecycle.discarded || 0))}</Text>
+            <Text style={styles.lifecycleLabel}>Discarded</Text>
+          </View>
+        </View>
+      </CustomerCard>
+
+      <CustomerCard>
+        <SectionHeader
+          title="Your seed batches"
+          subtitle="Open any batch to review status, payment context, and lifecycle updates."
+        />
+
+        {isLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={CustomerColors.primary} />
             <Text style={styles.loadingText}>Loading seed batches...</Text>
           </View>
-        )}
+        ) : null}
 
-        {!isLoading && batches.length === 0 && (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <MaterialIcons name="inventory-2" size={48} color={Colors.textTertiary} />
-            </View>
-            <Text style={styles.emptyTitle}>No Seed Batches Found</Text>
-            <Text style={styles.emptyMessage}>
-              Your seed batches will appear here once created by nursery staff.
-            </Text>
-          </View>
-        )}
+        {!isLoading && batches.length === 0 ? (
+          <CustomerEmptyState
+            title="No seed batches yet"
+            message="Batches will appear here after the nursery creates them for your account."
+            icon={<MaterialIcons name="inventory-2" size={44} color={CustomerColors.textMuted} />}
+          />
+        ) : null}
 
-        {batches.map((batch) => {
-          const plantName =
-            typeof batch.plantTypeId === "object" ? batch.plantTypeId?.name : "Unknown Plant";
-          const plantCategory =
-            typeof batch.plantTypeId === "object" ? batch.plantTypeId?.category : "";
-          const germinated = Number(batch.germinatedQuantity ?? batch.seedsGerminated ?? 0);
-          const discarded = Number(batch.discardedQuantity ?? batch.seedsDiscarded ?? 0);
-          const sown = Number(batch.seedsSown || 0);
-          const pending = Math.max(sown - germinated - discarded, 0);
-          const status = batch.status as BatchStatus;
-          const statusConfig = getStatusConfig(status);
-          const progressPercentage = getProgressPercentage(batch);
+        {!isLoading ? (
+          <View style={styles.list}>
+            {batches.map((batch) => {
+              const plantName =
+                typeof batch.plantTypeId === "object" ? batch.plantTypeId?.name : "Unknown plant";
+              const sown = Number(batch.seedsSown || 0);
+              const germinated = Number(batch.germinatedQuantity ?? batch.seedsGerminated ?? 0);
+              const discarded = Number(batch.discardedQuantity ?? batch.seedsDiscarded ?? 0);
+              const pending = Math.max(sown - germinated - discarded, 0);
+              const statusLabel = String(batch.status || "Unknown").replace(/_/g, " ");
 
-          return (
-            <Pressable
-              key={batch._id}
-              onPress={() => router.push(`/(customer)/seeds/${batch._id}` as any)}
-              style={({ pressed }) => [
-                styles.batchCard,
-                pressed && styles.batchCardPressed,
-              ]}
-            >
-              {/* Header */}
-              <View style={styles.cardHeader}>
-                <View style={styles.plantInfo}>
-                  <Text style={styles.plantName}>{plantName}</Text>
-                  {plantCategory ? (
-                    <View style={[styles.categoryBadge, { backgroundColor: Colors.info + "10" }]}>
-                      <Text style={[styles.categoryText, { color: Colors.info }]}>
-                        {plantCategory}
+              return (
+                <Pressable
+                  key={batch._id}
+                  onPress={() => router.push(`/(customer)/seeds/${batch._id}` as any)}
+                  style={({ pressed }) => [styles.batchCard, pressed && styles.batchCardPressed]}
+                >
+                  <View style={styles.batchHeader}>
+                    <View style={styles.batchTitleWrap}>
+                      <Text style={styles.batchTitle}>{plantName}</Text>
+                      <Text style={styles.batchMeta}>
+                        Seeds given {formatNumber(Number(batch.seedQuantity || 0))}
                       </Text>
                     </View>
-                  ) : null}
-                </View>
-                <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-                  <MaterialIcons
-                    name={statusConfig.icon as any}
-                    size={12}
-                    color={statusConfig.color}
-                  />
-                  <Text style={[styles.statusText, { color: statusConfig.color }]}>
-                    {statusConfig.label}
-                  </Text>
-                </View>
-              </View>
+                    <StatusChip label={statusLabel} tone={getStatusTone(batch.status)} />
+                  </View>
 
-              {/* Stats Grid */}
-              <View style={styles.statsGrid}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Sown</Text>
-                  <Text style={styles.statValue}>{formatNumber(sown)}</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Germinated</Text>
-                  <Text style={[styles.statValue, { color: Colors.success }]}>
-                    {formatNumber(germinated)}
-                  </Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Discarded</Text>
-                  <Text style={[styles.statValue, { color: Colors.error }]}>
-                    {formatNumber(discarded)}
-                  </Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statLabel}>Pending</Text>
-                  <Text style={[styles.statValue, { color: Colors.warning }]}>
-                    {formatNumber(pending)}
-                  </Text>
-                </View>
-              </View>
+                  <View style={styles.metricsRow}>
+                    <View style={styles.metricBlock}>
+                      <Text style={styles.metricValue}>{formatNumber(sown)}</Text>
+                      <Text style={styles.metricLabel}>Sown</Text>
+                    </View>
+                    <View style={styles.metricBlock}>
+                      <Text style={[styles.metricValue, styles.successText]}>{formatNumber(germinated)}</Text>
+                      <Text style={styles.metricLabel}>Germinated</Text>
+                    </View>
+                    <View style={styles.metricBlock}>
+                      <Text style={[styles.metricValue, styles.warningText]}>{formatNumber(pending)}</Text>
+                      <Text style={styles.metricLabel}>Pending</Text>
+                    </View>
+                  </View>
 
-              {/* Progress Bar */}
-              {sown > 0 && (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressHeader}>
-                    <Text style={styles.progressLabel}>Germination Progress</Text>
-                    <Text style={styles.progressValue}>
-                      {Math.round((germinated / sown) * 100)}%
+                  <View style={styles.progressWrap}>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${sown > 0 ? Math.min((germinated / sown) * 100, 100) : 0}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.progressLabel}>
+                      Germination {sown > 0 ? Math.round((germinated / sown) * 100) : 0}%
                     </Text>
                   </View>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        {
-                          width: `${progressPercentage}%`,
-                          backgroundColor: progressPercentage >= 80
-                            ? Colors.success
-                            : progressPercentage >= 50
-                            ? Colors.warning
-                            : Colors.primary,
-                        },
-                      ]}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* Footer */}
-              <View style={styles.cardFooter}>
-                <View style={styles.footerItem}>
-                  <MaterialIcons name="inventory" size={14} color={Colors.textSecondary} />
-                  <Text style={styles.footerText}>
-                    Given: {formatNumber(batch.seedQuantity || 0)} seeds
-                  </Text>
-                </View>
-                {batch.expectedReadyDate && (
-                  <View style={styles.footerDot} />
-                )}
-                {batch.expectedReadyDate && (
-                  <View style={styles.footerItem}>
-                    <MaterialIcons name="calendar-today" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.footerText}>
-                      Ready: {new Date(batch.expectedReadyDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                      })}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Touch Indicator */}
-              <View style={styles.touchIndicator}>
-                <MaterialIcons name="chevron-right" size={20} color={Colors.textTertiary} />
-              </View>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-    </SafeAreaView>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </CustomerCard>
+    </CustomerScreen>
   );
 }
 
-const styles = {
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+const styles = StyleSheet.create({
+  summaryGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
   },
-
-  // Header
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 28,
-    fontWeight: "700" as const,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 14,
-    fontWeight: "500" as const,
-  },
-
-  // Scroll Content
-  scrollContent: {
-    padding: Spacing.lg,
-    paddingBottom: 100,
-  },
-
-  // Loading State
-  loadingContainer: {
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
+  lifecycleCard: {
     gap: Spacing.md,
   },
-  loadingText: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "500" as const,
+  lifecycleGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
   },
-
-  // Empty State
-  emptyContainer: {
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.surface,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600" as const,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: "center" as const,
-    lineHeight: 20,
-  },
-
-  // Batch Card
-  batchCard: {
-    borderWidth: 1,
-    borderColor: Colors.border,
+  lifecycleTile: {
+    flexGrow: 1,
+    flexBasis: "48%",
+    padding: Spacing.sm,
     borderRadius: 16,
+    backgroundColor: CustomerColors.surface,
+    alignItems: "center",
+    gap: 2,
+    borderWidth: 1,
+    borderColor: CustomerColors.border,
+  },
+  lifecycleValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: CustomerColors.text,
+  },
+  lifecycleLabel: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
+    fontWeight: "600",
+  },
+  loadingState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  loadingText: {
+    color: CustomerColors.textMuted,
+  },
+  list: {
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  batchCard: {
     padding: Spacing.md,
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.md,
-    position: "relative" as const,
+    borderRadius: 20,
+    backgroundColor: "rgba(15,189,73,0.05)",
+    borderWidth: 1,
+    borderColor: CustomerColors.borderStrong,
+    gap: Spacing.md,
   },
   batchCardPressed: {
-    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
-  cardHeader: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
+  batchHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
   },
-  plantInfo: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.xs,
+  batchTitleWrap: {
     flex: 1,
-  },
-  plantName: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.textPrimary,
-  },
-  categoryBadge: {
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: "600" as const,
-  },
-  statusBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 16,
     gap: 4,
   },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "600" as const,
+  batchTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: CustomerColors.text,
   },
-
-  // Stats Grid
-  statsGrid: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
+  batchMeta: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
   },
-  statItem: {
+  metricsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  metricBlock: {
     flex: 1,
-    alignItems: "center" as const,
+    padding: Spacing.sm,
+    borderRadius: 16,
+    backgroundColor: CustomerColors.surface,
+    alignItems: "center",
+    gap: 2,
+    borderWidth: 1,
+    borderColor: CustomerColors.border,
   },
-  statLabel: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    marginBottom: 2,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
+  metricValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CustomerColors.text,
   },
-  statValue: {
-    fontSize: 14,
-    fontWeight: "700" as const,
-    color: Colors.text,
+  metricLabel: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
   },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 4,
+  successText: {
+    color: CustomerColors.success,
   },
-
-  // Progress Bar
-  progressContainer: {
-    marginBottom: Spacing.sm,
+  warningText: {
+    color: CustomerColors.warning,
   },
-  progressHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: 4,
+  progressWrap: {
+    gap: 8,
   },
-  progressLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  progressValue: {
-    fontSize: 11,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 2,
-    overflow: "hidden" as const,
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: CustomerColors.border,
+    overflow: "hidden",
   },
   progressFill: {
-    height: "100%" as const,
-    borderRadius: 2,
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: CustomerColors.primary,
   },
-
-  // Card Footer
-  cardFooter: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
+  progressLabel: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
   },
-  footerItem: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-  },
-  footerText: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  footerDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: "#D1D5DB",
-  },
-
-  // Touch Indicator
-  touchIndicator: {
-    position: "absolute" as const,
-    right: Spacing.md,
-    top: "50%" as const,
-    marginTop: -10,
-  },
-} as const;
+});

@@ -18,6 +18,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchCard from "../../../components/common/StitchCard";
 import { GerminationService } from "../../../services/germination.service";
 import { Sowing, SowingService } from "../../../services/sowing.service";
 import { Colors } from "../../../theme";
@@ -62,6 +64,7 @@ const formatDate = (dateString?: string) => {
 };
 
 const getSeedName = (sowing: Sowing): string => {
+  
   if (typeof sowing.seedId === "object") {
     return sowing.seedId?.name || "Unknown Seed";
   }
@@ -1001,35 +1004,13 @@ export default function StaffGerminationCreate() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Blue Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-            </TouchableOpacity>
-
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Record Germination</Text>
-              <Text style={styles.headerSubtitle}>
-                {availableSowings.length}{" "}
-                {availableSowings.length === 1 ? "sowing" : "sowings"} available
-              </Text>
-            </View>
-
-            <View style={styles.headerRight} />
-          </View>
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title="Record Germination"
+        subtitle={`${availableSowings.length} ${availableSowings.length === 1 ? "sowing" : "sowings"} available`}
+        variant="solid"
+        showBackButton
+        onBackPress={handleBack}
+      />
 
       {/* Stats Card */}
       {sowings.length > 0 && (
@@ -1057,6 +1038,13 @@ export default function StaffGerminationCreate() {
           ]}
           ListHeaderComponent={
             <>
+              <StitchCard style={styles.heroCard}>
+                <Text style={styles.heroTitle}>Record the next germination step consistently</Text>
+                <Text style={styles.heroSubtitle}>
+                  Pick an active sowing, enter germinated and discarded seeds, and keep inventory creation aligned.
+                </Text>
+              </StitchCard>
+
               {/* Sowings Section */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -1390,7 +1378,7 @@ const styles = {
     flexDirection: "row" as const,
     backgroundColor: Colors.white,
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 12,
     marginBottom: 8,
     borderRadius: 16,
     padding: 16,
@@ -1434,8 +1422,24 @@ const styles = {
   listContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingBottom: BOTTOM_NAV_HEIGHT + 20,
+  },
+  heroCard: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6B7280",
   },
   listContentWithForm: {
     paddingBottom: BOTTOM_NAV_HEIGHT + 80,

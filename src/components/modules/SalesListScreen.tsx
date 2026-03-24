@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -11,7 +10,7 @@ import {
   Dimensions,
   FlatList,
   Modal,
-  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   Text,
@@ -19,13 +18,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
+import Animated, { FadeIn, Layout } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SalesService } from "../../services/sales.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
 import { canViewSensitivePricing } from "../../utils/rbac";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
+import { moduleBadge } from "../common/moduleStyles";
+import StitchCard from "../common/StitchCard";
+import StitchInput from "../common/StitchInput";
+import StitchSectionHeader from "../common/StitchSectionHeader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
@@ -169,7 +173,10 @@ const getSaleQty = (sale: any): number => {
         ? sale.customerSeedBatch
         : null;
     const units = Number(
-      batch?.germinatedQuantity ?? batch?.seedsGerminated ?? batch?.seedsSown ?? 0,
+      batch?.germinatedQuantity ??
+        batch?.seedsGerminated ??
+        batch?.seedsSown ??
+        0,
     );
     return Number.isFinite(units) && units > 0 ? units : 1;
   }
@@ -212,6 +219,8 @@ const getItemPlantNames = (sale: any): string[] => {
   const names: string[] = sale.items
     .map((item: any) => {
       const inventoryPlantName =
+        item?.plantTypeName ??
+        item?.inventoryLabel ??
         item?.inventory?.plantType?.name ??
         item?.inventoryId?.plantType?.name ??
         item?.plantType?.name;
@@ -249,6 +258,13 @@ const getSaleThumbnail = (sale: any): string | undefined => {
   if (Array.isArray(sale?.items)) {
     for (const item of sale.items) {
       const candidates = [
+        item?.plantImage ? { imageUrl: item.plantImage } : null,
+        item?.plantTypeName
+          ? {
+              name: item.plantTypeName,
+              imageUrl: item.plantImage,
+            }
+          : null,
         item?.inventory?.plantType,
         item?.inventoryId?.plantType,
         item?.plantType,
@@ -275,7 +291,8 @@ const getPaymentInfo = (mode?: string) => {
 const getPaymentTagInfo = (sale: any) => {
   const paymentStatus = String(sale?.paymentStatus || "").toUpperCase();
   if (paymentStatus === "PAID") return PAYMENT_STATUS_TAGS.PAID;
-  if (paymentStatus === "PARTIALLY_PAID") return PAYMENT_STATUS_TAGS.PARTIALLY_PAID;
+  if (paymentStatus === "PARTIALLY_PAID")
+    return PAYMENT_STATUS_TAGS.PARTIALLY_PAID;
   if (paymentStatus === "UNPAID" || paymentStatus === "OVERDUE") {
     return PAYMENT_STATUS_TAGS.UNPAID;
   }
@@ -458,7 +475,11 @@ const FilterModal = ({
           <View style={styles.modalHeader}>
             <View style={styles.modalHeaderContent}>
               <View style={styles.modalHeaderLeft}>
-                <MaterialIcons name="tune" size={24} color={Colors.primary} />
+                <MaterialIcons
+                  name="tune"
+                  size={24}
+                  color={AdminTheme.colors.primary}
+                />
                 <Text style={styles.modalHeaderTitle}>Filter Sales</Text>
               </View>
               <TouchableOpacity
@@ -468,7 +489,7 @@ const FilterModal = ({
                 <MaterialIcons
                   name="close"
                   size={24}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </TouchableOpacity>
             </View>
@@ -503,7 +524,11 @@ const FilterModal = ({
                       <MaterialIcons
                         name={method.icon as any}
                         size={20}
-                        color={isSelected ? method.color : Colors.textSecondary}
+                        color={
+                          isSelected
+                            ? method.color
+                            : AdminTheme.colors.textMuted
+                        }
                       />
                       <Text
                         style={[
@@ -564,7 +589,11 @@ const FilterModal = ({
                       <MaterialIcons
                         name={status.icon as any}
                         size={20}
-                        color={isSelected ? status.color : Colors.textSecondary}
+                        color={
+                          isSelected
+                            ? status.color
+                            : AdminTheme.colors.textMuted
+                        }
                       />
                       <Text
                         style={[
@@ -620,8 +649,8 @@ const FilterModal = ({
                       size={20}
                       color={
                         localFilters.dateRange === range.id
-                          ? Colors.primary
-                          : Colors.textSecondary
+                          ? AdminTheme.colors.primary
+                          : AdminTheme.colors.textMuted
                       }
                     />
                     <Text
@@ -650,7 +679,7 @@ const FilterModal = ({
                       <TextInput
                         style={styles.amountInput}
                         placeholder="0"
-                        placeholderTextColor={Colors.textTertiary}
+                        placeholderTextColor={AdminTheme.colors.textSoft}
                         keyboardType="number-pad"
                         value={localFilters.minAmount?.toString() || ""}
                         onChangeText={(text) => {
@@ -675,7 +704,7 @@ const FilterModal = ({
                       <TextInput
                         style={styles.amountInput}
                         placeholder="Any"
-                        placeholderTextColor={Colors.textTertiary}
+                        placeholderTextColor={AdminTheme.colors.textSoft}
                         keyboardType="number-pad"
                         value={localFilters.maxAmount?.toString() || ""}
                         onChangeText={(text) => {
@@ -707,11 +736,11 @@ const FilterModal = ({
               style={styles.modalApplyButton}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.modalApplyGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
+                style={[
+                  styles.modalApplyGradient,
+                  { backgroundColor: AdminTheme.colors.primary },
+                ]}
               >
                 <Text style={styles.modalApplyButtonText}>Apply Filters</Text>
                 {activeFilterCount > 0 && (
@@ -721,7 +750,7 @@ const FilterModal = ({
                     </Text>
                   </View>
                 )}
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
@@ -747,21 +776,20 @@ const StatsCard = ({
   sublabel,
   gradient,
 }: StatsCardProps) => (
-  <LinearGradient
-    colors={gradient}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 1 }}
-    style={styles.statsCard}
-  >
+  <View style={[styles.statsCard, { backgroundColor: gradient[0] }]}>
     <View style={styles.statsCardContent}>
-      <MaterialIcons name={icon as any} size={24} color={Colors.white} />
+      <MaterialIcons
+        name={icon as any}
+        size={24}
+        color={AdminTheme.colors.surface}
+      />
       <View style={styles.statsInfo}>
         <Text style={styles.statsValue}>{value}</Text>
         <Text style={styles.statsLabel}>{label}</Text>
         {sublabel && <Text style={styles.statsSublabel}>{sublabel}</Text>}
       </View>
     </View>
-  </LinearGradient>
+  </View>
 );
 
 // ==================== STATS ROW COMPONENT ====================
@@ -793,7 +821,10 @@ const StatsRow = ({ stats, showFinancialInsights }: StatsRowProps) => (
       value={stats.todayCount}
       label="Today's Sales"
       sublabel={formatCurrency(stats.todayAmount)}
-      gradient={[Colors.primary, Colors.primaryLight || Colors.primary]}
+      gradient={[
+        AdminTheme.colors.primary,
+        AdminTheme.colors.primaryDark || AdminTheme.colors.primary,
+      ]}
     />
 
     {showFinancialInsights && (
@@ -802,7 +833,7 @@ const StatsRow = ({ stats, showFinancialInsights }: StatsRowProps) => (
         value={formatCompactCurrency(stats.totalProfit)}
         label="Total Profit"
         sublabel={`${((stats.totalProfit / stats.totalAmount) * 100 || 0).toFixed(1)}% margin`}
-        gradient={[Colors.success, "#059669"]}
+        gradient={[AdminTheme.colors.success, "#059669"]}
       />
     )}
 
@@ -811,7 +842,7 @@ const StatsRow = ({ stats, showFinancialInsights }: StatsRowProps) => (
       value={stats.totalSales}
       label="Total Sales"
       sublabel={formatCurrency(stats.totalAmount)}
-      gradient={[Colors.warning, "#D97706"]}
+      gradient={[AdminTheme.colors.warning, "#D97706"]}
     />
 
     <StatsCard
@@ -819,7 +850,7 @@ const StatsRow = ({ stats, showFinancialInsights }: StatsRowProps) => (
       value={formatCompactCurrency(stats.avgSaleValue)}
       label="Average Sale"
       sublabel="per transaction"
-      gradient={[Colors.info || "#8B5CF6", "#7C3AED"]}
+      gradient={[AdminTheme.colors.info || "#8B5CF6", "#7C3AED"]}
     />
   </ScrollView>
 );
@@ -845,6 +876,9 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
   const itemCount = item.items?.length || 0;
   const saleDate = getSaleDateValue(item);
   const seller = getSellerName(item);
+  const saleNumber = item?.saleNumber || item?._id?.slice(-8) || "Sale";
+  const customerName = item?.customer?.name || "Walk-in Customer";
+  const customerPhone = item?.customer?.phone;
   const plantNames = getItemPlantNames(item);
   const thumbnailUri = getSaleThumbnail(item);
   const serviceBatch =
@@ -867,7 +901,7 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
       entering={FadeIn.duration(400)}
       layout={Layout.springify().damping(20)}
     >
-      <TouchableOpacity
+      <StitchCard
         onPress={() => {
           if (item._id) {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -875,14 +909,8 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
           }
         }}
         style={styles.saleCard}
-        activeOpacity={0.7}
       >
-        <LinearGradient
-          colors={[Colors.white, Colors.surface]}
-          style={styles.cardGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        >
+        <View style={styles.cardGradient}>
           {thumbnailUri ? (
             <Image
               source={{ uri: thumbnailUri }}
@@ -899,9 +927,6 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderMeta}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.saleId} numberOfLines={1}>
-                    {seller}
-                  </Text>
                   <View
                     style={[
                       styles.statusBadge,
@@ -922,90 +947,117 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
                       {statusInfo.label}
                     </Text>
                   </View>
-                </View>
-                <Text style={styles.itemSummaryText} numberOfLines={1}>
-                  {itemSummary}
-                </Text>
-              </View>
-              <Text style={styles.dateText}>{formatDate(saleDate)}</Text>
-            </View>
-
-            <View style={styles.amountSection}>
-              <Text style={styles.amountLabel}>Total Amount</Text>
-              <Text style={styles.amountValue}>{formatCurrency(amount)}</Text>
-            </View>
-
-            <View style={styles.cardDivider} />
-
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <MaterialIcons
-                  name={saleKind === "SERVICE_SALE" ? "spa" : "shopping-bag"}
-                  size={14}
-                  color={Colors.primary}
-                />
-                <View>
-                  <Text style={styles.detailLabel}>
-                    {saleKind === "SERVICE_SALE" ? "Service Units" : "Units"}
-                  </Text>
-                  <Text style={styles.detailValue}>
-                    {saleKind === "SERVICE_SALE"
-                      ? `${qty} seedlings`
-                      : `${qty} (${itemCount} ${itemCount === 1 ? "item" : "items"})`}
-                  </Text>
-                </View>
-              </View>
-
-              {showFinancialInsights && (
-                <View style={styles.detailItem}>
-                  <MaterialIcons
-                    name="trending-up"
-                    size={14}
-                    color={profit > 0 ? Colors.success : Colors.textSecondary}
-                  />
-                  <View>
-                    <Text style={styles.detailLabel}>Profit</Text>
-                    <Text
+                  <View style={styles.infoPillRow}>
+                    <View
                       style={[
-                        styles.detailValue,
-                        profit > 0 && styles.profitPositive,
-                        profit < 0 && styles.profitNegative,
+                        styles.statusBadge,
+                        { backgroundColor: paymentInfo.bg },
                       ]}
                     >
-                      {formatCurrency(profit)}
-                    </Text>
-                    {profit > 0 && (
-                      <Text style={styles.profitPercentage}>
-                        +{profitPercentage}%
+                      <MaterialIcons
+                        name={paymentInfo.icon as any}
+                        size={14}
+                        color={paymentInfo.color}
+                      />
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          { color: paymentInfo.color },
+                        ]}
+                      >
+                        {paymentInfo.label}
                       </Text>
-                    )}
+                    </View>
                   </View>
                 </View>
-              )}
+
+                <View style={styles.titleRow}>
+                  <View
+                    style={{
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={styles.itemSummaryText} numberOfLines={1}>
+                      {itemSummary}
+                    </Text>
+
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialIcons
+                        name={
+                          saleKind === "SERVICE_SALE" ? "spa" : "inventory-2"
+                        }
+                        size={14}
+                        color={AdminTheme.colors.primary}
+                      />
+                      <Text style={styles.statusBadgeText}>
+                        {qty}{" "}
+                        {saleKind === "SERVICE_SALE" ? "seedlings" : "units"}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.dateText}>{formatDate(saleDate)}</Text>
+                  </View>
+                  <View style={styles.amountRow}>
+                    <View style={styles.amountSection}>
+                      <Text style={styles.amountLabel}>Total Amount</Text>
+                      <Text style={styles.amountValue}>
+                        {formatCurrency(amount)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            <View style={styles.metaSection}>
-              <View style={styles.metaRow}>
-                <MaterialIcons
-                  name={paymentInfo.icon as any}
-                  size={14}
-                  color={paymentInfo.color}
-                />
-                <Text style={styles.metaText}>Payment: {paymentInfo.label}</Text>
-              </View>
-              {showFinancialInsights && (
-                <View style={styles.metaRow}>
+            <View style={styles.customerMetaCard}>
+              <View style={styles.customerHeaderRow}>
+                <View style={styles.customerMetaRow}>
                   <MaterialIcons
-                    name="account-balance-wallet"
+                    name="person"
                     size={14}
-                    color={Colors.textSecondary}
+                    color={AdminTheme.colors.primary}
                   />
-                  <Text style={styles.metaText} numberOfLines={1}>
-                    Cost {formatCurrency(cost)} • Margin{" "}
-                    {Number(item.grossMarginPercent ?? profitPercentage).toFixed(1)}%
+                  <Text style={styles.customerMetaLabel}>Customer</Text>
+                </View>
+                <View style={styles.customerMetaRow}>
+                  <MaterialIcons
+                    name="badge"
+                    size={13}
+                    color={AdminTheme.colors.textMuted}
+                  />
+                  <Text style={styles.customerMetaLabel}>Performed By</Text>
+                </View>
+              </View>
+              <View style={styles.customerDetailRow}>
+                <View style={styles.customerDetailColumn}>
+                  <Text style={styles.customerMetaName} numberOfLines={1}>
+                    {customerName}
+                  </Text>
+                  {customerPhone ? (
+                    <View style={styles.customerMetaRow}>
+                      <MaterialIcons
+                        name="call"
+                        size={13}
+                        color={AdminTheme.colors.textMuted}
+                      />
+                      <Text style={styles.customerMetaText} numberOfLines={1}>
+                        {customerPhone}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={styles.customerDetailColumn}>
+                  <Text style={styles.customerMetaName} numberOfLines={1}>
+                    {seller}
                   </Text>
                 </View>
-              )}
+              </View>
             </View>
 
             {item.notes && (
@@ -1013,7 +1065,7 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
                 <MaterialIcons
                   name="notes"
                   size={14}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.notesText} numberOfLines={1}>
                   {item.notes}
@@ -1021,8 +1073,8 @@ const SaleCard = ({ item, onPress, showFinancialInsights }: SaleCardProps) => {
               </View>
             )}
           </View>
-        </LinearGradient>
-      </TouchableOpacity>
+        </View>
+      </StitchCard>
     </Animated.View>
   );
 };
@@ -1042,16 +1094,18 @@ const EmptyState = ({
 }: EmptyStateProps) => (
   <Animated.View entering={FadeIn.duration(400)} style={styles.emptyContainer}>
     <View style={styles.emptyIconContainer}>
-      <LinearGradient
-        colors={[Colors.surface, Colors.background]}
-        style={styles.emptyIconGradient}
+      <View
+        style={[
+          styles.emptyIconGradient,
+          { backgroundColor: AdminTheme.colors.background },
+        ]}
       >
         <MaterialIcons
           name={hasFilters ? "search-off" : "receipt-long"}
           size={48}
-          color={Colors.textTertiary}
+          color={AdminTheme.colors.textSoft}
         />
-      </LinearGradient>
+      </View>
     </View>
 
     <Text style={styles.emptyTitle}>
@@ -1070,15 +1124,19 @@ const EmptyState = ({
         style={styles.emptyButton}
         activeOpacity={0.7}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="clear-all" size={20} color={Colors.white} />
+          <MaterialIcons
+            name="clear-all"
+            size={20}
+            color={AdminTheme.colors.surface}
+          />
           <Text style={styles.emptyButtonText}>Clear Filters</Text>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     ) : (
       <TouchableOpacity
@@ -1086,15 +1144,19 @@ const EmptyState = ({
         style={styles.emptyButton}
         activeOpacity={0.7}
       >
-        <LinearGradient
-          colors={[Colors.success, "#059669"]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.success },
+          ]}
         >
-          <MaterialIcons name="add-circle" size={20} color={Colors.white} />
+          <MaterialIcons
+            name="add-circle"
+            size={20}
+            color={AdminTheme.colors.surface}
+          />
           <Text style={styles.emptyButtonText}>Create First Sale</Text>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     )}
   </Animated.View>
@@ -1104,7 +1166,7 @@ const EmptyState = ({
 
 const LoadingState = () => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color={Colors.primary} />
+    <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
     <Text style={styles.loadingText}>Loading your sales...</Text>
   </View>
 );
@@ -1119,11 +1181,11 @@ interface ErrorStateProps {
 
 const ErrorState = ({ error, onRetry, onBack }: ErrorStateProps) => (
   <View style={styles.container}>
-    <LinearGradient
-      colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-      style={styles.errorHeaderGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 0 }}
+    <View
+      style={[
+        styles.errorHeaderGradient,
+        { backgroundColor: AdminTheme.colors.primary },
+      ]}
     >
       <SafeAreaView edges={["left", "right"]} style={styles.errorHeaderContent}>
         <TouchableOpacity
@@ -1131,16 +1193,24 @@ const ErrorState = ({ error, onRetry, onBack }: ErrorStateProps) => (
           style={styles.errorBackButton}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
+          <MaterialIcons
+            name="arrow-back"
+            size={20}
+            color={AdminTheme.colors.surface}
+          />
         </TouchableOpacity>
         <Text style={styles.errorHeaderTitle}>Sales</Text>
         <View style={styles.errorHeaderSpacer} />
       </SafeAreaView>
-    </LinearGradient>
+    </View>
 
     <View style={styles.errorContainer}>
       <View style={styles.errorIconContainer}>
-        <MaterialIcons name="receipt-long" size={48} color={Colors.error} />
+        <MaterialIcons
+          name="receipt-long"
+          size={48}
+          color={AdminTheme.colors.danger}
+        />
       </View>
 
       <Text style={styles.errorTitle}>Failed to Load Sales</Text>
@@ -1154,15 +1224,19 @@ const ErrorState = ({ error, onRetry, onBack }: ErrorStateProps) => (
         style={styles.retryButton}
         activeOpacity={0.7}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.retryGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.retryGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="refresh" size={20} color={Colors.white} />
+          <MaterialIcons
+            name="refresh"
+            size={20}
+            color={AdminTheme.colors.surface}
+          />
           <Text style={styles.retryButtonText}>Try Again</Text>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     </View>
   </View>
@@ -1209,25 +1283,25 @@ export function SalesListScreen({
       ONLINE: 0,
       OTHER: 0,
     };
-      const status: Record<SaleStatus, number> = {
+    const status: Record<SaleStatus, number> = {
       COMPLETED: 0,
       PENDING: 0,
       CANCELLED: 0,
     };
 
-      sales.forEach((sale: any) => {
-        const paymentKey = sale.paymentMode?.toUpperCase() as PaymentMethod;
+    sales.forEach((sale: any) => {
+      const paymentKey = sale.paymentMode?.toUpperCase() as PaymentMethod;
       if (paymentMethods.hasOwnProperty(paymentKey)) {
         paymentMethods[paymentKey]++;
       } else {
         paymentMethods.OTHER++;
       }
 
-        const statusKey = getStatusKey(sale);
-        if (status.hasOwnProperty(statusKey)) {
-          status[statusKey]++;
-        } else {
-          status.COMPLETED++;
+      const statusKey = getStatusKey(sale);
+      if (status.hasOwnProperty(statusKey)) {
+        status[statusKey]++;
+      } else {
+        status.COMPLETED++;
       }
     });
 
@@ -1242,7 +1316,10 @@ export function SalesListScreen({
       0,
     );
     const totalProfit = showFinancialInsights
-      ? sales.reduce((sum, sale) => sum + (Number(sale.totalProfit ?? 0) || 0), 0)
+      ? sales.reduce(
+          (sum, sale) => sum + (Number(sale.totalProfit ?? 0) || 0),
+          0,
+        )
       : 0;
 
     const today = new Date().toISOString().split("T")[0];
@@ -1339,8 +1416,12 @@ export function SalesListScreen({
           aVal = Number(a.totalProfit ?? 0);
           bVal = Number(b.totalProfit ?? 0);
         } else {
-          aVal = getSaleDateValue(a) ? new Date(getSaleDateValue(a)!).getTime() : 0;
-          bVal = getSaleDateValue(b) ? new Date(getSaleDateValue(b)!).getTime() : 0;
+          aVal = getSaleDateValue(a)
+            ? new Date(getSaleDateValue(a)!).getTime()
+            : 0;
+          bVal = getSaleDateValue(b)
+            ? new Date(getSaleDateValue(b)!).getTime()
+            : 0;
         }
 
         return sortOption.id.includes("_asc")
@@ -1378,15 +1459,17 @@ export function SalesListScreen({
   const handleCreateSale = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!canCreate) return;
-    router.push(`/${`(${routeGroup})`}/sales/create`);
+    router.push(`/${`(${routeGroup})`}/sales/create` as any);
   }, [canCreate, routeGroup, router]);
 
   const handleViewSale = useCallback(
     (id: string) => {
-      router.push(`/${`(${routeGroup})`}/sales/${id}`);
+      router.push(`/${`(${routeGroup})`}/sales/${id}` as any);
     },
     [routeGroup, router],
   );
+
+  const isRootModuleScreen = routeGroup === "staff" || routeGroup === "admin";
 
   const handleSearchChange = useCallback((text: string) => {
     setFilters((prev) => ({ ...prev, search: text }));
@@ -1414,29 +1497,26 @@ export function SalesListScreen({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
-  const removeFilter = useCallback((type: string, value?: any) => {
+  const handleTogglePaymentMethod = useCallback((method: string) => {
+    const normalizedMethod = method as PaymentMethod;
+    setFilters((prev) => ({
+      ...prev,
+      paymentMethods: prev.paymentMethods.filter(
+        (currentMethod) => currentMethod !== normalizedMethod,
+      ),
+    }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
 
-    switch (type) {
-      case "payment":
-        setFilters((prev) => ({
-          ...prev,
-          paymentMethods: prev.paymentMethods.filter((m) => m !== value),
-        }));
-        break;
-      case "status":
-        setFilters((prev) => ({
-          ...prev,
-          status: prev.status.filter((s) => s !== value),
-        }));
-        break;
-      case "date":
-        setFilters((prev) => ({ ...prev, dateRange: null }));
-        break;
-      case "amount":
-        setFilters((prev) => ({ ...prev, minAmount: null, maxAmount: null }));
-        break;
-    }
+  const handleToggleStatus = useCallback((status: string) => {
+    const normalizedStatus = status as SaleStatus;
+    setFilters((prev) => ({
+      ...prev,
+      status: prev.status.filter(
+        (currentStatus) => currentStatus !== normalizedStatus,
+      ),
+    }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
   const renderItem = useCallback(
@@ -1475,89 +1555,78 @@ export function SalesListScreen({
 
   return (
     <View style={styles.container}>
-      {/* Integrated Header with Search, Filter, and Sort */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <SafeAreaView edges={["left", "right"]} style={styles.headerContent}>
-          {/* Title and Create Button */}
-          <View style={styles.headerTopRow}>
-            <View>
-              <Text style={styles.headerTitle}>{title}</Text>
-              <Text style={styles.headerSubtitle}>
-                {filteredSales.length}{" "}
-                {filteredSales.length === 1 ? "transaction" : "transactions"}
-              </Text>
-            </View>
-
-            {canCreate && (
-              <TouchableOpacity
-                onPress={handleCreateSale}
-                style={styles.createButton}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={[Colors.success, "#059669"]}
-                  style={styles.createGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <MaterialIcons name="add" size={20} color={Colors.white} />
-                  <Text style={styles.createButtonText}>New</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Search Bar and Filter Button */}
-          <View style={styles.headerSearchRow}>
-            <View style={styles.headerSearchContainer}>
-              <View style={styles.headerSearchInputContainer}>
+      <StitchHeader
+        title={title}
+        subtitle={`${filteredSales.length} ${filteredSales.length === 1 ? "transaction" : "transactions"}`}
+        variant="gradient"
+        showBackButton={!isRootModuleScreen}
+        onBackPress={!isRootModuleScreen ? handleBack : undefined}
+        actions={
+          canCreate ? (
+            <TouchableOpacity
+              onPress={handleCreateSale}
+              style={styles.createButton}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.createGradient]}>
                 <MaterialIcons
-                  name="search"
-                  size={18}
-                  color="rgba(255,255,255,0.8)"
+                  name="add"
+                  size={20}
+                  color={AdminTheme.colors.surface}
                 />
-                <TextInput
-                  style={styles.headerSearchInput}
-                  placeholder="Search"
-                  placeholderTextColor="rgba(255,255,255,0.6)"
-                  value={filters.search}
-                  onChangeText={handleSearchChange}
-                  returnKeyType="search"
-                />
-                {filters.search.length > 0 && (
-                  <TouchableOpacity
-                    onPress={handleSearchClear}
-                    style={styles.headerSearchClearButton}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons
-                      name="close"
-                      size={16}
-                      color="rgba(255,255,255,0.8)"
-                    />
-                  </TouchableOpacity>
-                )}
               </View>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
 
+      {/* Sales List */}
+      <FlatList
+        data={filteredSales}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        ListHeaderComponent={
+          <View style={styles.topSection}>
+            <View style={styles.searchRow}>
+              <StitchInput
+                containerStyle={styles.inputStyle}
+                placeholder="Search"
+                value={filters.search}
+                onChangeText={handleSearchChange}
+                icon={
+                  <MaterialIcons
+                    name="search"
+                    size={18}
+                    color={AdminTheme.colors.textMuted}
+                  />
+                }
+                right={
+                  filters.search.length > 0 ? (
+                    <Pressable onPress={handleSearchClear}>
+                      <MaterialIcons
+                        name="close"
+                        size={16}
+                        color={AdminTheme.colors.textMuted}
+                      />
+                    </Pressable>
+                  ) : null
+                }
+              />
               <TouchableOpacity
                 onPress={() => setIsFilterModalVisible(true)}
-                style={[
-                  styles.headerFilterButton,
-                  activeFilterCount > 0 && styles.headerFilterButtonActive,
-                ]}
+                style={styles.headerFilterButton}
                 activeOpacity={0.7}
               >
                 <MaterialIcons
                   name="tune"
                   size={20}
-                  color={activeFilterCount > 0 ? Colors.primary : Colors.white}
+                  color={
+                    hasActiveFilters
+                      ? AdminTheme.colors.primary
+                      : AdminTheme.colors.textMuted
+                  }
                 />
-                {activeFilterCount > 0 && (
+                {hasActiveFilters && (
                   <View style={styles.headerFilterBadge}>
                     <Text style={styles.headerFilterBadgeText}>
                       {activeFilterCount}
@@ -1566,193 +1635,80 @@ export function SalesListScreen({
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-
-          {/* Active Filters Chips - In Header */}
-          {hasActiveFilters && (
-            <Animated.View
-              entering={FadeIn.duration(300)}
-              exiting={FadeOut.duration(300)}
-              style={styles.activeFiltersContainer}
-            >
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.activeFiltersScroll}
-                contentContainerStyle={styles.activeFiltersContent}
-              >
+            {hasActiveFilters && (
+              <View style={styles.activeFiltersRow}>
                 {filters.paymentMethods.map((method) => (
-                  <View
-                    key={method}
-                    style={[
-                      styles.activeFilterChip,
-                      {
-                        backgroundColor: `${PAYMENT_METHODS[method]?.color}10`,
-                      },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={PAYMENT_METHODS[method]?.icon as any}
-                      size={12}
-                      color={PAYMENT_METHODS[method]?.color}
-                    />
-                    <Text
-                      style={[
-                        styles.activeFilterChipText,
-                        { color: PAYMENT_METHODS[method]?.color },
-                      ]}
-                    >
-                      {PAYMENT_METHODS[method]?.label}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => removeFilter("payment", method)}
+                  <View key={method} style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterChipText}>{method}</Text>
+                    <Pressable
+                      onPress={() => handleTogglePaymentMethod(method)}
                       style={styles.activeFilterChipRemove}
-                      activeOpacity={0.7}
                     >
                       <MaterialIcons
                         name="close"
                         size={12}
-                        color={PAYMENT_METHODS[method]?.color}
+                        color={AdminTheme.colors.surface}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 ))}
-
                 {filters.status.map((status) => (
-                  <View
-                    key={status}
-                    style={[
-                      styles.activeFilterChip,
-                      { backgroundColor: `${SALE_STATUS[status]?.color}10` },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name={SALE_STATUS[status]?.icon as any}
-                      size={12}
-                      color={SALE_STATUS[status]?.color}
-                    />
-                    <Text
-                      style={[
-                        styles.activeFilterChipText,
-                        { color: SALE_STATUS[status]?.color },
-                      ]}
-                    >
-                      {SALE_STATUS[status]?.label}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => removeFilter("status", status)}
+                  <View key={status} style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterChipText}>{status}</Text>
+                    <Pressable
+                      onPress={() => handleToggleStatus(status)}
                       style={styles.activeFilterChipRemove}
-                      activeOpacity={0.7}
                     >
                       <MaterialIcons
                         name="close"
                         size={12}
-                        color={SALE_STATUS[status]?.color}
+                        color={AdminTheme.colors.surface}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 ))}
-
                 {filters.dateRange && (
-                  <View
-                    style={[
-                      styles.activeFilterChip,
-                      { backgroundColor: `${Colors.primary}10` },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="date-range"
-                      size={12}
-                      color={Colors.primary}
-                    />
-                    <Text
-                      style={[
-                        styles.activeFilterChipText,
-                        { color: Colors.primary },
-                      ]}
-                    >
-                      {
-                        DATE_RANGES.find((r) => r.id === filters.dateRange)
-                          ?.label
+                  <View style={styles.activeFilterChip}>
+                    <Text style={styles.activeFilterChipText}>
+                      {filters.dateRange}
+                    </Text>
+                    <Pressable
+                      onPress={() =>
+                        setFilters((prev) => ({ ...prev, dateRange: null }))
                       }
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => removeFilter("date")}
                       style={styles.activeFilterChipRemove}
-                      activeOpacity={0.7}
                     >
                       <MaterialIcons
                         name="close"
                         size={12}
-                        color={Colors.primary}
+                        color={AdminTheme.colors.surface}
                       />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 )}
+              </View>
+            )}
 
-                {(filters.minAmount !== null || filters.maxAmount !== null) && (
-                  <View
-                    style={[
-                      styles.activeFilterChip,
-                      { backgroundColor: `${Colors.success}10` },
-                    ]}
-                  >
-                    <MaterialIcons
-                      name="attach-money"
-                      size={12}
-                      color={Colors.success}
-                    />
-                    <Text
-                      style={[
-                        styles.activeFilterChipText,
-                        { color: Colors.success },
-                      ]}
-                    >
-                      {filters.minAmount !== null
-                        ? `₹${filters.minAmount}`
-                        : "0"}{" "}
-                      -
-                      {filters.maxAmount !== null
-                        ? `₹${filters.maxAmount}`
-                        : "∞"}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => removeFilter("amount")}
-                      style={styles.activeFilterChipRemove}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons
-                        name="close"
-                        size={12}
-                        color={Colors.success}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </ScrollView>
-            </Animated.View>
-          )}
-        </SafeAreaView>
-      </LinearGradient>
+            <StitchSectionHeader title="Summary" subtitle="Sales overview" />
 
-      {/* Stats Section */}
-      {sales.length > 0 && (
-        <View style={styles.statsWrapper}>
-          <StatsRow stats={stats} showFinancialInsights={showFinancialInsights} />
-        </View>
-      )}
+            {sales.length > 0 && (
+              <View style={styles.statsWrapper}>
+                <StatsRow
+                  stats={stats}
+                  showFinancialInsights={showFinancialInsights}
+                />
+              </View>
+            )}
 
-      {/* Sales List */}
-      <FlatList
-        data={filteredSales}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
+            <StitchSectionHeader title="Sales" subtitle="Recent transactions" />
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing || isRefetching}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
             progressViewOffset={20}
           />
         }
@@ -1786,95 +1742,53 @@ export function SalesListScreen({
 
 // ==================== STYLES ====================
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
 
-  // Header Styles
-  headerGradient: {
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
-  headerTopRow: {
+  searchRow: {
     flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    width: "100%",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-    letterSpacing: -0.5,
+  inputStyle: {
+    width: "80%",
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
-  },
-  headerSearchRow: {
-    marginBottom: Spacing.sm,
-  },
-  headerSearchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  headerSearchInputContainer: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Platform.OS === "ios" ? Spacing.sm : 0,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    height: 44,
-  },
-  headerSearchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.white,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.xs,
-    marginLeft: Spacing.xs,
-  },
-  headerSearchClearButton: {
-    padding: Spacing.xs,
+  topSection: {
+    paddingTop: AdminTheme.spacing.xs,
   },
   headerFilterButton: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderColor: AdminTheme.colors.borderSoft,
     position: "relative" as const,
   },
   headerFilterButtonActive: {
-    backgroundColor: Colors.white,
+    borderColor: AdminTheme.colors.primary,
   },
   headerFilterBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
     top: -4,
     right: -4,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -1882,21 +1796,21 @@ const styles = {
     justifyContent: "center" as const,
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Colors.white,
+    borderColor: AdminTheme.colors.surface,
   },
   headerFilterBadgeText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 10,
     fontWeight: "700" as const,
   },
   headerSortContainer: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
   },
 
   // Active Filters in Header
   activeFiltersContainer: {
-    marginTop: Spacing.sm,
-    paddingTop: Spacing.sm,
+    marginTop: AdminTheme.spacing.sm,
+    paddingTop: AdminTheme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
@@ -1904,20 +1818,31 @@ const styles = {
     flex: 1,
   },
   activeFiltersContent: {
-    gap: Spacing.xs,
-    paddingRight: Spacing.md,
+    gap: AdminTheme.spacing.xs,
+    paddingRight: AdminTheme.spacing.md,
+  },
+  activeFiltersRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 8,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingBottom: 6,
   },
   activeFilterChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 6,
     borderRadius: 16,
     gap: 6,
+    backgroundColor: AdminTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   activeFilterChipText: {
     fontSize: 12,
     fontWeight: "500" as const,
+    color: AdminTheme.colors.text,
   },
   activeFilterChipRemove: {
     padding: 2,
@@ -1926,47 +1851,41 @@ const styles = {
 
   // Create Button
   createButton: {
-    borderRadius: 20,
-    overflow: "hidden" as const,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   createGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-    minWidth: 80,
-  },
-  createButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600" as const,
+    width: "100%",
+    height: "100%",
   },
 
   // Stats Styles
   statsWrapper: {
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: AdminTheme.spacing.sm,
   },
   statsScroll: {
     maxHeight: 100,
   },
   statsScrollContent: {
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   statsCard: {
+    ...cardSurface,
     width: 160,
-    borderRadius: 16,
-    padding: Spacing.md,
+    borderRadius: 18,
+    padding: AdminTheme.spacing.lg,
+    borderWidth: 0,
   },
   statsCardContent: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   statsInfo: {
     flex: 1,
@@ -1974,7 +1893,7 @@ const styles = {
   statsValue: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     marginBottom: 2,
     letterSpacing: -0.5,
   },
@@ -1998,8 +1917,8 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     backgroundColor: "rgba(255, 255, 255, 0.15)",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xs,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.2)",
@@ -2009,7 +1928,7 @@ const styles = {
   },
   sortButtonText: {
     fontSize: 13,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontWeight: "500" as const,
     maxWidth: 120,
   },
@@ -2020,7 +1939,7 @@ const styles = {
     width: 240,
     borderRadius: 12,
     overflow: "hidden" as const,
-    shadowColor: Colors.shadow,
+    shadowColor: AdminTheme.colors.borderSoft,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -2028,21 +1947,21 @@ const styles = {
     zIndex: 1001,
   },
   sortDropdownBlur: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   sortDropdownHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   sortDropdownTitle: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   sortDropdownClose: {
     padding: 4,
@@ -2051,24 +1970,24 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
     borderRadius: 8,
   },
   sortOptionSelected: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   sortOptionContent: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   sortOptionText: {
     fontSize: 14,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   sortOptionTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
 
@@ -2081,15 +2000,15 @@ const styles = {
   modalContent: {
     width: "100%",
     maxHeight: "88%",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: "hidden" as const,
   },
   modalHeader: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   modalHeaderContent: {
     flexDirection: "row" as const,
@@ -2099,12 +2018,12 @@ const styles = {
   modalHeaderLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   modalHeaderTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   modalCloseButton: {
     padding: 4,
@@ -2113,40 +2032,41 @@ const styles = {
     maxHeight: "70%",
   },
   modalBodyContent: {
-    padding: Spacing.lg,
-    gap: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.lg,
   },
   filterSection: {
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   filterSectionTitle: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.xs,
   },
   filterOptionsGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   filterOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 20,
-    backgroundColor: Colors.white,
-    gap: Spacing.xs,
+    backgroundColor: AdminTheme.colors.surface,
+    gap: AdminTheme.spacing.xs,
     minWidth: 100,
   },
   filterOptionLabel: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   filterOptionBadge: {
+    ...moduleBadge,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
@@ -2159,100 +2079,100 @@ const styles = {
   dateRangeGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   dateRangeOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 20,
-    backgroundColor: Colors.white,
-    gap: Spacing.xs,
+    backgroundColor: AdminTheme.colors.surface,
+    gap: AdminTheme.spacing.xs,
     minWidth: (SCREEN_WIDTH - 80) / 2,
   },
   dateRangeOptionSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + "05",
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: AdminTheme.colors.primary + "05",
   },
   dateRangeOptionText: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   dateRangeOptionTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   amountRangeContainer: {
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   amountInputRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   amountInputGroup: {
     flex: 1,
   },
   amountInputLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     marginBottom: 4,
   },
   amountInputWrapper: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 12,
-    paddingHorizontal: Spacing.sm,
-    backgroundColor: Colors.white,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
     height: 44,
   },
   amountInputCurrency: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     marginRight: 4,
   },
   amountInput: {
     flex: 1,
     fontSize: 15,
-    color: Colors.text,
-    paddingVertical: Spacing.sm,
+    color: AdminTheme.colors.text,
+    paddingVertical: AdminTheme.spacing.sm,
   },
   amountSeparator: {
-    paddingHorizontal: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.xs,
   },
   amountSeparatorText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   modalFooter: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    gap: Spacing.md,
+    borderTopColor: AdminTheme.colors.borderSoft,
+    gap: AdminTheme.spacing.md,
   },
   modalClearButton: {
     flex: 1,
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modalClearButtonText: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   modalApplyButton: {
     flex: 1,
@@ -2265,15 +2185,16 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   modalApplyButtonText: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   modalApplyBadge: {
-    backgroundColor: Colors.white,
+    ...moduleBadge,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -2284,14 +2205,14 @@ const styles = {
   modalApplyBadgeText: {
     fontSize: 11,
     fontWeight: "700" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
 
   // List Styles
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
   },
 
   // Loading State Styles
@@ -2299,12 +2220,12 @@ const styles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
 
@@ -2316,8 +2237,8 @@ const styles = {
   errorHeaderContent: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
   },
   errorBackButton: {
     width: 40,
@@ -2331,7 +2252,7 @@ const styles = {
     flex: 1,
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     textAlign: "center" as const,
   },
   errorHeaderSpacer: {
@@ -2341,30 +2262,30 @@ const styles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   errorIconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.error + "10",
+    backgroundColor: AdminTheme.colors.danger + "10",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.danger,
+    marginBottom: AdminTheme.spacing.sm,
   },
   errorMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 20,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   retryButton: {
     borderRadius: 12,
@@ -2374,12 +2295,12 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },
@@ -2388,14 +2309,14 @@ const styles = {
   emptyContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+    paddingVertical: AdminTheme.spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyIconContainer: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
     overflow: "hidden" as const,
   },
   emptyIconGradient: {
@@ -2406,16 +2327,16 @@ const styles = {
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.sm,
   },
   emptyMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 20,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyButton: {
     borderRadius: 12,
@@ -2425,24 +2346,25 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },
 
   // Sale Card Styles
   saleCard: {
+    ...cardSurface,
     borderRadius: 16,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.white,
+    borderColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
   },
   cardGradient: {
     padding: 0,
@@ -2459,8 +2381,8 @@ const styles = {
     backgroundColor: "#F9FAFB",
   },
   cardContent: {
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    padding: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   cardHeader: {
     flexDirection: "row" as const,
@@ -2470,27 +2392,30 @@ const styles = {
   cardHeaderMeta: {
     flex: 1,
     minWidth: 0,
+    gap: 10,
   },
   saleId: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   titleRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
     gap: 8,
+    
   },
   itemSummaryText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.text,
   },
   paymentBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 16,
   },
@@ -2499,10 +2424,11 @@ const styles = {
     fontWeight: "600" as const,
   },
   statusBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 16,
   },
@@ -2512,31 +2438,114 @@ const styles = {
   },
   dateText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   amountSection: {
-    paddingTop: Spacing.xs,
+    paddingTop: AdminTheme.spacing.xs,
+  },
+  amountRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "flex-start" as const,
+    gap: AdminTheme.spacing.sm,
   },
   amountLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     marginBottom: 2,
   },
   amountValue: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     letterSpacing: -0.5,
+  },
+  infoPillRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    justifyContent: "flex-end" as const,
+    gap: 8,
+    flex: 1,
+  },
+  infoPill: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: AdminTheme.colors.background,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
+  },
+  infoPillText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.textMuted,
+  },
+  customerMetaCard: {
+    ...cardSurface,
+    marginTop: AdminTheme.spacing.sm,
+    padding: AdminTheme.spacing.sm,
+    borderRadius: 12,
+    backgroundColor: AdminTheme.colors.background,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
+    gap: 4,
+  },
+  customerHeaderRow: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    gap: AdminTheme.spacing.md,
+  },
+  customerMetaRow: {
+    justifyContent: "space-between" as const,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+  },
+  customerMetaLabel: {
+    fontSize: 11,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.textSoft,
+    
+  },
+  customerDetailRow: {
+    flexDirection: "row" as const,
+    gap: AdminTheme.spacing.md,
+    marginTop: 4,
+    justifyContent:"space-between",
+    
+  },
+  customerDetailColumn: {
+    flex: 1,
+    gap: 4,
+    alignItems:"center",
+    justifyContent:"center",
+    
+  },
+  customerMetaName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.text,
+    
+  },
+  customerMetaText: {
+    flex: 1,
+    fontSize: 12,
+    color: AdminTheme.colors.textMuted,
+    
   },
   cardDivider: {
     height: 1,
-    backgroundColor: Colors.borderLight,
-    marginVertical: Spacing.xs,
+    backgroundColor: AdminTheme.colors.borderSoft,
+    marginVertical: AdminTheme.spacing.xs,
   },
   detailsGrid: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    gap: Spacing.lg,
+    gap: AdminTheme.spacing.lg,
   },
   detailItem: {
     flexDirection: "row" as const,
@@ -2545,29 +2554,30 @@ const styles = {
   },
   detailLabel: {
     fontSize: 10,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
   },
   detailValue: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   profitPositive: {
-    color: Colors.success,
+    color: AdminTheme.colors.success,
   },
   profitNegative: {
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   profitPercentage: {
+    ...moduleBadge,
     fontSize: 10,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
     marginTop: 1,
   },
   metaSection: {
     gap: 6,
-    paddingTop: Spacing.sm,
+    paddingTop: AdminTheme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: AdminTheme.colors.borderSoft,
   },
   metaRow: {
     flexDirection: "row" as const,
@@ -2576,18 +2586,18 @@ const styles = {
   },
   metaText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     flex: 1,
   },
   notesContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
   },
   notesText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
 } as const;

@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,16 +11,19 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GerminationService } from "../../services/germination.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
 import { canViewSourcingDetails } from "../../utils/rbac";
 import BannerCardImage from "../ui/BannerCardImage";
+import { AdminTheme } from "../admin/theme";
+import ModuleScreenHeader from "../common/ModuleScreenHeader";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import { moduleBadge } from "../common/moduleStyles";
+import { Colors } from "@/src/theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -309,11 +312,11 @@ const getSuccessRate = (item: GerminationDetails) => {
 
 const getGerminationStatus = (item: GerminationDetails) => {
   const rate = getSuccessRate(item);
-  if (rate >= 80) return { label: "Excellent", color: Colors.success };
+  if (rate >= 80) return { label: "Excellent", color: AdminTheme.colors.success };
   if (rate >= 60) return { label: "Good", color: "#4CAF50" };
-  if (rate >= 40) return { label: "Average", color: Colors.warning };
-  if (rate > 0) return { label: "Low", color: Colors.error };
-  return { label: "No Data", color: Colors.textTertiary };
+  if (rate >= 40) return { label: "Average", color: AdminTheme.colors.warning };
+  if (rate > 0) return { label: "Low", color: AdminTheme.colors.danger };
+  return { label: "No Data", color: AdminTheme.colors.textSoft };
 };
 
 const getRoleVisual = (role: string) => {
@@ -329,7 +332,7 @@ const getRoleVisual = (role: string) => {
   return {
     label: "Staff",
     icon: "person" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     bg: "#E8F2FF",
   };
 };
@@ -370,7 +373,7 @@ const GerminationFilterModal = ({
               <MaterialIcons
                 name="close"
                 size={18}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
             </Pressable>
           </View>
@@ -383,7 +386,7 @@ const GerminationFilterModal = ({
               <MaterialIcons
                 name="calendar-today"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.filterSectionTitle}>Date Range</Text>
             </View>
@@ -411,8 +414,8 @@ const GerminationFilterModal = ({
                     size={14}
                     color={
                       local.dateRange === item.id
-                        ? Colors.primary
-                        : Colors.textSecondary
+                        ? AdminTheme.colors.primary
+                        : AdminTheme.colors.textMuted
                     }
                   />
                   <Text
@@ -432,7 +435,7 @@ const GerminationFilterModal = ({
               <MaterialIcons
                 name="inventory"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.filterSectionTitle}>Inventory</Text>
             </View>
@@ -461,8 +464,8 @@ const GerminationFilterModal = ({
                     size={14}
                     color={
                       local.inventory === item.id
-                        ? Colors.primary
-                        : Colors.textSecondary
+                        ? AdminTheme.colors.primary
+                        : AdminTheme.colors.textMuted
                     }
                   />
                   <Text
@@ -482,7 +485,7 @@ const GerminationFilterModal = ({
               <MaterialIcons
                 name="analytics"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.filterSectionTitle}>Performance</Text>
             </View>
@@ -508,8 +511,8 @@ const GerminationFilterModal = ({
                     size={14}
                     color={
                       local.performance === item.id
-                        ? Colors.primary
-                        : Colors.textSecondary
+                        ? AdminTheme.colors.primary
+                        : AdminTheme.colors.textMuted
                     }
                   />
                   <Text
@@ -557,6 +560,7 @@ export function GerminationReadScreen({
   canCreate = false,
   onCreatePress,
 }: GerminationReadScreenProps) {
+  const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const showSourcingDetails = canViewSourcingDetails(role);
   const [selectedRecord, setSelectedRecord] =
@@ -680,7 +684,7 @@ export function GerminationReadScreen({
 
   const selectedStatus = useMemo(() => {
     if (!selectedRecord)
-      return { label: "No Data", color: Colors.textTertiary };
+      return { label: "No Data", color: AdminTheme.colors.textSoft };
     return getGerminationStatus(selectedRecord);
   }, [selectedRecord]);
 
@@ -703,7 +707,7 @@ export function GerminationReadScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading germination records...</Text>
         </View>
       </SafeAreaView>
@@ -714,7 +718,7 @@ export function GerminationReadScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.errorCard}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
           <Text style={styles.errorMessage}>
             {(error as any)?.message || "Failed to load records"}
@@ -726,7 +730,7 @@ export function GerminationReadScreen({
               pressed && styles.retryButtonPressed,
             ]}
           >
-            <MaterialIcons name="refresh" size={20} color={Colors.white} />
+            <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
         </View>
@@ -736,181 +740,118 @@ export function GerminationReadScreen({
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <SafeAreaView edges={[ "left", "right"]}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <MaterialIcons name="grass" size={24} color={Colors.white} />
-              <Text style={styles.headerTitle}>{title}</Text>
-            </View>
-            <View style={styles.headerActions}>
-              {canCreate && onCreatePress && (
-                <Pressable
-                  onPress={onCreatePress}
-                  style={({ pressed }) => [
-                    styles.createButton,
-                    pressed && styles.createButtonPressed,
-                  ]}
-                >
-                  <MaterialIcons name="add" size={18} color={Colors.primary} />
-                  <Text style={styles.createButtonText}>Record</Text>
-                </Pressable>
-              )}
-              <Pressable
-                onPress={handleRefresh}
-                style={({ pressed }) => [
-                  styles.refreshButton,
-                  pressed && styles.refreshButtonPressed,
-                ]}
-              >
-                <MaterialIcons name="refresh" size={20} color={Colors.white} />
-              </Pressable>
-            </View>
-          </View>
-        </SafeAreaView>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <MaterialIcons
-                name="format-list-bulleted"
-                size={14}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={styles.statLabel}>Records</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {formatNumber(stats.totalRecords)}
-            </Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <MaterialIcons
-                name="spa"
-                size={14}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={styles.statLabel}>Germinated</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {formatNumber(stats.totalGerminated)}
-            </Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <MaterialIcons
-                name="delete-outline"
-                size={14}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={styles.statLabel}>Discarded</Text>
-            </View>
-            <Text style={styles.statValue}>
-              {formatNumber(stats.totalDiscarded)}
-            </Text>
-          </View>
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <MaterialIcons
-                name="insights"
-                size={14}
-                color="rgba(255,255,255,0.9)"
-              />
-              <Text style={styles.statLabel}>Success</Text>
-            </View>
-            <Text style={styles.statValue}>{stats.successRate}%</Text>
-          </View>
-        </View>
-        <View style={styles.searchWrap}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchBox}>
-              <MaterialIcons
-                name="search"
-                size={18}
-                color="rgba(255,255,255,0.8)"
-              />
-              <TextInput
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder={
-                  showSourcingDetails
-                    ? "Search plant, seed, supplier, staff..."
-                    : "Search plant, seed, staff..."
-                }
-                placeholderTextColor="rgba(255,255,255,0.6)"
-                style={styles.searchInput}
-                returnKeyType="search"
-              />
-              {searchQuery ? (
-                <Pressable
-                  onPress={() => setSearchQuery("")}
-                  style={styles.searchClear}
-                >
-                  <MaterialIcons
-                    name="close"
-                    size={16}
-                    color="rgba(255,255,255,0.8)"
-                  />
-                </Pressable>
-              ) : null}
-            </View>
+      <ModuleScreenHeader
+        title={title}
+        subtitle={`${filtered.length} ${
+          filtered.length === 1 ? "record" : "records"
+        }`}
+        onBack={() => router.back()}
+        actions={
+          <View style={styles.headerActions}>
             <Pressable
-              onPress={() => setIsFilterVisible(true)}
+              onPress={handleRefresh}
               style={({ pressed }) => [
-                styles.filterButton,
-                activeFilterCount > 0 && styles.filterButtonActive,
-                pressed && styles.filterButtonPressed,
+                styles.createButton,
+                pressed && styles.refreshButtonPressed,
               ]}
-            >
-              <MaterialIcons
-                name="tune"
-                size={18}
-                color={activeFilterCount > 0 ? Colors.primary : Colors.white}
-              />
-              {activeFilterCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>
-                    {activeFilterCount}
-                  </Text>
-                </View>
-              )}
+            ><View
+                              style={[
+                                styles.createGradient,
+                              ]}
+                            >
+              <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
+              </View>
             </Pressable>
+            {canCreate && onCreatePress && (
+              <Pressable
+                onPress={onCreatePress}
+                style={({ pressed }) => [
+                  styles.createButton,
+                  pressed && styles.createButtonPressed,
+                ]}
+              ><View
+                              style={[
+                                styles.createGradient,
+                              ]}
+                            >
+                <MaterialIcons name="add" size={20} color={Colors.white}/>
+                </View>
+              </Pressable>
+            )}
           </View>
-        </View>
-      </LinearGradient>
-
-      {activeFilterCount > 0 && (
-        <View style={styles.activeFilterRow}>
-          <Text style={styles.activeFilterText}>
-            Filters active: {activeFilterCount}
-          </Text>
-          <Pressable onPress={clearFilters} style={styles.activeFilterClear}>
-            <Text style={styles.activeFilterClearText}>Clear</Text>
-          </Pressable>
-        </View>
-      )}
-
+        }
+      />
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <ModuleScreenIntro
+            stats={[
+              {
+                label: "Records",
+                value: formatNumber(stats.totalRecords),
+                icon: "format-list-bulleted",
+                tone: "info",
+              },
+              {
+                label: "Germinated",
+                value: formatNumber(stats.totalGerminated),
+                icon: "spa",
+                tone: "success",
+              },
+              {
+                label: "Discarded",
+                value: formatNumber(stats.totalDiscarded),
+                icon: "delete-outline",
+                tone: "danger",
+              },
+              {
+                label: "Success Rate",
+                value: `${stats.successRate}%`,
+                icon: "insights",
+                tone: "warning",
+              },
+            ]}
+            search={{
+              value: searchQuery,
+              onChangeText: setSearchQuery,
+              onClear: () => setSearchQuery(""),
+              placeholder: showSourcingDetails
+                ? "Search plant, seed, supplier, staff..."
+                : "Search plant, seed, staff...",
+              onFilterPress: () => setIsFilterVisible(true),
+              activeFilterCount,
+            }}
+            helperRow={
+              activeFilterCount > 0 ? (
+                <View style={styles.activeFilterRow}>
+                  <Text style={styles.activeFilterText}>
+                    Filters active: {activeFilterCount}
+                  </Text>
+                  <Pressable
+                    onPress={clearFilters}
+                    style={styles.activeFilterClear}
+                  >
+                    <Text style={styles.activeFilterClearText}>Clear</Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
+          />
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="grass" size={56} color={Colors.textTertiary} />
+            <MaterialIcons name="grass" size={56} color={AdminTheme.colors.textSoft} />
             <Text style={styles.emptyTitle}>No Germination Records</Text>
             <Text style={styles.emptyText}>
               {searchQuery || activeFilterCount > 0
@@ -928,7 +869,7 @@ export function GerminationReadScreen({
                     pressed && styles.createButtonPressed,
                   ]}
                 >
-                  <MaterialIcons name="add" size={18} color={Colors.white} />
+                  <MaterialIcons name="add" size={18} color={AdminTheme.colors.surface} />
                   <Text style={styles.emptyCreateButtonText}>
                     Record First Batch
                   </Text>
@@ -983,7 +924,7 @@ export function GerminationReadScreen({
                         <MaterialIcons
                           name="category"
                           size={11}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                         <Text style={styles.categoryChipText}>
                           {item.category}
@@ -999,7 +940,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="scatter-plot"
                         size={12}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.metricLabel}>Sown</Text>
                     </View>
@@ -1012,7 +953,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="eco"
                         size={12}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.metricLabel}>Germinated</Text>
                     </View>
@@ -1025,7 +966,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="delete-outline"
                         size={12}
-                        color={Colors.error}
+                        color={AdminTheme.colors.danger}
                       />
                       <Text style={styles.metricLabel}>Discarded</Text>
                     </View>
@@ -1038,7 +979,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="schedule"
                         size={12}
-                        color={Colors.warning}
+                        color={AdminTheme.colors.warning}
                       />
                       <Text style={styles.metricLabel}>Pending</Text>
                     </View>
@@ -1054,9 +995,9 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="merge-type"
                         size={12}
-                        color={Colors.primary}
+                        color={AdminTheme.colors.primary}
                       />
-                      <Text style={[styles.footerText, { color: Colors.primary }]}>
+                      <Text style={[styles.footerText, { color: AdminTheme.colors.primary }]}>
                         Merged {item.sourceCount} entries
                       </Text>
                     </View>
@@ -1065,7 +1006,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="person"
                       size={12}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.footerText}>{item.performedBy}</Text>
                   </View>
@@ -1073,7 +1014,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="calendar-today"
                       size={12}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.footerText}>
                       {formatDate(item.germinationDate)}
@@ -1083,7 +1024,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="inventory"
                       size={12}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.footerText}>
                       {item.inventoryInitialQuantity > 0
@@ -1136,7 +1077,7 @@ export function GerminationReadScreen({
                 <MaterialIcons
                   name="close"
                   size={20}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
             </View>
@@ -1188,7 +1129,7 @@ export function GerminationReadScreen({
                   <MaterialIcons
                     name="insights"
                     size={16}
-                    color={Colors.primary}
+                    color={AdminTheme.colors.primary}
                   />
                   <Text style={styles.detailsTopCardLabel}>Success</Text>
                   <Text style={styles.detailsTopCardValue}>
@@ -1199,7 +1140,7 @@ export function GerminationReadScreen({
                   <MaterialIcons
                     name="done-all"
                     size={16}
-                    color={Colors.primary}
+                    color={AdminTheme.colors.primary}
                   />
                   <Text style={styles.detailsTopCardLabel}>Processed</Text>
                   <Text style={styles.detailsTopCardValue}>
@@ -1232,7 +1173,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="scatter-plot"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Sown Quantity</Text>
                   </View>
@@ -1245,7 +1186,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="spa"
                       size={14}
-                      color={Colors.success}
+                      color={AdminTheme.colors.success}
                     />
                     <Text style={styles.detailLabel}>Germinated</Text>
                   </View>
@@ -1258,7 +1199,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="delete-outline"
                       size={14}
-                      color={Colors.error}
+                      color={AdminTheme.colors.danger}
                     />
                     <Text style={styles.detailLabel}>Discarded</Text>
                   </View>
@@ -1271,7 +1212,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="schedule"
                       size={14}
-                      color={Colors.warning}
+                      color={AdminTheme.colors.warning}
                     />
                     <Text style={styles.detailLabel}>Pending</Text>
                   </View>
@@ -1284,7 +1225,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="percent"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Discard Rate</Text>
                   </View>
@@ -1301,7 +1242,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="grass"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Plant</Text>
                   </View>
@@ -1318,7 +1259,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="category"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Category</Text>
                     </View>
@@ -1333,7 +1274,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="straighten"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Expected Seeds / Batch</Text>
                     </View>
@@ -1347,7 +1288,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="eco"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Seed</Text>
                   </View>
@@ -1361,7 +1302,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="storefront"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Supplier</Text>
                     </View>
@@ -1376,7 +1317,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="event-busy"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Seed Expiry</Text>
                     </View>
@@ -1394,7 +1335,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="scatter-plot"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Sown / Germinated / Pending</Text>
                   </View>
@@ -1410,7 +1351,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="event"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Sowing Date</Text>
                     </View>
@@ -1425,7 +1366,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="event-available"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Germination Date</Text>
                     </View>
@@ -1443,7 +1384,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="flag"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Status</Text>
                   </View>
@@ -1458,7 +1399,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="timeline"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Growth Stage</Text>
                     </View>
@@ -1472,7 +1413,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="inventory"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Initial / In Stock</Text>
                   </View>
@@ -1516,7 +1457,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="event-available"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Recorded On</Text>
                     </View>
@@ -1531,7 +1472,7 @@ export function GerminationReadScreen({
                       <MaterialIcons
                         name="update"
                         size={14}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.detailLabel}>Last Updated</Text>
                     </View>
@@ -1546,7 +1487,7 @@ export function GerminationReadScreen({
                     <MaterialIcons
                       name="event-available"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Created</Text>
                   </View>
@@ -1564,206 +1505,90 @@ export function GerminationReadScreen({
   );
 }
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   center: {
     flex: 1,
     justifyContent: "center" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.background,
-  },
-  headerGradient: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: 12,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerActions: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 8,
   },
-  headerLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
   refreshButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: AdminTheme.colors.primary,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   refreshButtonPressed: {
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.95 }],
   },
   createButton: {
+   width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  },
+  createGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.75)",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    justifyContent: "center" as const,
+    width: "100%",
+    height: "100%",
   },
   createButtonPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.97 }],
   },
-  createButtonText: {
-    fontSize: 12,
-    fontWeight: "700" as const,
-    color: Colors.primary,
-  },
-  statsGrid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: 110,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.8)",
-    marginBottom: 2,
-  },
-  statLabelRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  searchWrap: {
-    marginTop: 12,
-  },
-  searchRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-  },
-  searchBox: {
-    flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: 12,
-    minHeight: 44,
-    paddingHorizontal: 12,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.white,
-    paddingVertical: 10,
-  },
-  searchClear: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-  },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  filterButtonActive: {
-    borderColor: "rgba(255,255,255,0.9)",
-    backgroundColor: Colors.white,
-  },
-  filterButtonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  filterBadge: {
-    position: "absolute" as const,
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 10,
-    backgroundColor: Colors.error,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: Colors.white,
-  },
-  filterBadgeText: {
-    color: Colors.white,
-    fontSize: 10,
-    fontWeight: "700" as const,
-  },
+  
   activeFilterRow: {
-    marginHorizontal: 20,
-    marginBottom: 8,
+    marginHorizontal: AdminTheme.spacing.lg,
+    marginBottom: 6,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
   },
   activeFilterText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   activeFilterClear: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
   },
   activeFilterClearText: {
     fontSize: 12,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: 4,
     paddingBottom: BOTTOM_NAV_HEIGHT + 24,
   },
   loadingCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     padding: 24,
     borderRadius: 20,
     alignItems: "center" as const,
@@ -1771,11 +1596,12 @@ const styles = {
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     padding: 24,
     borderRadius: 20,
     alignItems: "center" as const,
@@ -1785,19 +1611,19 @@ const styles = {
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
     marginTop: 8,
   },
   errorMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
     marginBottom: 8,
   },
   retryButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
@@ -1805,29 +1631,31 @@ const styles = {
     marginTop: 8,
   },
   retryButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.98 }],
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },
   emptyContainer: {
+    ...cardSurface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingVertical: 56,
+    paddingHorizontal: AdminTheme.spacing.lg,
     gap: 10,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginTop: 8,
   },
   emptyText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
     paddingHorizontal: 20,
   },
@@ -1836,31 +1664,32 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   emptyCreateButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600" as const,
   },
   recordCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
   },
   recordCardPressed: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     transform: [{ scale: 0.98 }],
   },
   recordImageBanner: {
@@ -1870,7 +1699,7 @@ const styles = {
     marginBottom: 0,
   },
   recordCardContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
   },
   recordTitleRow: {
     flexDirection: "row" as const,
@@ -1885,12 +1714,12 @@ const styles = {
   recordTitle: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   recordSubTitle: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   categoryChip: {
     marginTop: 6,
@@ -1901,21 +1730,23 @@ const styles = {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
     borderWidth: 1,
-    borderColor: `${Colors.primary}22`,
+    borderColor: `${AdminTheme.colors.primary}22`,
   },
   categoryChipText: {
     fontSize: 10,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   statusBadge: {
+    ...moduleBadge,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   bannerStatusBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
     top: 8,
     right: 8,
@@ -1942,7 +1773,7 @@ const styles = {
   },
   metricLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     marginBottom: 3,
   },
   metricLabelRow: {
@@ -1954,7 +1785,7 @@ const styles = {
   metricValue: {
     fontSize: 13,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   recordFooter: {
     flexDirection: "row" as const,
@@ -1971,7 +1802,7 @@ const styles = {
   },
   footerText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   modalOverlay: {
     flex: 1,
@@ -1988,7 +1819,7 @@ const styles = {
     } as const),
   },
   filterModalSheet: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
@@ -2005,7 +1836,7 @@ const styles = {
   filterModalTitle: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   filterModalClose: {
     width: 30,
@@ -2022,7 +1853,7 @@ const styles = {
   filterSectionTitle: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterSectionHeader: {
     flexDirection: "row" as const,
@@ -2041,21 +1872,21 @@ const styles = {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
   },
   filterChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}12`,
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: `${AdminTheme.colors.primary}12`,
   },
   filterChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   filterActionsRow: {
@@ -2076,20 +1907,20 @@ const styles = {
   filterClearBtnText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterApplyBtn: {
     flex: 1.3,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     paddingVertical: 11,
   },
   filterApplyBtnText: {
     fontSize: 13,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   detailsOverlay: {
     position: "absolute" as const,
@@ -2108,7 +1939,7 @@ const styles = {
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "80%",
@@ -2129,17 +1960,17 @@ const styles = {
     paddingTop: 12,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: AdminTheme.colors.border,
   },
   detailsTitle: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   detailsSubtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   detailsClose: {
     width: 30,
@@ -2180,13 +2011,13 @@ const styles = {
   detailsHeroTitle: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     paddingHorizontal: 12,
   },
   detailsHeroSubtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     paddingHorizontal: 12,
   },
   detailsTopCards: {
@@ -2194,6 +2025,7 @@ const styles = {
     gap: 10,
   },
   detailsTopCard: {
+    ...cardSurface,
     flex: 1,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -2204,12 +2036,12 @@ const styles = {
   },
   detailsTopCardLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   detailsTopCardValue: {
     fontSize: 14,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   progressWrap: {
     gap: 6,
@@ -2223,17 +2055,17 @@ const styles = {
   progressFill: {
     height: "100%",
     borderRadius: 99,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
   },
   progressText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   detailsSection: {
     borderWidth: 1,
     borderColor: "#F1F5F9",
     borderRadius: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 6,
@@ -2241,7 +2073,7 @@ const styles = {
   detailsSectionTitle: {
     fontSize: 12,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   detailRow: {
@@ -2259,13 +2091,13 @@ const styles = {
   },
   detailLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   detailValue: {
     flex: 1,
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     textAlign: "right" as const,
     flexShrink: 1,
   },
@@ -2273,12 +2105,13 @@ const styles = {
     flex: 1,
     fontSize: 11,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     textAlign: "right" as const,
     fontFamily: "monospace",
     flexShrink: 1,
   },
   rolePill: {
+    ...moduleBadge,
     maxWidth: "58%" as const,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -2287,7 +2120,7 @@ const styles = {
   detailValueRole: {
     fontSize: 12,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     textAlign: "right" as const,
   },
 } as const;

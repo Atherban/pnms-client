@@ -3,13 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   Alert,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,64 +17,41 @@ import {
   View,
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-  Layout,
-  SlideInRight,
-} from "react-native-reanimated";
 
-import FixedHeader from "../../../components/common/FixedHeader";
-import BannerCardImage from "../../../components/ui/BannerCardImage";
-import { PaymentService } from "../../../services/payment.service";
-import { useAuthStore } from "../../../stores/auth.store";
-import { Colors, Spacing } from "../../../theme";
+import { CustomerActionButton } from "@/src/components/customer/CustomerActionButton";
+import {
+  CustomerEmptyState,
+  CustomerScreen,
+  SectionHeader,
+  StatPill,
+  StatusChip,
+} from "@/src/components/common/StitchScreen";
+import { StitchHeaderActionButton } from "@/src/components/common/StitchHeader";
+import { CustomerFilterChip } from "@/src/components/customer/CustomerFilterChip";
+import { CustomerSurfaceCard } from "@/src/components/customer/CustomerSurfaceCard";
+import BannerCardImage from "@/src/components/ui/BannerCardImage";
+import { PaymentService } from "@/src/services/payment.service";
+import { useAuthStore } from "@/src/stores/auth.store";
+import { CustomerColors, Spacing } from "@/src/theme";
+import type { DueSale } from "@/src/types/payment.types";
 
-const formatMoney = (amount: number) =>
-  `₹${Math.round(amount).toLocaleString("en-IN")}`;
-const formatCompactMoney = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
-  return `₹${amount}`;
+const formatMoney = (amount: number) => `₹${Math.round(amount).toLocaleString("en-IN")}`;
+
+const formatDate = (value?: string) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
-const PAYMENT_MODES = [
-  { id: "UPI", label: "UPI", icon: "qr-code", color: Colors.primary },
-  { id: "ONLINE", label: "Online", icon: "language", color: "#8B5CF6" },
-  {
-    id: "BANK_TRANSFER",
-    label: "Bank Transfer",
-    icon: "account-balance",
-    color: "#059669",
-  },
-  { id: "CASH", label: "Cash", icon: "payments", color: "#D97706" },
-] as const;
-
-type PaymentMode = (typeof PAYMENT_MODES)[number]["id"];
-
 const formatDateTimeLabel = (value?: string) => {
-  if (!value) return "Select payment date & time";
+  if (!value) return "Select payment date and time";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (parsed.toDateString() === today.toDateString()) {
-    return `Today, ${parsed.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })}`;
-  } else if (parsed.toDateString() === yesterday.toDateString()) {
-    return `Yesterday, ${parsed.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })}`;
-  }
-
   return parsed.toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -85,497 +62,117 @@ const formatDateTimeLabel = (value?: string) => {
   });
 };
 
-// ==================== STATS CARD ====================
+const PAYMENT_MODES = [
+  { id: "UPI", label: "UPI", icon: "qr-code" },
+  { id: "ONLINE", label: "Online", icon: "language" },
+  { id: "BANK_TRANSFER", label: "Bank", icon: "account-balance" },
+  { id: "CASH", label: "Cash", icon: "payments" },
+] as const;
 
-interface StatsCardProps {
-  totalDue: number;
-  totalPaid: number;
-  pendingCount: number;
-}
+type PaymentMode = (typeof PAYMENT_MODES)[number]["id"];
+type DueFilter = "ALL" | "UNPAID" | "PENDING" | "PAID";
 
-const StatsCard = ({ totalDue, totalPaid, pendingCount }: StatsCardProps) => {
-  const progressPercentage =
-    totalDue > 0 ? (totalPaid / (totalDue + totalPaid)) * 100 : 0;
-
-  return (
-    <Animated.View
-      entering={FadeInDown.springify().damping(35)}
-      style={styles.statsCard}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.statsCardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.error + "10" },
-              ]}
-            >
-              <MaterialIcons name="receipt" size={20} color={Colors.error} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Total Due</Text>
-              <Text style={[styles.statValue, { color: Colors.error }]}>
-                {formatCompactMoney(totalDue)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.success + "10" },
-              ]}
-            >
-              <MaterialIcons
-                name="check-circle"
-                size={20}
-                color={Colors.success}
-              />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Paid</Text>
-              <Text style={[styles.statValue, { color: Colors.success }]}>
-                {formatCompactMoney(totalPaid)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.warning + "10" },
-              ]}
-            >
-              <MaterialIcons name="pending" size={20} color={Colors.warning} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Pending</Text>
-              <Text style={[styles.statValue, { color: Colors.warning }]}>
-                {pendingCount}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Progress Bar */}
-        <View style={styles.statsProgressContainer}>
-          <View style={styles.statsProgressBar}>
-            <View
-              style={[
-                styles.statsProgressFill,
-                { width: `${Math.min(progressPercentage, 100)}%` },
-              ]}
-            />
-          </View>
-          <Text style={styles.statsProgressText}>
-            {progressPercentage.toFixed(1)}% of dues cleared
-          </Text>
-        </View>
-      </LinearGradient>
-    </Animated.View>
+const getDueTone = (item: DueSale): "success" | "warning" | "info" => {
+  const hasPendingVerification = item.transactions.some((tx) =>
+    ["PENDING", "PENDING_VERIFICATION", "SYNC_QUEUED"].includes(String(tx.status || "").toUpperCase()),
   );
+  if (item.dueAmount <= 0) return "success";
+  if (hasPendingVerification) return "info";
+  return "warning";
 };
 
-// ==================== DUE CARD (Customer Friendly) ====================
-
-interface DueCardProps {
-  item: any;
-  onPress: (saleId: string) => void;
-  onViewDetails: (saleId: string) => void;
-  index: number;
-}
-
-const DueCard = ({ item, onPress, onViewDetails, index }: DueCardProps) => {
-  const paidRatio =
-    item.totalAmount > 0 ? (item.paidAmount / item.totalAmount) * 100 : 0;
-  const transactions = Array.isArray(item.transactions) ? item.transactions : [];
-  const recentTransactions = [...transactions]
-    .sort((a: any, b: any) => {
-      const aTime = new Date(a?.paymentAt || a?.createdAt || 0).getTime();
-      const bTime = new Date(b?.paymentAt || b?.createdAt || 0).getTime();
-      return bTime - aTime;
-    })
-    .slice(0, 2);
-  const orderDate = item.issuedAt || item.saleDate || item.createdAt;
-  const formattedDate = orderDate
-    ? new Date(orderDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : null;
-
-  // Get status display
-  const getStatusDisplay = () => {
-    if (item.status === "PAID") {
-      return { label: "Paid", color: Colors.success, icon: "check-circle" };
-    }
-    if (item.dueAmount === 0) {
-      return {
-        label: "Completed",
-        color: Colors.success,
-        icon: "check-circle",
-      };
-    }
-    if (item.paidAmount > 0) {
-      return {
-        label: "Partial Paid",
-        color: Colors.warning,
-        icon: "hourglass-empty",
-      };
-    }
-    return { label: "Pending", color: Colors.warning, icon: "pending" };
-  };
-
-  const status = getStatusDisplay();
-  const getTransactionStatusDisplay = (status?: string) => {
-    const value = String(status || "").toUpperCase();
-    if (value === "VERIFIED" || value === "APPROVED") {
-      return { label: "Verified", color: Colors.success, icon: "check-circle" };
-    }
-    if (value === "REJECTED" || value === "CANCELLED") {
-      return { label: "Rejected", color: Colors.error, icon: "cancel" };
-    }
-    return { label: "Pending", color: Colors.warning, icon: "hourglass-empty" };
-  };
-
-  return (
-    <Animated.View
-      entering={FadeInUp.delay(index * 100)
-        .springify()
-        .damping(35)}
-      layout={Layout.springify()}
-      style={styles.card}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <BannerCardImage
-          uri={item.imageUri}
-          iconName="receipt-long"
-          minHeight={140}
-          containerStyle={styles.cardImageBanner}
-        />
-        <View style={styles.cardContent}>
-        {/* Header */}
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View
-              style={[
-                styles.cardIcon,
-                { backgroundColor: Colors.primary + "10" },
-              ]}
-            >
-              <MaterialIcons
-                name="receipt-long"
-                size={16}
-                color={Colors.primary}
-              />
-            </View>
-            <View>
-              <Text style={styles.orderLabel}>{item.itemTitle || "Invoice"}</Text>
-              {item.itemSubtitle ? (
-                <Text style={styles.orderDate}>{item.itemSubtitle}</Text>
-              ) : null}
-              {formattedDate && (
-                <Text style={styles.orderDate}>{formattedDate}</Text>
-              )}
-            </View>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: status.color + "10" },
-            ]}
-          >
-            <MaterialIcons
-              name={status.icon as any}
-              size={12}
-              color={status.color}
-            />
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
-            </Text>
-          </View>
-        </View>
-
-        {/* Amounts */}
-        <View style={styles.amountContainer}>
-          <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>Total Bill</Text>
-            <Text style={styles.amountValue}>
-              {formatMoney(item.totalAmount)}
-            </Text>
-          </View>
-          <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>Paid</Text>
-            <Text style={[styles.amountValue, { color: Colors.success }]}>
-              {formatMoney(item.paidAmount)}
-            </Text>
-          </View>
-          <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>Balance Due</Text>
-            <Text
-              style={[
-                styles.amountValue,
-                { color: Colors.error, fontWeight: "700" },
-              ]}
-            >
-              {formatMoney(item.dueAmount)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Due Progress Bar */}
-        <View style={styles.dueProgressContainer}>
-          <View style={styles.dueProgressBar}>
-            <View
-              style={[
-                styles.dueProgressFill,
-                {
-                  width: `${Math.min(Math.max(paidRatio, 0), 100)}%`,
-                  backgroundColor:
-                    paidRatio < 50 ? Colors.warning : Colors.success,
-                },
-              ]}
-            />
-          </View>
-          <Text style={styles.dueProgressText}>
-            {Math.round(Math.min(Math.max(paidRatio, 0), 100))}% paid
-          </Text>
-        </View>
-
-        {/* Recent Payment Activity */}
-        {recentTransactions.length > 0 && (
-          <View style={styles.activityContainer}>
-            <Text style={styles.activityTitle}>Recent Activity</Text>
-            {recentTransactions.map((tx: any) => (
-              <View key={tx.id} style={styles.activityItem}>
-                {(() => {
-                  const txStatus = getTransactionStatusDisplay(tx.status);
-                  return (
-                    <View style={styles.activityLeft}>
-                      <View
-                        style={[
-                          styles.activityIcon,
-                          { backgroundColor: txStatus.color + "10" },
-                        ]}
-                      >
-                        <MaterialIcons
-                          name={txStatus.icon as any}
-                          size={12}
-                          color={txStatus.color}
-                        />
-                      </View>
-                      <View>
-                        <Text style={styles.activityAmount}>
-                          {formatMoney(tx.amount)}
-                        </Text>
-                        <Text style={styles.activityMeta}>
-                          {tx.mode?.replace("_", " ")} • {txStatus.label}
-                        </Text>
-                      </View>
-                    </View>
-                  );
-                })()}
-              </View>
-            ))}
-            {transactions.length > 2 && (
-              <Text style={styles.moreActivity}>
-                +{transactions.length - 2} more payment
-                {transactions.length - 2 > 1 ? "s" : ""}
-              </Text>
-            )}
-          </View>
-        )}
-
-        <View style={styles.cardActions}>
-          <Pressable
-            onPress={() => onViewDetails(item.saleId)}
-            style={({ pressed }) => [
-              styles.viewDetailsButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <MaterialIcons name="receipt-long" size={16} color={Colors.primary} />
-            <Text style={styles.viewDetailsText}>View Details</Text>
-          </Pressable>
-
-          {item.dueAmount > 0 && (
-            <Pressable
-              onPress={() => onPress(item.saleId)}
-              style={({ pressed }) => [
-                styles.payButton,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.payButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <MaterialIcons name="payment" size={18} color={Colors.white} />
-                <Text style={styles.payButtonText}>Make a Payment</Text>
-              </LinearGradient>
-            </Pressable>
-          )}
-        </View>
-        </View>
-      </LinearGradient>
-    </Animated.View>
+const getDueLabel = (item: DueSale) => {
+  const hasPendingVerification = item.transactions.some((tx) =>
+    ["PENDING", "PENDING_VERIFICATION", "SYNC_QUEUED"].includes(String(tx.status || "").toUpperCase()),
   );
+  if (item.dueAmount <= 0) return "Paid";
+  if (hasPendingVerification) return "Pending Verification";
+  if (item.paidAmount > 0) return "Partially Paid";
+  return "Unpaid";
 };
-
-// ==================== PAYMENT MODAL (Customer Friendly) ====================
 
 interface PaymentModalProps {
   visible: boolean;
-  selectedSale: any;
+  selectedSale?: DueSale;
   onClose: () => void;
   onSubmit: () => void;
   amount: string;
   setAmount: (value: string) => void;
   mode: PaymentMode;
-  setMode: (mode: PaymentMode) => void;
+  setMode: (value: PaymentMode) => void;
   utrNumber: string;
   setUtrNumber: (value: string) => void;
   reference: string;
   setReference: (value: string) => void;
   paymentAt: string;
   setPaymentAt: (value: string) => void;
-  screenshotFile: any;
-  setScreenshotFile: (file: any) => void;
+  screenshotFile: { uri: string; name: string; type?: string } | null;
+  setScreenshotFile: (file: { uri: string; name: string; type?: string } | null) => void;
   onPickScreenshot: () => void;
   showDatePicker: boolean;
   setShowDatePicker: (show: boolean) => void;
   isSubmitting: boolean;
 }
 
-const PaymentModal = ({
-  visible,
-  selectedSale,
-  onClose,
-  onSubmit,
-  amount,
-  setAmount,
-  mode,
-  setMode,
-  utrNumber,
-  setUtrNumber,
-  reference,
-  setReference,
-  paymentAt,
-  setPaymentAt,
-  screenshotFile,
-  setScreenshotFile,
-  onPickScreenshot,
-  showDatePicker,
-  setShowDatePicker,
-  isSubmitting,
-}: PaymentModalProps) => {
-  const dueAmount = selectedSale?.dueAmount || 0;
-  const invoiceDate = selectedSale?.issuedAt || selectedSale?.saleDate || selectedSale?.createdAt;
-  const formattedInvoiceDate = invoiceDate
-    ? new Date(invoiceDate).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : null;
+function PaymentModal(props: PaymentModalProps) {
+  const {
+    visible,
+    selectedSale,
+    onClose,
+    onSubmit,
+    amount,
+    setAmount,
+    mode,
+    setMode,
+    utrNumber,
+    setUtrNumber,
+    reference,
+    setReference,
+    paymentAt,
+    setPaymentAt,
+    screenshotFile,
+    setScreenshotFile,
+    onPickScreenshot,
+    showDatePicker,
+    setShowDatePicker,
+    isSubmitting,
+  } = props;
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.modalOverlay}>
-        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-
-        <Animated.View
-          entering={SlideInRight.springify().damping(45)}
-          style={styles.modalContent}
-        >
+        <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.modalSheet}>
           <View style={styles.modalHeader}>
             <View>
-              <Text style={styles.modalTitle}>Make a Payment</Text>
+              <Text style={styles.modalTitle}>Submit payment</Text>
               <Text style={styles.modalSubtitle}>
-                Invoice from {formattedInvoiceDate || "Unknown date"}
+                {selectedSale?.itemTitle || "Invoice"} • Due {formatMoney(selectedSale?.dueAmount || 0)}
               </Text>
             </View>
-            <Pressable onPress={onClose} style={styles.modalClose}>
-              <MaterialIcons
-                name="close"
-                size={20}
-                color={Colors.textSecondary}
-              />
+            <Pressable onPress={onClose} style={styles.modalCloseButton}>
+              <MaterialIcons name="close" size={20} color={CustomerColors.textMuted} />
             </Pressable>
           </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.modalBody}
-          >
-            {/* Due Amount Highlight */}
-            <View style={styles.dueHighlight}>
-              <Text style={styles.dueHighlightLabel}>Balance Due</Text>
-              <Text style={styles.dueHighlightAmount}>
-                {formatMoney(dueAmount)}
-              </Text>
-            </View>
-
-            {/* Payment Method Selection */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>
-                How would you like to pay?
-              </Text>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Payment mode</Text>
               <View style={styles.modeGrid}>
                 {PAYMENT_MODES.map((item) => {
-                  const isActive = mode === item.id;
+                  const active = mode === item.id;
                   return (
                     <Pressable
                       key={item.id}
                       onPress={() => setMode(item.id)}
-                      style={[
-                        styles.modeOption,
-                        isActive && styles.modeOptionActive,
-                        isActive && { borderColor: item.color },
-                      ]}
+                      style={[styles.modeChip, active && styles.modeChipActive]}
                     >
-                      <View
-                        style={[
-                          styles.modeIcon,
-                          {
-                            backgroundColor: isActive
-                              ? item.color + "10"
-                              : "#F3F4F6",
-                          },
-                        ]}
-                      >
-                        <MaterialIcons
-                          name={item.icon as any}
-                          size={18}
-                          color={isActive ? item.color : Colors.textSecondary}
-                        />
-                      </View>
-                      <Text
-                        style={[
-                          styles.modeLabel,
-                          isActive && { color: item.color, fontWeight: "600" },
-                        ]}
-                      >
+                      <MaterialIcons
+                        name={item.icon as any}
+                        size={16}
+                        color={active ? CustomerColors.white : CustomerColors.textMuted}
+                      />
+                      <Text style={[styles.modeChipText, active && styles.modeChipTextActive]}>
                         {item.label}
                       </Text>
                     </Pressable>
@@ -584,188 +181,86 @@ const PaymentModal = ({
               </View>
             </View>
 
-            {/* Payment Amount */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>Payment Amount</Text>
-              <View style={styles.amountInputContainer}>
-                <Text style={styles.amountCurrency}>₹</Text>
-                <TextInput
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="Enter amount"
-                  keyboardType="numeric"
-                  style={styles.amountInput}
-                  placeholderTextColor={Colors.textTertiary}
-                />
-              </View>
-              {amount && Number(amount) > dueAmount && (
-                <Text style={styles.errorText}>
-                  Amount cannot exceed your balance due
-                </Text>
-              )}
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Amount</Text>
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="Enter amount"
+                keyboardType="numeric"
+                placeholderTextColor={CustomerColors.textMuted}
+                style={styles.textInput}
+              />
             </View>
 
-            {/* Transaction ID (for online payments) */}
-            {mode !== "CASH" && (
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>
-                  Transaction ID / UTR{" "}
-                  <Text style={styles.requiredStar}>*</Text>
-                </Text>
+            {mode !== "CASH" ? (
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>Transaction ID / UTR</Text>
                 <TextInput
                   value={utrNumber}
                   onChangeText={setUtrNumber}
-                  placeholder="Enter transaction ID from your payment app"
-                  style={styles.modalInput}
-                  placeholderTextColor={Colors.textTertiary}
-                  autoCapitalize="characters"
+                  placeholder="Enter transaction ID"
+                  placeholderTextColor={CustomerColors.textMuted}
+                  style={styles.textInput}
                 />
-                <Text style={styles.helperText}>
-                  You can find this in your payment app after successful payment
-                </Text>
               </View>
-            )}
+            ) : null}
 
-            {/* Payment Date */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>When did you pay?</Text>
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                style={styles.datePickerButton}
-              >
-                <MaterialIcons
-                  name="calendar-today"
-                  size={18}
-                  color={Colors.primary}
-                />
-                <Text
-                  style={
-                    paymentAt
-                      ? styles.datePickerText
-                      : styles.datePickerPlaceholder
-                  }
-                >
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Payment time</Text>
+              <Pressable onPress={() => setShowDatePicker(true)} style={styles.dateField}>
+                <MaterialIcons name="calendar-today" size={16} color={CustomerColors.primary} />
+                <Text style={paymentAt ? styles.dateValue : styles.datePlaceholder}>
                   {formatDateTimeLabel(paymentAt)}
                 </Text>
               </Pressable>
-              {paymentAt && (
-                <Pressable
-                  onPress={() => setPaymentAt("")}
-                  style={styles.clearDateButton}
-                >
-                  <Text style={styles.clearDateText}>Clear date</Text>
-                </Pressable>
-              )}
             </View>
 
-            {/* Payment Screenshot (Optional) */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>
-                Payment Screenshot (Optional)
-              </Text>
-              <Text style={styles.helperText}>
-                Upload a screenshot to help us verify your payment faster
-              </Text>
-
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Payment screenshot</Text>
               {!screenshotFile ? (
-                <Pressable
-                  onPress={onPickScreenshot}
-                  style={styles.uploadButton}
-                >
-                  <MaterialIcons
-                    name="add-photo-alternate"
-                    size={24}
-                    color={Colors.primary}
-                  />
-                  <Text style={styles.uploadButtonText}>Choose Screenshot</Text>
+                <Pressable onPress={onPickScreenshot} style={styles.uploadField}>
+                  <MaterialIcons name="cloud-upload" size={24} color={CustomerColors.primary} />
+                  <Text style={styles.uploadTitle}>Upload screenshot</Text>
+                  <Text style={styles.uploadCaption}>Optional, but helps verification.</Text>
                 </Pressable>
               ) : (
-                <View style={styles.previewContainer}>
-                  <Image
-                    source={{ uri: screenshotFile.uri }}
-                    style={styles.previewImage}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                  <View style={styles.previewOverlay}>
+                <View style={styles.previewCard}>
+                  <Image source={{ uri: screenshotFile.uri }} style={styles.previewImage} contentFit="cover" />
+                  <View style={styles.previewMeta}>
                     <Text style={styles.previewName} numberOfLines={1}>
                       {screenshotFile.name}
                     </Text>
-                    <Pressable
-                      onPress={() => setScreenshotFile(null)}
-                      style={styles.previewRemove}
-                    >
-                      <MaterialIcons
-                        name="close"
-                        size={16}
-                        color={Colors.white}
-                      />
+                    <Pressable onPress={() => setScreenshotFile(null)}>
+                      <Text style={styles.previewRemove}>Remove</Text>
                     </Pressable>
                   </View>
                 </View>
               )}
             </View>
 
-            {/* Additional Notes (Optional) */}
-            <View style={styles.modalSection}>
-              <Text style={styles.modalSectionTitle}>
-                Additional Notes (Optional)
-              </Text>
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Reference note</Text>
               <TextInput
                 value={reference}
                 onChangeText={setReference}
-                placeholder="Any additional information you'd like to share"
-                style={[styles.modalInput, styles.textArea]}
-                placeholderTextColor={Colors.textTertiary}
+                placeholder="Add any note for the nursery"
+                placeholderTextColor={CustomerColors.textMuted}
+                style={[styles.textInput, styles.noteInput]}
                 multiline
-                numberOfLines={3}
               />
             </View>
           </ScrollView>
 
-          {/* Modal Actions */}
-          <View style={styles.modalFooter}>
-            <Pressable onPress={onClose} style={styles.modalCancelButton}>
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
-            </Pressable>
-
-            <Pressable
+          <View style={styles.modalActions}>
+            <CustomerActionButton label="Cancel" variant="secondary" onPress={onClose} style={styles.flexButton} />
+            <CustomerActionButton
+              label={isSubmitting ? "Submitting..." : "Submit"}
               onPress={onSubmit}
-              disabled={isSubmitting}
-              style={[
-                styles.modalSubmitButton,
-                isSubmitting && styles.modalSubmitButtonDisabled,
-              ]}
-            >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.modalSubmitGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <MaterialIcons name="sync" size={18} color={Colors.white} />
-                    <Text style={styles.modalSubmitButtonText}>
-                      Submitting...
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <MaterialIcons
-                      name="check-circle"
-                      size={18}
-                      color={Colors.white}
-                    />
-                    <Text style={styles.modalSubmitButtonText}>
-                      Submit Payment
-                    </Text>
-                  </>
-                )}
-              </LinearGradient>
-            </Pressable>
+              style={styles.flexButton}
+            />
           </View>
-        </Animated.View>
+        </View>
       </View>
 
       <DateTimePickerModal
@@ -780,28 +275,23 @@ const PaymentModal = ({
       />
     </Modal>
   );
-};
-
-// ==================== MAIN COMPONENT ====================
+}
 
 export default function CustomerDuesScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const [activeFilter, setActiveFilter] = useState<DueFilter>("ALL");
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<PaymentMode>("UPI");
   const [utrNumber, setUtrNumber] = useState("");
   const [paymentAt, setPaymentAt] = useState("");
   const [reference, setReference] = useState("");
-  const [screenshotFile, setScreenshotFile] = useState<{
-    uri: string;
-    name: string;
-    type?: string;
-  } | null>(null);
+  const [screenshotFile, setScreenshotFile] = useState<{ uri: string; name: string; type?: string } | null>(null);
   const [showPaymentAtPicker, setShowPaymentAtPicker] = useState(false);
 
-  const { data, refetch, isRefetching } = useQuery({
+  const { data, refetch, isRefetching, isLoading } = useQuery({
     queryKey: ["customer-dues", user?.id, user?.phoneNumber],
     queryFn: () =>
       PaymentService.getDueSalesForUser({
@@ -812,56 +302,49 @@ export default function CustomerDuesScreen() {
       }),
   });
 
-  // Fetch rejected payments count
   const { data: rejectedPayments } = useQuery({
     queryKey: ["payment-proofs", "rejected"],
     queryFn: () => PaymentService.listPaymentProofs("REJECTED"),
   });
 
-  const rejectedCount = (rejectedPayments || []).length;
+  const dues = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const selectedSale = useMemo(() => dues.find((item) => item.saleId === selectedSaleId), [dues, selectedSaleId]);
+  const rejectedCount = Array.isArray(rejectedPayments) ? rejectedPayments.length : 0;
 
-  const selectedSale = useMemo(
-    () => (data || []).find((item) => item.saleId === selectedSaleId),
-    [data, selectedSaleId],
-  );
-
-  const sortedDues = useMemo(() => {
-    const rows = Array.isArray(data) ? data : [];
-    return [...rows].sort((a, b) => {
-      const aOutstanding = Number(a?.dueAmount ?? 0) > 0 ? 1 : 0;
-      const bOutstanding = Number(b?.dueAmount ?? 0) > 0 ? 1 : 0;
-      if (aOutstanding !== bOutstanding) return bOutstanding - aOutstanding;
-      return String(b?.issuedAt || "").localeCompare(String(a?.issuedAt || ""));
+  const filteredDues = useMemo(() => {
+    const rows = [...dues].sort((a, b) => String(b.issuedAt || "").localeCompare(String(a.issuedAt || "")));
+    return rows.filter((item) => {
+      const hasPendingVerification = item.transactions.some((tx) =>
+        ["PENDING", "PENDING_VERIFICATION", "SYNC_QUEUED"].includes(String(tx.status || "").toUpperCase()),
+      );
+      if (activeFilter === "UNPAID") return item.dueAmount > 0 && item.paidAmount <= 0 && !hasPendingVerification;
+      if (activeFilter === "PENDING") return hasPendingVerification;
+      if (activeFilter === "PAID") return item.dueAmount <= 0;
+      return true;
     });
-  }, [data]);
+  }, [activeFilter, dues]);
 
-  // Calculate stats
-  const stats = useMemo(() => {
-    const dues = sortedDues;
-    const totalDue = dues.reduce((sum, item) => sum + item.dueAmount, 0);
-    const totalPaid = dues.reduce((sum, item) => sum + item.paidAmount, 0);
-    const pendingCount = dues.filter((item) =>
-      item.transactions.some((tx: any) => {
-        const value = String(tx?.status || "").toUpperCase();
-        return value === "PENDING" || value === "PENDING_VERIFICATION" || value === "SYNC_QUEUED";
-      }),
-    ).length;
-    return { totalDue, totalPaid, pendingCount };
-  }, [sortedDues]);
+  const totalDue = dues.reduce((sum, item) => sum + item.dueAmount, 0);
+  const totalPaid = dues.reduce((sum, item) => sum + item.paidAmount, 0);
+  const pendingVerificationCount = dues.filter((item) =>
+    item.transactions.some((tx) =>
+      ["PENDING", "PENDING_VERIFICATION", "SYNC_QUEUED"].includes(String(tx.status || "").toUpperCase()),
+    ),
+  ).length;
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedSale) throw new Error("Please select an invoice to pay for");
+      if (!selectedSale) throw new Error("Please select an invoice first.");
       const numericAmount = Number(amount);
 
       if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-        throw new Error("Please enter a valid payment amount");
+        throw new Error("Please enter a valid payment amount.");
       }
       if (numericAmount > selectedSale.dueAmount) {
-        throw new Error("Payment amount cannot be more than your balance due");
+        throw new Error("Payment amount cannot exceed the balance due.");
       }
       if (mode !== "CASH" && !utrNumber.trim()) {
-        throw new Error("Transaction ID is required for online payments");
+        throw new Error("Transaction ID is required for online payments.");
       }
 
       return PaymentService.submitPaymentProof({
@@ -886,26 +369,17 @@ export default function CustomerDuesScreen() {
       setPaymentAt("");
       setReference("");
       setScreenshotFile(null);
-      Alert.alert(
-        "✅ Thank You!",
-        "Your payment has been submitted for verification. We'll notify you once it's confirmed.",
-      );
+      Alert.alert("Submitted", "Your payment proof was submitted for verification.");
     },
     onError: (err: any) => {
-      Alert.alert(
-        "Unable to submit",
-        err?.message || "Please check your information and try again",
-      );
+      Alert.alert("Unable to submit", err?.message || "Please try again.");
     },
   });
 
   const pickScreenshot = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(
-        "Permission Required",
-        "We need access to your photos to upload a payment screenshot.",
-      );
+      Alert.alert("Permission required", "Photo access is required to upload a payment screenshot.");
       return;
     }
 
@@ -916,97 +390,179 @@ export default function CustomerDuesScreen() {
     });
     if (result.canceled || !result.assets?.length) return;
     const asset = result.assets[0];
-    const name = asset.fileName || `payment_${Date.now()}.jpg`;
-
     setScreenshotFile({
       uri: asset.uri,
-      name,
+      name: asset.fileName || `payment_${Date.now()}.jpg`,
       type: asset.mimeType || "image/jpeg",
     });
   };
 
-  return (
-    <View style={styles.container}>
-      <FixedHeader
-        title="Payments"
-        subtitle="Track and settle your nursery bills"
-        titleStyle={styles.headerTitle}
-        actions={
-          <View style={styles.headerActions}>
-            {rejectedCount > 0 && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.headerRejectedBtn,
-                  pressed && styles.headerIconBtnPressed,
-                ]}
-                onPress={() => router.push("/(customer)/rejected-payments")}
-              >
-                <MaterialIcons name="error" size={18} color={Colors.error} />
-                <Text style={styles.headerRejectedBadge}>{rejectedCount}</Text>
-              </Pressable>
-            )}
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                pressed && styles.headerIconBtnPressed,
-              ]}
-              onPress={() => refetch()}
-            >
-              <MaterialIcons
-                name={isRefetching ? "sync" : "refresh"}
-                size={20}
-                color={Colors.white}
-              />
-            </Pressable>
-          </View>
-        }
-      />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Stats Card */}
-        {sortedDues.length > 0 && (
-          <StatsCard
-            totalDue={stats.totalDue}
-            totalPaid={stats.totalPaid}
-            pendingCount={stats.pendingCount}
+  const headerActions = (
+    <View style={styles.headerActions}>
+      {rejectedCount > 0 ? (
+        <View style={styles.rejectedShortcut}>
+          <StitchHeaderActionButton
+            iconName="error-outline"
+            onPress={() => router.push("/(customer)/rejected-payments")}
           />
-        )}
+          <Text style={styles.rejectedCount}>{rejectedCount}</Text>
+        </View>
+      ) : null}
+      <StitchHeaderActionButton
+        iconName={isRefetching ? "sync" : "refresh"}
+        onPress={() => refetch()}
+      />
+    </View>
+  );
 
-        {/* Bills List */}
-        {sortedDues.length === 0 ? (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            style={styles.emptyCard}
-          >
-            <View style={styles.emptyIconContainer}>
-              <MaterialIcons
-                name="receipt"
-                size={48}
-                color={Colors.textTertiary}
-              />
+  return (
+    <CustomerScreen
+      title="Payments"
+      subtitle="Track dues, submitted proofs, and invoice status."
+      actions={headerActions}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          colors={[CustomerColors.primary]}
+          tintColor={CustomerColors.primary}
+        />
+      }
+    >
+      <View style={styles.summaryGrid}>
+        <StatPill label="Outstanding" value={formatMoney(totalDue)} />
+        <StatPill label="Paid" value={formatMoney(totalPaid)} />
+        <StatPill label="Pending" value={String(pendingVerificationCount)} />
+      </View>
+
+      {rejectedCount > 0 ? (
+        <CustomerSurfaceCard style={styles.rejectedCard}>
+          <View style={styles.rejectedInfo}>
+            <View style={styles.rejectedIconWrap}>
+              <MaterialIcons name="error" size={18} color={CustomerColors.danger} />
             </View>
-            <Text style={styles.emptyTitle}>No Payments Due</Text>
-            <Text style={styles.emptyMessage}>
-              You do not have any pending payments at the moment.
-            </Text>
-          </Animated.View>
-        ) : (
-          sortedDues.map((item, index) => (
-            <DueCard
-              key={item.saleId}
-              item={item}
-              onPress={setSelectedSaleId}
-              onViewDetails={(saleId) => router.push(`/(customer)/dues/${saleId}` as any)}
-              index={index}
-            />
-          ))
-        )}
-      </ScrollView>
+            <View style={styles.rejectedTextWrap}>
+              <Text style={styles.rejectedTitle}>Rejected payments</Text>
+              <Text style={styles.rejectedSubtitle}>Review failed verifications and re-submit proof if needed.</Text>
+            </View>
+          </View>
+          <CustomerActionButton
+            label="Open"
+            variant="secondary"
+            onPress={() => router.push("/(customer)/rejected-payments")}
+          />
+        </CustomerSurfaceCard>
+      ) : null}
 
-      {/* Payment Modal */}
+      <CustomerSurfaceCard style={styles.filterCard}>
+        <SectionHeader title="Invoices" subtitle="Filter your list by due state or verification stage." />
+        <View style={styles.filterRow}>
+          {(["ALL", "UNPAID", "PENDING", "PAID"] as DueFilter[]).map((filter) => {
+            return (
+              <CustomerFilterChip
+                key={filter}
+                label={filter === "ALL" ? "All" : filter.charAt(0) + filter.slice(1).toLowerCase()}
+                active={filter === activeFilter}
+                onPress={() => setActiveFilter(filter)}
+              />
+            );
+          })}
+        </View>
+      </CustomerSurfaceCard>
+
+      {isLoading ? (
+        <CustomerSurfaceCard style={styles.loadingCard}>
+          <Text style={styles.loadingText}>Loading payment records...</Text>
+        </CustomerSurfaceCard>
+      ) : null}
+
+      {!isLoading && filteredDues.length === 0 ? (
+        <CustomerEmptyState
+          title={dues.length === 0 ? "No payments due" : "No invoices in this filter"}
+          message={
+            dues.length === 0
+              ? "You do not have any due or past invoices at the moment."
+              : "Try another filter to review the rest of your invoices."
+          }
+          icon={<MaterialIcons name="receipt-long" size={44} color={CustomerColors.textMuted} />}
+        />
+      ) : null}
+
+      {!isLoading
+        ? filteredDues.map((item) => {
+            const recentPending = item.transactions.find((tx) =>
+              ["PENDING", "PENDING_VERIFICATION", "SYNC_QUEUED"].includes(String(tx.status || "").toUpperCase()),
+            );
+            // console.log(item);
+            
+            return (
+              <CustomerSurfaceCard key={item.saleId} style={styles.dueCard}>
+                <View style={styles.dueTopRow}>
+                  <View style={styles.dueIdentity}>
+                    <BannerCardImage
+                      uri={item.imageUri}
+                      iconName="receipt-long"
+                      minHeight={60}
+                      containerStyle={styles.dueImage}
+                    />
+                    <View style={styles.dueTextWrap}>
+                      <Text style={styles.dueTitle}>{item.itemTitle || "Nursery invoice"}</Text>
+                      <Text style={styles.dueSubtitle}>
+                        {formatDate(item.issuedAt)}
+                        {item.itemSubtitle ? ` • ${item.itemSubtitle}` : ""}
+                      </Text>
+                    </View>
+                  </View>
+                  <StatusChip label={getDueLabel(item)} tone={getDueTone(item)} />
+                </View>
+
+                <View style={styles.amountBlocks}>
+                  <View style={styles.amountTile}>
+                    <Text style={styles.amountTileLabel}>Total</Text>
+                    <Text style={styles.amountTileValue}>{formatMoney(item.totalAmount)}</Text>
+                  </View>
+                  <View style={styles.amountTile}>
+                    <Text style={styles.amountTileLabel}>Paid</Text>
+                    <Text style={[styles.amountTileValue, styles.successText]}>{formatMoney(item.paidAmount)}</Text>
+                  </View>
+                  <View style={styles.amountTile}>
+                    <Text style={styles.amountTileLabel}>Balance</Text>
+                    <Text style={[styles.amountTileValue, item.dueAmount > 0 && styles.errorText]}>
+                      {formatMoney(item.dueAmount)}
+                    </Text>
+                  </View>
+                </View>
+
+                {recentPending ? (
+                  <View style={styles.infoStrip}>
+                    <MaterialIcons name="hourglass-empty" size={16} color={CustomerColors.info} />
+                    <Text style={styles.infoStripText}>Payment proof submitted and waiting for verification.</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.dueActions}>
+                  <CustomerActionButton
+                    label="View Details"
+                    variant="secondary"
+                    onPress={() => router.push(`/(customer)/dues/${item.saleId}` as any)}
+                    style={styles.flexButton}
+                  />
+                  {item.dueAmount > 0 ? (
+                    <CustomerActionButton
+                      label="Pay"
+                      onPress={() => {
+                        setSelectedSaleId(item.saleId);
+                        setAmount(String(Math.round(item.dueAmount)));
+                      }}
+                      style={styles.flexButton}
+                    />
+                  ) : null}
+                </View>
+              </CustomerSurfaceCard>
+            );
+          })
+        : null}
+
       <PaymentModal
         visible={Boolean(selectedSale)}
         selectedSale={selectedSale}
@@ -1029,652 +585,332 @@ export default function CustomerDuesScreen() {
         setShowDatePicker={setShowPaymentAtPicker}
         isSubmitting={submitMutation.isPending}
       />
-    </View>
+    </CustomerScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  headerTitle: {
-    fontSize: 24,
-  },
   headerActions: {
     flexDirection: "row",
-    alignItems: "center",
     gap: Spacing.sm,
   },
-  headerRejectedBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: Colors.error,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.error + "15",
-    flexDirection: "row",
-    gap: 4,
+  rejectedShortcut: {
+    position: "relative",
   },
-  headerRejectedBadge: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.error,
-  },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.32)",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    transform: [{ scale: 0.95 }],
-  },
-  content: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: 100,
-    gap: Spacing.md,
-  },
-
-  // Stats Card
-  statsCard: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.xs,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statsCardGradient: {
-    padding: Spacing.lg,
-  },
-  statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
-  statItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statContent: {
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
-  },
-  statsProgressContainer: {
-    gap: 4,
-  },
-  statsProgressBar: {
-    height: 4,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  statsProgressFill: {
-    height: "100%",
-    backgroundColor: Colors.primary,
-    borderRadius: 2,
-  },
-  statsProgressText: {
-    fontSize: 11,
-    color: "#9CA3AF",
-    textAlign: "right",
-  },
-
-  // Due Card (Customer Friendly)
-  card: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardGradient: {
-    padding: 0,
-  },
-  cardImageBanner: {
-    width: "100%",
-    minHeight: 140,
-    borderRadius: 0,
-    marginBottom: 0,
-  },
-  cardContent: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  cardIcon: {
-    width: 32,
-    height: 32,
+  rejectedCount: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
     borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  orderLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  orderDate: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#6B7280",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  amountContainer: {
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
-  amountRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  amountLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-  },
-  amountValue: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  dueProgressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  dueProgressBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 2,
     overflow: "hidden",
-  },
-  dueProgressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  dueProgressText: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-  activityContainer: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-  },
-  activityTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 2,
-  },
-  activityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 4,
-  },
-  activityLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    flex: 1,
-  },
-  activityIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activityAmount: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  activityMeta: {
-    fontSize: 10,
-    color: "#9CA3AF",
-  },
-  moreActivity: {
-    fontSize: 11,
-    color: Colors.primary,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  cardActions: {
-    gap: Spacing.sm,
-  },
-  viewDetailsButton: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary + "35",
-    backgroundColor: Colors.primary + "08",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  viewDetailsText: {
-    color: Colors.primary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  payButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  payButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
-  },
-  payButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-
-  // Empty State
-  emptyCard: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: Spacing.md,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: "#6B7280",
+    backgroundColor: CustomerColors.white,
     textAlign: "center",
-    paddingHorizontal: 32,
+    color: CustomerColors.danger,
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 16,
   },
-
-  // Modal Styles (Customer Friendly)
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
+  summaryGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
   },
-  modalContent: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "90%",
-  },
-  modalHeader: {
+  rejectedCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    gap: Spacing.sm,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
+  rejectedInfo: {
+    flex: 1,
+    flexDirection: "row",
+    gap: Spacing.sm,
   },
-  modalSubtitle: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  modalClose: {
+  rejectedIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "rgba(239,68,68,0.12)",
   },
-  modalBody: {
-    padding: Spacing.lg,
+  rejectedTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  rejectedTitle: {
+    fontWeight: "700",
+    color: CustomerColors.text,
+  },
+  rejectedSubtitle: {
+    color: CustomerColors.textMuted,
+    fontSize: 12,
+  },
+  filterCard: {
     gap: Spacing.md,
   },
-
-  // Due Highlight
-  dueHighlight: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 16,
-    padding: Spacing.md,
+  filterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  loadingCard: {
     alignItems: "center",
+    paddingVertical: Spacing.xl,
+  },
+  loadingText: {
+    color: CustomerColors.textMuted,
+  },
+  dueCard: {
+    gap: Spacing.md,
+  },
+  dueTopRow: {
+    
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  dueIdentity: {
+    
+    flex: 1,
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  dueImage: {
+    width: 72,
+    minHeight: 72,
+    borderRadius: 16,
+  },
+  dueTextWrap: {
+    
+    flex: 1,
+    gap: 4,
+  },
+  dueTitle: {
+    
+    fontSize: 18,
+    fontWeight: "800",
+    color: CustomerColors.text,
+  },
+  dueSubtitle: {
+    
+    fontSize: 13,
+    color: CustomerColors.textMuted,
+    lineHeight: 20,
+  },
+  amountBlocks: {
+    marginVertical: Spacing.sm,
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  amountTile: {
+    flex: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: CustomerColors.white,
+    gap: 4,
     borderWidth: 1,
-    borderColor: "#FEE2E2",
+    borderColor: CustomerColors.border,
   },
-  dueHighlightLabel: {
+  amountTileLabel: {
+    fontSize: 11,
+    color: CustomerColors.textMuted,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  amountTileValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CustomerColors.text,
+  },
+  successText: {
+    color: CustomerColors.success,
+  },
+  errorText: {
+    color: CustomerColors.danger,
+  },
+  infoStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 16,
+    backgroundColor: "rgba(14,165,233,0.12)",
+  },
+  infoStripText: {
+    flex: 1,
+    color: CustomerColors.info,
     fontSize: 12,
-    color: "#DC2626",
-    marginBottom: 2,
   },
-  dueHighlightAmount: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#DC2626",
+  dueActions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: 2,
   },
-
-  // Modal Sections
-  modalSection: {
+  flexButton: {
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: CustomerColors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    maxHeight: "88%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
     marginBottom: Spacing.md,
   },
-  modalSectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: Spacing.sm,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: CustomerColors.text,
   },
-  requiredStar: {
-    color: "#DC2626",
-  },
-  helperText: {
-    fontSize: 11,
-    color: "#9CA3AF",
+  modalSubtitle: {
     marginTop: 4,
-    lineHeight: 14,
+    color: CustomerColors.textMuted,
   },
-
-  // Mode Selection
+  modalCloseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,189,73,0.08)",
+    borderWidth: 1,
+    borderColor: CustomerColors.borderStrong,
+  },
+  modalContent: {
+    gap: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  inputBlock: {
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: CustomerColors.text,
+  },
   modeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  modeOption: {
-    flex: 1,
-    minWidth: "45%",
+  modeChip: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.sm,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: CustomerColors.border,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    backgroundColor: Colors.white,
-    gap: Spacing.sm,
+    borderColor: CustomerColors.borderStrong,
   },
-  modeOptionActive: {
-    borderWidth: 2,
-    backgroundColor: Colors.white,
+  modeChipActive: {
+    backgroundColor: CustomerColors.primary,
+    borderColor: CustomerColors.primary,
   },
-  modeIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+  modeChipText: {
+    color: CustomerColors.textMuted,
+    fontWeight: "700",
   },
-  modeLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    flex: 1,
+  modeChipTextActive: {
+    color: CustomerColors.white,
   },
-
-  // Amount Input
-  amountInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    backgroundColor: Colors.white,
+  textInput: {
+    minHeight: 52,
+    borderRadius: 16,
     paddingHorizontal: Spacing.md,
-    height: 48,
-  },
-  amountCurrency: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: Colors.primary,
-    marginRight: Spacing.xs,
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#111827",
-    padding: 0,
-  },
-  errorText: {
-    fontSize: 12,
-    color: "#DC2626",
-    marginTop: 4,
-    marginLeft: 4,
-  },
-
-  // Modal Input
-  modalInput: {
+    backgroundColor: "rgba(15,189,73,0.05)",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: 14,
-    color: "#111827",
-    backgroundColor: Colors.white,
-    height: 44,
+    borderColor: CustomerColors.borderStrong,
+    color: CustomerColors.text,
   },
-  textArea: {
-    height: 80,
+  noteInput: {
+    minHeight: 92,
+    paddingTop: Spacing.md,
     textAlignVertical: "top",
   },
-
-  // Date Picker
-  datePickerButton: {
+  dateField: {
+    minHeight: 52,
+    borderRadius: 16,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: "rgba(15,189,73,0.05)",
+    borderWidth: 1,
+    borderColor: CustomerColors.borderStrong,
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white,
-    height: 44,
-    gap: Spacing.sm,
+    gap: 8,
   },
-  datePickerText: {
-    fontSize: 14,
-    color: "#111827",
-    flex: 1,
+  dateValue: {
+    color: CustomerColors.text,
   },
-  datePickerPlaceholder: {
-    fontSize: 14,
-    color: "#9CA3AF",
-    flex: 1,
+  datePlaceholder: {
+    color: CustomerColors.textMuted,
   },
-  clearDateButton: {
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  clearDateText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "500",
-  },
-
-  // Upload Button
-  uploadButton: {
-    flexDirection: "row",
+  uploadField: {
+    minHeight: 132,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: CustomerColors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    borderStyle: "dashed",
-    borderRadius: 12,
-    paddingVertical: Spacing.md,
+    backgroundColor: "rgba(15,189,73,0.04)",
+    gap: 4,
+  },
+  uploadTitle: {
+    fontWeight: "700",
+    color: CustomerColors.text,
+  },
+  uploadCaption: {
+    color: CustomerColors.textMuted,
+    fontSize: 12,
+  },
+  previewCard: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
-    backgroundColor: "#EFF6FF",
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-
-  // Preview
-  previewContainer: {
-    position: "relative",
-    borderRadius: 12,
-    overflow: "hidden",
+    padding: Spacing.sm,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,189,73,0.05)",
+    borderWidth: 1,
+    borderColor: CustomerColors.borderStrong,
   },
   previewImage: {
-    width: "100%",
-    height: 160,
-    backgroundColor: "#F3F4F6",
+    width: 72,
+    height: 72,
+    borderRadius: 14,
   },
-  previewOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.sm,
-    backgroundColor: "rgba(0,0,0,0.6)",
+  previewMeta: {
+    flex: 1,
+    gap: 6,
   },
   previewName: {
-    fontSize: 12,
-    color: Colors.white,
-    flex: 1,
+    fontWeight: "700",
+    color: CustomerColors.text,
   },
   previewRemove: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
+    color: CustomerColors.danger,
+    fontWeight: "700",
   },
-
-  // Modal Footer
-  modalFooter: {
+  modalActions: {
     flexDirection: "row",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-    gap: Spacing.md,
-  },
-  modalCancelButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.white,
-  },
-  modalCancelButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#6B7280",
-  },
-  modalSubmitButton: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  modalSubmitButtonDisabled: {
-    opacity: 0.5,
-  },
-  modalSubmitGradient: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     gap: Spacing.sm,
-  },
-  modalSubmitButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.white,
+    marginTop: Spacing.sm,
   },
 });

@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
+import StitchHeader from "../../../components/common/StitchHeader";
 import { SeedService } from "../../../services/seed.service";
 import { Colors } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
@@ -393,40 +394,22 @@ export default function StaffSeedEdit() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Blue Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-            </TouchableOpacity>
-
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Edit Seed</Text>
-              <Text style={styles.headerSubtitle} numberOfLines={1}>
-                {name || "Update seed information"}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={handleManageImages}
-              style={styles.headerAction}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="image" size={20} color={Colors.white} />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title="Edit Seed"
+        subtitle={name || "Update seed information"}
+        variant="solid"
+        showBackButton
+        onBackPress={handleBack}
+        actions={
+          <TouchableOpacity
+            onPress={handleManageImages}
+            style={styles.headerAction}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="image" size={18} color={Colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Form Content with Keyboard Handling */}
       <KeyboardAvoidingView

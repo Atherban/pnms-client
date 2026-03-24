@@ -1,0 +1,41 @@
+export const SuperAdminTheme = {
+  colors: {
+    primary: "#0FBD49",
+    primaryDark: "#0B9F3D",
+    background: "#F6F8F6",
+    surface: "#FFFFFF",
+    surfaceMuted: "#F1F5F9",
+    text: "#0F172A",
+    textMuted: "#64748B",
+    textSoft: "#94A3B8",
+    border: "#E2E8F0",
+    borderSoft: "#EEF2F6",
+    success: "#16A34A",
+    warning: "#F59E0B",
+    danger: "#EF4444",
+    info: "#0EA5E9",
+  },
+  spacing: {
+    xs: 8,
+    sm: 12,
+    md: 16,
+    lg: 20,
+    xl: 24,
+  },
+  radius: {
+    sm: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    full: 999,
+  },
+  shadow: {
+    card: {
+      shadowColor: "#0F172A",
+      shadowOpacity: 0.06,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 2,
+    },
+  },
+} as const;

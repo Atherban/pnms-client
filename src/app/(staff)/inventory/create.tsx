@@ -26,6 +26,8 @@ import {
   formatQuantityUnit,
   normalizeQuantityUnit,
 } from "../../../utils/units";
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchCard from "../../../components/common/StitchCard";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -128,37 +130,29 @@ export default function StaffInventoryCreate() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Add Inventory</Text>
-          <Text style={styles.headerSubtitle}>Purchased stock entry</Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </LinearGradient>
+      <StitchHeader
+        title="Add Inventory"
+        subtitle="Purchased stock entry"
+        variant="solid"
+        showBackButton
+        onBackPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.back();
+        }}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        <StitchCard style={styles.heroCard}>
+          <Text style={styles.heroTitle}>Create a purchased inventory entry with the same admin flow</Text>
+          <Text style={styles.heroSubtitle}>
+            Select a plant type, confirm quantity and unit, then let pricing apply from configuration automatically.
+          </Text>
+        </StitchCard>
+
         {/* Form Card */}
         <View style={styles.formCard}>
           {/* Inventory Information Section */}
@@ -614,8 +608,22 @@ const styles = {
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.sm,
     paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.xl,
+  },
+  heroCard: {
+    marginBottom: Spacing.lg,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: Colors.text,
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: Colors.textSecondary,
   },
   formCard: {
     backgroundColor: Colors.white,

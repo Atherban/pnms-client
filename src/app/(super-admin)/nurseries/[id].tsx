@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,27 +18,35 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../../components/common/FixedHeader";
+import SuperAdminHeader from "../../../components/super-admin/SuperAdminHeader";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../../../components/navigation/SharedBottomNav";
+import { SuperAdminTheme } from "../../../components/super-admin/theme";
 import { NurseryService } from "../../../services/nursery.service";
 import { UserService } from "../../../services/user.service";
-import { Colors } from "../../../theme";
-
-const BOTTOM_NAV_HEIGHT = 80;
+import { Colors } from "@/src/theme";
 
 // ==================== INFO CARD ====================
 
 interface InfoCardProps {
   nursery: any;
+  phoneNumber: string;
+  onPhoneNumberChange: (value: string) => void;
+  onPhoneNumberSave: () => void;
   onStatusChange: (status: "ACTIVE" | "SUSPENDED") => void;
   onDeletePress: () => void;
   isStatusPending: boolean;
+  isPhonePending: boolean;
 }
 
 const InfoCard = ({
   nursery,
+  phoneNumber,
+  onPhoneNumberChange,
+  onPhoneNumberSave,
   onStatusChange,
   onDeletePress,
   isStatusPending,
+  isPhonePending,
 }: InfoCardProps) => {
   const isActive = nursery?.status === "ACTIVE";
 
@@ -51,15 +59,15 @@ const InfoCard = ({
               styles.infoIcon,
               {
                 backgroundColor: isActive
-                  ? `${Colors.success}10`
-                  : `${Colors.error}10`,
+                  ? `${SuperAdminTheme.colors.success}10`
+                  : `${SuperAdminTheme.colors.danger}10`,
               },
             ]}
           >
             <MaterialIcons
               name="store"
               size={20}
-              color={isActive ? Colors.success : Colors.error}
+              color={isActive ? SuperAdminTheme.colors.success : SuperAdminTheme.colors.danger}
             />
           </View>
           <View style={styles.infoTitleContainer}>
@@ -107,6 +115,38 @@ const InfoCard = ({
               : "—"}
           </Text>
         </View>
+
+        <View style={styles.phoneSection}>
+          <Text style={styles.phoneLabel}>Nursery Phone</Text>
+          <View style={styles.phoneRow}>
+            <TextInput
+              value={phoneNumber}
+              onChangeText={onPhoneNumberChange}
+              style={styles.phoneInput}
+              placeholder="Phone number (optional)"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.phoneSaveButton,
+                (!phoneNumber.trim() && !nursery?.phoneNumber) && styles.phoneSaveButtonDisabled,
+                pressed && styles.phoneSaveButtonPressed,
+              ]}
+              onPress={onPhoneNumberSave}
+              disabled={isPhonePending}
+            >
+              {isPhonePending ? (
+                <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
+              ) : (
+                <Text style={styles.phoneSaveText}>Save</Text>
+              )}
+            </Pressable>
+          </View>
+          {!phoneNumber.trim() && !nursery?.phoneNumber ? (
+            <Text style={styles.phoneHelper}>Optional field used for WhatsApp inquiries.</Text>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.actionButtons}>
@@ -121,7 +161,7 @@ const InfoCard = ({
         >
           <LinearGradient
             colors={
-              isActive ? ["#E5E7EB", "#D1D5DB"] : [Colors.success, "#059669"]
+              isActive ? ["#E5E7EB", "#D1D5DB"] : [SuperAdminTheme.colors.success, "#059669"]
             }
             style={styles.actionGradient}
             start={{ x: 0, y: 0 }}
@@ -130,14 +170,14 @@ const InfoCard = ({
             {isStatusPending ? (
               <ActivityIndicator
                 size="small"
-                color={isActive ? "#6B7280" : Colors.white}
+                color={isActive ? "#6B7280" : SuperAdminTheme.colors.surface}
               />
             ) : (
               <>
                 <MaterialIcons
                   name="check-circle"
                   size={16}
-                  color={isActive ? "#6B7280" : Colors.white}
+                  color={isActive ? "#6B7280" : SuperAdminTheme.colors.surface}
                 />
                 <Text
                   style={[
@@ -163,7 +203,7 @@ const InfoCard = ({
         >
           <LinearGradient
             colors={
-              !isActive ? ["#E5E7EB", "#D1D5DB"] : [Colors.error, "#DC2626"]
+              !isActive ? ["#E5E7EB", "#D1D5DB"] : [SuperAdminTheme.colors.danger, "#DC2626"]
             }
             style={styles.actionGradient}
             start={{ x: 0, y: 0 }}
@@ -172,14 +212,14 @@ const InfoCard = ({
             {isStatusPending ? (
               <ActivityIndicator
                 size="small"
-                color={!isActive ? "#6B7280" : Colors.white}
+                color={!isActive ? "#6B7280" : SuperAdminTheme.colors.surface}
               />
             ) : (
               <>
                 <MaterialIcons
                   name="block"
                   size={16}
-                  color={!isActive ? "#6B7280" : Colors.white}
+                  color={!isActive ? "#6B7280" : SuperAdminTheme.colors.surface}
                 />
                 <Text
                   style={[
@@ -201,7 +241,7 @@ const InfoCard = ({
           ]}
           onPress={onDeletePress}
         >
-          <MaterialIcons name="delete-outline" size={18} color={Colors.error} />
+          <MaterialIcons name="delete-outline" size={18} color={SuperAdminTheme.colors.danger} />
           <Text style={styles.deleteText}>Delete</Text>
         </Pressable>
       </View>
@@ -238,7 +278,7 @@ const AdminSelector = ({
         <MaterialIcons
           name="admin-panel-settings"
           size={18}
-          color={Colors.primary}
+          color={SuperAdminTheme.colors.primary}
         />
         <Text style={styles.selectorTitle}>Assign Nursery Admin</Text>
       </View>
@@ -297,7 +337,7 @@ const AdminSelector = ({
                       styles.adminAvatar,
                       {
                         backgroundColor: isSelected
-                          ? `${Colors.primary}20`
+                          ? `${SuperAdminTheme.colors.primary}20`
                           : "#F3F4F6",
                       },
                     ]}
@@ -305,7 +345,7 @@ const AdminSelector = ({
                     <Text
                       style={[
                         styles.adminInitial,
-                        isSelected && { color: Colors.primary },
+                        isSelected && { color: SuperAdminTheme.colors.primary },
                       ]}
                     >
                       {admin.name?.charAt(0).toUpperCase() || "?"}
@@ -322,7 +362,7 @@ const AdminSelector = ({
                   <MaterialIcons
                     name="check-circle"
                     size={20}
-                    color={Colors.primary}
+                    color={SuperAdminTheme.colors.primary}
                   />
                 )}
               </Pressable>
@@ -343,7 +383,7 @@ const AdminSelector = ({
         <LinearGradient
           colors={
             selectedId
-              ? [Colors.primary, Colors.primaryLight || Colors.primary]
+              ? [SuperAdminTheme.colors.primary, SuperAdminTheme.colors.primaryDark || SuperAdminTheme.colors.primary]
               : ["#E5E7EB", "#D1D5DB"]
           }
           style={styles.assignGradient}
@@ -351,13 +391,13 @@ const AdminSelector = ({
           end={{ x: 1, y: 0 }}
         >
           {isPending ? (
-            <ActivityIndicator size="small" color={Colors.white} />
+            <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
           ) : (
             <>
               <MaterialIcons
                 name="add-task"
                 size={18}
-                color={selectedId ? Colors.white : "#9CA3AF"}
+                color={selectedId ? SuperAdminTheme.colors.surface : "#9CA3AF"}
               />
               <Text
                 style={[
@@ -412,7 +452,7 @@ const CreateAdminCard = ({
   return (
     <View style={styles.createAdminCard}>
       <View style={styles.selectorHeader}>
-        <MaterialIcons name="person-add" size={18} color={Colors.primary} />
+        <MaterialIcons name="person-add" size={18} color={SuperAdminTheme.colors.primary} />
         <Text style={styles.selectorTitle}>Create Nursery Admin</Text>
       </View>
       <View style={styles.createAdminFields}>
@@ -474,16 +514,16 @@ const CreateAdminCard = ({
         disabled={!isValid || isPending}
       >
         <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+          colors={[SuperAdminTheme.colors.primary, SuperAdminTheme.colors.primaryDark || SuperAdminTheme.colors.primary]}
           style={styles.assignGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
           {isPending ? (
-            <ActivityIndicator size="small" color={Colors.white} />
+            <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
           ) : (
             <>
-              <MaterialIcons name="person-add-alt-1" size={18} color={Colors.white} />
+              <MaterialIcons name="person-add-alt-1" size={18} color={SuperAdminTheme.colors.surface} />
               <Text style={styles.assignText}>Create and Assign Admin</Text>
             </>
           )}
@@ -518,7 +558,7 @@ const AssignedAdminCard = ({
             styles.assignedAvatar,
             {
               backgroundColor: admin.isPrimary
-                ? `${Colors.primary}10`
+                ? `${SuperAdminTheme.colors.primary}10`
                 : "#F3F4F6",
             },
           ]}
@@ -526,7 +566,7 @@ const AssignedAdminCard = ({
           <Text
             style={[
               styles.assignedInitial,
-              admin.isPrimary && { color: Colors.primary },
+              admin.isPrimary && { color: SuperAdminTheme.colors.primary },
             ]}
           >
             {admin.name?.charAt(0).toUpperCase() || "?"}
@@ -541,10 +581,10 @@ const AssignedAdminCard = ({
               <View
                 style={[
                   styles.primaryBadge,
-                  { backgroundColor: `${Colors.primary}10` },
+                  { backgroundColor: `${SuperAdminTheme.colors.primary}10` },
                 ]}
               >
-                <MaterialIcons name="star" size={10} color={Colors.primary} />
+                <MaterialIcons name="star" size={10} color={SuperAdminTheme.colors.primary} />
                 <Text style={styles.primaryBadgeText}>Primary</Text>
               </View>
             )}
@@ -567,7 +607,7 @@ const AssignedAdminCard = ({
             <MaterialIcons
               name="star-outline"
               size={14}
-              color={Colors.primary}
+              color={SuperAdminTheme.colors.primary}
             />
             <Text style={styles.primaryButtonText}>Set Primary</Text>
           </Pressable>
@@ -579,7 +619,7 @@ const AssignedAdminCard = ({
           ]}
           onPress={() => onRemove(admin.adminUserId || admin.id)}
         >
-          <MaterialIcons name="delete-outline" size={14} color={Colors.error} />
+          <MaterialIcons name="delete-outline" size={14} color={SuperAdminTheme.colors.danger} />
           <Text style={styles.removeButtonText}>Remove</Text>
         </Pressable>
       </View>
@@ -618,7 +658,7 @@ const DeleteModal = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <MaterialIcons name="warning" size={24} color={Colors.error} />
+            <MaterialIcons name="warning" size={24} color={SuperAdminTheme.colors.danger} />
             <Text style={styles.modalTitle}>Delete Nursery</Text>
           </View>
 
@@ -631,7 +671,7 @@ const DeleteModal = ({
             <MaterialIcons
               name="error-outline"
               size={16}
-              color={Colors.warning}
+              color={SuperAdminTheme.colors.warning}
             />
             <Text style={styles.modalWarningText}>
               Type <Text style={styles.modalHighlight}>DELETE</Text> to confirm
@@ -668,13 +708,13 @@ const DeleteModal = ({
               disabled={!isValid || isPending}
             >
               <LinearGradient
-                colors={[Colors.error, "#DC2626"]}
+                colors={[SuperAdminTheme.colors.danger, "#DC2626"]}
                 style={styles.modalConfirmGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {isPending ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
+                  <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
                 ) : (
                   <Text style={styles.modalConfirmText}>Delete Nursery</Text>
                 )}
@@ -703,6 +743,7 @@ export default function SuperAdminNurseryDetailScreen() {
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [nurseryPhoneNumber, setNurseryPhoneNumber] = useState("");
 
   const {
     data: nursery,
@@ -713,6 +754,10 @@ export default function SuperAdminNurseryDetailScreen() {
     queryFn: () => NurseryService.getById(String(id)),
     enabled: Boolean(id),
   });
+
+  useEffect(() => {
+    setNurseryPhoneNumber(String(nursery?.phoneNumber || ""));
+  }, [nursery?.phoneNumber]);
 
   const {
     data: assignedAdmins,
@@ -867,6 +912,29 @@ export default function SuperAdminNurseryDetailScreen() {
     },
   });
 
+  const phoneMutation = useMutation({
+    mutationFn: () => {
+      if (!id) throw new Error("Nursery id is missing");
+      return NurseryService.update(String(id), {
+        phoneNumber: nurseryPhoneNumber.trim() || undefined,
+      });
+    },
+    onSuccess: async () => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await queryClient.invalidateQueries({
+        queryKey: ["super-admin", "nursery", id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["super-admin", "nurseries"],
+      });
+      Alert.alert("✅ Updated", "Nursery phone number saved.");
+    },
+    onError: (err: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("❌ Failed", err?.message || "Unable to update phone number");
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: () => NurseryService.remove(String(id)),
     onSuccess: async () => {
@@ -906,14 +974,18 @@ export default function SuperAdminNurseryDetailScreen() {
   if (loadingNursery) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
+        <SuperAdminHeader
           title="Nursery Details"
           subtitle="Loading..."
-          showBackButton
           onBackPress={handleBack}
+          actions={
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons name="refresh" size={20} color={Colors.surface} />
+            </Pressable>
+          }
         />
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={SuperAdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading nursery details...</Text>
         </View>
       </SafeAreaView>
@@ -923,14 +995,18 @@ export default function SuperAdminNurseryDetailScreen() {
   if (!nursery) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
+        <SuperAdminHeader
           title="Nursery Details"
           subtitle="Not found"
-          showBackButton
           onBackPress={handleBack}
+          actions={
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons name="refresh" size={20} color={Colors.surface} />
+            </Pressable>
+          }
         />
         <View style={styles.centerContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={SuperAdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Nursery Not Found</Text>
           <Text style={styles.errorMessage}>
             The nursery you&apos;re looking for doesn&apos;t exist.
@@ -945,20 +1021,13 @@ export default function SuperAdminNurseryDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <SuperAdminHeader
         title={nursery?.name || "Nursery Details"}
         subtitle="Manage nursery settings and admins"
-        showBackButton
         onBackPress={handleBack}
         actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={handleRefresh}
-          >
-            <MaterialIcons name="refresh" size={20} color={Colors.white} />
+          <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+            <MaterialIcons name="refresh" size={20} color={Colors.surface} />
           </Pressable>
         }
       />
@@ -971,17 +1040,21 @@ export default function SuperAdminNurseryDetailScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[SuperAdminTheme.colors.primary]}
+            tintColor={SuperAdminTheme.colors.primary}
           />
         }
       >
         {/* Info Card */}
         <InfoCard
           nursery={nursery}
+          phoneNumber={nurseryPhoneNumber}
+          onPhoneNumberChange={setNurseryPhoneNumber}
+          onPhoneNumberSave={() => phoneMutation.mutate()}
           onStatusChange={statusMutation.mutate}
           onDeletePress={() => setShowDeleteModal(true)}
           isStatusPending={statusMutation.isPending}
+          isPhonePending={phoneMutation.isPending}
         />
 
         {/* Admin Selector */}
@@ -1012,7 +1085,7 @@ export default function SuperAdminNurseryDetailScreen() {
         <View style={styles.assignedSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="people" size={18} color={Colors.primary} />
+              <MaterialIcons name="people" size={18} color={SuperAdminTheme.colors.primary} />
               <Text style={styles.sectionTitle}>Assigned Admins</Text>
             </View>
             <Text style={styles.sectionCount}>
@@ -1022,7 +1095,7 @@ export default function SuperAdminNurseryDetailScreen() {
 
           {loadingAssigned ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={SuperAdminTheme.colors.primary} />
               <Text style={styles.loadingSmallText}>Loading admins...</Text>
             </View>
           ) : (assignedAdmins || []).length === 0 ? (
@@ -1086,7 +1159,7 @@ export default function SuperAdminNurseryDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
 
   // Header
@@ -1101,9 +1174,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.34)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
   },
   headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
     transform: [{ scale: 0.95 }],
   },
 
@@ -1134,11 +1207,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: SuperAdminTheme.colors.primary,
     borderRadius: 10,
   },
   backButtonText: {
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1147,13 +1220,13 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 100,
     gap: 20,
   },
 
   // Info Card
   infoCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1203,13 +1276,13 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   activeText: {
-    color: Colors.success,
+    color: SuperAdminTheme.colors.success,
   },
   suspendedText: {
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
   infoContent: {
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     borderRadius: 12,
     padding: 12,
     gap: 8,
@@ -1229,6 +1302,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     color: "#111827",
+  },
+  phoneSection: {
+    marginTop: 4,
+    gap: 8,
+  },
+  phoneLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  phoneInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
+    color: "#111827",
+    fontSize: 13,
+  },
+  phoneSaveButton: {
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: SuperAdminTheme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  phoneSaveButtonDisabled: {
+    opacity: 0.7,
+  },
+  phoneSaveButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  phoneSaveText: {
+    color: SuperAdminTheme.colors.surface,
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  phoneHelper: {
+    fontSize: 11,
+    color: "#9CA3AF",
   },
   actionButtons: {
     flexDirection: "row",
@@ -1258,7 +1382,7 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
   },
   actionTextDisabled: {
     color: "#6B7280",
@@ -1281,12 +1405,12 @@ const styles = StyleSheet.create({
   deleteText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
 
   // Admin Selector
   selectorCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1306,7 +1430,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     borderRadius: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
@@ -1328,7 +1452,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   adminRow: {
     flexDirection: "row",
@@ -1339,7 +1463,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5E7EB",
   },
   adminRowSelected: {
-    backgroundColor: `${Colors.primary}05`,
+    backgroundColor: `${SuperAdminTheme.colors.primary}05`,
   },
   adminRowPressed: {
     backgroundColor: "#F3F4F6",
@@ -1395,7 +1519,7 @@ const styles = StyleSheet.create({
   assignText: {
     fontSize: 13,
     fontWeight: "600",
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
   },
   assignTextDisabled: {
     color: "#9CA3AF",
@@ -1418,7 +1542,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   createAdminCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -1436,7 +1560,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     fontSize: 13,
     color: "#111827",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   passwordField: {
     position: "relative",
@@ -1480,7 +1604,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   assignedCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -1529,7 +1653,7 @@ const styles = StyleSheet.create({
   primaryBadgeText: {
     fontSize: 9,
     fontWeight: "600",
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
   },
   assignedContact: {
     fontSize: 11,
@@ -1550,7 +1674,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${SuperAdminTheme.colors.primary}10`,
   },
   primaryButtonPressed: {
     transform: [{ scale: 0.96 }],
@@ -1558,7 +1682,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 11,
     fontWeight: "600",
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
   },
   removeButton: {
     flexDirection: "row",
@@ -1575,7 +1699,7 @@ const styles = StyleSheet.create({
   removeButtonText: {
     fontSize: 11,
     fontWeight: "600",
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
 
   // Loading
@@ -1583,7 +1707,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 24,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1599,7 +1723,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 32,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1628,7 +1752,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: "100%",
     maxWidth: 340,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 20,
     padding: 20,
     gap: 16,
@@ -1662,7 +1786,7 @@ const styles = StyleSheet.create({
   },
   modalHighlight: {
     fontWeight: "700",
-    color: Colors.warning,
+    color: SuperAdminTheme.colors.warning,
   },
   modalInput: {
     borderWidth: 1,
@@ -1672,7 +1796,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#111827",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   modalActions: {
     flexDirection: "row",
@@ -1686,7 +1810,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   modalCancelPressed: {
     transform: [{ scale: 0.98 }],
@@ -1715,6 +1839,6 @@ const styles = StyleSheet.create({
   modalConfirmText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
   },
 });

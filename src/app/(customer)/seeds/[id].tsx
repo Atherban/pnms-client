@@ -1,57 +1,31 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
-  Pressable,
   RefreshControl,
-  ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+
+import {
+  CustomerCard,
+  CustomerEmptyState,
+  CustomerScreen,
+  SectionHeader,
+  StatPill,
+  StatusChip,
+} from "@/src/components/common/StitchScreen";
 import { CustomerSeedBatchService } from "@/src/services/customer-seed-batch.service";
-import { Colors, Spacing } from "@/src/theme";
+import { CustomerColors, Spacing } from "@/src/theme";
 
-type TimelineStep = {
-  key: string;
-  label: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-  description: string;
-};
-
-const timelineSteps: TimelineStep[] = [
-  {
-    key: "RECEIVED",
-    label: "Seeds Received",
-    icon: "inventory",
-    description: "Seeds have been handed over to nursery",
-  },
-  {
-    key: "SOWN",
-    label: "Seeds Sown",
-    icon: "grass",
-    description: "Seeds have been planted in growing medium",
-  },
-  {
-    key: "GERMINATING",
-    label: "Germination Started",
-    icon: "spa",
-    description: "Seeds have sprouted and seedlings are growing",
-  },
-  {
-    key: "READY",
-    label: "Plants Ready",
-    icon: "done-all",
-    description: "Plants are ready for collection",
-  },
-  {
-    key: "COLLECTED",
-    label: "Collected",
-    icon: "local-shipping",
-    description: "Plants have been collected by customer",
-  },
+const timelineSteps = [
+  { key: "RECEIVED", label: "Seeds received" },
+  { key: "SOWN", label: "Seeds sown" },
+  { key: "GERMINATING", label: "Germination started" },
+  { key: "READY", label: "Plants ready" },
+  { key: "COLLECTED", label: "Collected" },
 ];
 
 const statusOrder: Record<string, number> = {
@@ -74,18 +48,16 @@ const formatDate = (value?: string) => {
   });
 };
 
-const formatCurrency = (value: number) => {
-  return `₹${value.toLocaleString("en-IN")}`;
-};
+const formatCurrency = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
-const getPaymentStatusColor = (status: string) => {
-  switch (status.toUpperCase()) {
+const getPaymentTone = (status: string): "success" | "warning" | "danger" => {
+  switch (String(status || "").toUpperCase()) {
     case "PAID":
-      return { bg: "#D1FAE5", text: "#065F46", icon: "check-circle" };
+      return "success";
     case "PARTIAL":
-      return { bg: "#FEF3C7", text: "#92400E", icon: "pending" };
+      return "warning";
     default:
-      return { bg: "#FEE2E2", text: "#991B1B", icon: "error" };
+      return "danger";
   }
 };
 
@@ -100,561 +72,222 @@ export default function CustomerSeedBatchDetailScreen() {
   });
 
   const batch = data;
-  const plantTypeName =
-    typeof batch?.plantTypeId === "object" ? batch?.plantTypeId?.name : "-";
-  const plantCategory =
-    typeof batch?.plantTypeId === "object" ? batch?.plantTypeId?.category : null;
-  const germinated = Number(batch?.germinatedQuantity ?? batch?.seedsGerminated ?? 0);
-  const discarded = Number(batch?.discardedQuantity ?? batch?.seedsDiscarded ?? 0);
-  const sown = Number(batch?.seedsSown || 0);
-  const currentOrder = statusOrder[String(batch?.status || "RECEIVED").toUpperCase()] || 1;
-  const paymentStatus =
-    typeof batch?.saleId === "object" ? batch?.saleId?.paymentStatus || "UNPAID" : "UNPAID";
-  const paymentStatusConfig = getPaymentStatusColor(paymentStatus);
-
-  const handleBack = () => {
-    router.back();
-  };
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerContent}>
-            <Pressable onPress={handleBack} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
-            </Pressable>
-            <View>
-              <Text style={styles.headerTitle}>Seed Batch Detail</Text>
-              <Text style={styles.headerSubtitle}>Loading...</Text>
-            </View>
-          </View>
-        </LinearGradient>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading batch details...</Text>
-        </View>
-      </SafeAreaView>
+      <CustomerScreen title="Seed Batch Detail" subtitle="Loading batch information..." onBackPress={() => router.back()}>
+        <CustomerCard style={styles.centerCard}>
+          <ActivityIndicator size="large" color={CustomerColors.primary} />
+          <Text style={styles.helperText}>Loading batch details...</Text>
+        </CustomerCard>
+      </CustomerScreen>
     );
   }
 
   if (!batch) {
     return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerContent}>
-            <Pressable onPress={handleBack} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
-            </Pressable>
-            <View>
-              <Text style={styles.headerTitle}>Seed Batch Detail</Text>
-              <Text style={styles.headerSubtitle}>Not Found</Text>
-            </View>
-          </View>
-        </LinearGradient>
-        <View style={styles.errorContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
-          <Text style={styles.errorTitle}>Batch Not Found</Text>
-          <Text style={styles.errorMessage}>
-            The seed batch you're looking for doesn't exist or has been removed.
-          </Text>
-          <Pressable onPress={handleBack} style={styles.errorButton}>
-            <Text style={styles.errorButtonText}>Go Back</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <CustomerScreen title="Seed Batch Detail" subtitle="Not found" onBackPress={() => router.back()}>
+        <CustomerEmptyState
+          title="Batch not found"
+          message="The selected seed batch is unavailable or no longer accessible."
+          icon={<MaterialIcons name="error-outline" size={44} color={CustomerColors.danger} />}
+        />
+      </CustomerScreen>
     );
   }
 
+  const plantTypeName =
+    typeof batch.plantTypeId === "object" ? batch.plantTypeId?.name : "Seed batch";
+  const currentOrder = statusOrder[String(batch.status || "RECEIVED").toUpperCase()] || 1;
+  const sown = Number(batch.seedsSown || 0);
+  const germinated = Number(batch.germinatedQuantity ?? batch.seedsGerminated ?? 0);
+  const discarded = Number(batch.discardedQuantity ?? batch.seedsDiscarded ?? 0);
+  const paymentStatus =
+    typeof batch.saleId === "object" ? batch.saleId?.paymentStatus || "UNPAID" : "UNPAID";
+
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerContent}>
-          <Pressable onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
-          </Pressable>
-          <View>
-            <Text style={styles.headerTitle}>Seed Batch Detail</Text>
-            <Text style={styles.headerSubtitle}>{plantTypeName}</Text>
+    <CustomerScreen
+      title="Seed Batch Detail"
+      subtitle={plantTypeName}
+      onBackPress={() => router.back()}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          colors={[CustomerColors.primary]}
+          tintColor={CustomerColors.primary}
+        />
+      }
+    >
+      <CustomerCard style={styles.heroCard}>
+        <SectionHeader
+          title={plantTypeName}
+          subtitle={`Expected ready ${formatDate(batch.expectedReadyDate || batch.estimatedPickupDate)}`}
+          trailing={<StatusChip label={String(batch.status || "Unknown")} tone="info" />}
+        />
+        <View style={styles.summaryGrid}>
+          <StatPill label="Seeds given" value={String(Number(batch.seedQuantity || 0).toLocaleString("en-IN"))} />
+          <StatPill label="Germinated" value={String(germinated.toLocaleString("en-IN"))} />
+          <StatPill label="Discarded" value={String(discarded.toLocaleString("en-IN"))} />
+        </View>
+      </CustomerCard>
+
+      <CustomerCard>
+        <SectionHeader title="Payment and service" subtitle="Amounts are shown exactly as recorded against this batch." />
+        <View style={styles.detailList}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Service charge estimate</Text>
+            <Text style={styles.detailValue}>{formatCurrency(Number(batch.serviceChargeEstimate || 0))}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Discount amount</Text>
+            <Text style={[styles.detailValue, styles.successText]}>
+              -{formatCurrency(Number(batch.discountAmount || 0))}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Final amount</Text>
+            <Text style={styles.detailStrong}>{formatCurrency(Number(batch.finalAmount || 0))}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Payment status</Text>
+            <StatusChip label={paymentStatus} tone={getPaymentTone(paymentStatus)} />
           </View>
         </View>
-      </LinearGradient>
+      </CustomerCard>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-      >
-        {/* Status Overview */}
-        <View style={styles.statusOverviewCard}>
-          <View style={styles.statusRow}>
-            <View style={styles.statusBadge}>
-              <View style={[styles.statusDot, { backgroundColor: statusOrder[batch.status] >= 4 ? Colors.success : Colors.warning }]} />
-              <Text style={styles.statusText}>Current Status: <Text style={styles.statusValue}>{batch.status}</Text></Text>
-            </View>
-            <View style={[styles.paymentBadge, { backgroundColor: paymentStatusConfig.bg }]}>
-              <MaterialIcons name={paymentStatusConfig.icon as any} size={12} color={paymentStatusConfig.text} />
-              <Text style={[styles.paymentText, { color: paymentStatusConfig.text }]}>
-                {paymentStatus}
-              </Text>
-            </View>
-          </View>
+      <CustomerCard>
+        <SectionHeader title="Lifecycle" subtitle="This timeline shows how far the nursery has progressed with your batch." />
+        <View style={styles.timeline}>
+          {timelineSteps.map((step, index) => {
+            const done = currentOrder >= index + 1;
+            const isLast = index === timelineSteps.length - 1;
 
-          {plantCategory && (
-            <View style={styles.categoryBadge}>
-              <MaterialIcons name="category" size={12} color={Colors.info} />
-              <Text style={styles.categoryText}>{plantCategory}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Batch Summary */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="info" size={20} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Batch Summary</Text>
-          </View>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Seeds Given</Text>
-              <Text style={styles.statValue}>{batch.seedQuantity?.toLocaleString("en-IN")}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Seeds Sown</Text>
-              <Text style={styles.statValue}>{sown.toLocaleString("en-IN")}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Germinated</Text>
-              <Text style={[styles.statValue, { color: Colors.success }]}>
-                {germinated.toLocaleString("en-IN")}
-              </Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Discarded</Text>
-              <Text style={[styles.statValue, { color: Colors.error }]}>
-                {discarded.toLocaleString("en-IN")}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.detailsList}>
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <MaterialIcons name="calendar-today" size={16} color={Colors.textSecondary} />
-              </View>
-              <Text style={styles.detailLabel}>Expected Ready Date</Text>
-              <Text style={styles.detailValue}>
-                {formatDate(batch.expectedReadyDate || batch.estimatedPickupDate)}
-              </Text>
-            </View>
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <MaterialIcons name="currency-rupee" size={16} color={Colors.textSecondary} />
-              </View>
-              <Text style={styles.detailLabel}>Service Charges</Text>
-              <Text style={styles.detailValue}>{formatCurrency(Number(batch.serviceChargeEstimate || 0))}</Text>
-            </View>
-
-            <View style={styles.detailRow}>
-              <View style={styles.detailIcon}>
-                <MaterialIcons name="discount" size={16} color={Colors.success} />
-              </View>
-              <Text style={styles.detailLabel}>Discount</Text>
-              <Text style={[styles.detailValue, { color: Colors.success }]}>
-                -{formatCurrency(Number(batch.discountAmount || 0))}
-              </Text>
-            </View>
-
-            <View style={styles.totalRow}>
-              <View style={styles.detailIcon}>
-                <MaterialIcons name="receipt" size={18} color={Colors.primary} />
-              </View>
-              <Text style={styles.totalLabel}>Final Amount</Text>
-              <Text style={styles.totalValue}>{formatCurrency(Number(batch.finalAmount || 0))}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Progress Timeline */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="timeline" size={20} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Progress Timeline</Text>
-          </View>
-
-          <View style={styles.timelineContainer}>
-            {timelineSteps.map((step, index) => {
-              const done = currentOrder >= index + 1;
-              const isLast = index === timelineSteps.length - 1;
-
-              return (
-                <View key={step.key} style={styles.timelineItem}>
-                  <View style={styles.timelineLeft}>
-                    <View
-                      style={[
-                        styles.timelineIcon,
-                        done && styles.timelineIconDone,
-                        { backgroundColor: done ? Colors.success + "20" : Colors.surface },
-                      ]}
-                    >
-                      <MaterialIcons
-                        name={step.icon}
-                        size={16}
-                        color={done ? Colors.success : Colors.textTertiary}
-                      />
-                    </View>
-                    {!isLast && <View style={[styles.timelineLine, done && styles.timelineLineDone]} />}
+            return (
+              <View key={step.key} style={styles.timelineRow}>
+                <View style={styles.timelineRail}>
+                  <View style={[styles.timelineDot, done ? styles.timelineDotDone : styles.timelineDotPending]}>
+                    <MaterialIcons
+                      name={done ? "check" : "schedule"}
+                      size={12}
+                      color={done ? CustomerColors.white : CustomerColors.textMuted}
+                    />
                   </View>
-
-                  <View style={styles.timelineContent}>
-                    <Text style={[styles.timelineLabel, done && styles.timelineLabelDone]}>
-                      {step.label}
-                    </Text>
-                    <Text style={styles.timelineDescription}>{step.description}</Text>
-                  </View>
-
-                  {done && (
-                    <View style={styles.timelineCheck}>
-                      <MaterialIcons name="check-circle" size={16} color={Colors.success} />
-                    </View>
-                  )}
+                  {!isLast ? <View style={[styles.timelineLine, done && styles.timelineLineDone]} /> : null}
                 </View>
-              );
-            })}
-          </View>
+                <View style={styles.timelineBody}>
+                  <Text style={styles.timelineTitle}>{step.label}</Text>
+                  <Text style={styles.timelineCaption}>
+                    {done ? "Completed in nursery workflow." : "Awaiting this stage."}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </CustomerCard>
+
+      <CustomerCard>
+        <SectionHeader title="Batch numbers" />
+        <View style={styles.summaryGrid}>
+          <StatPill label="Seeds sown" value={String(sown.toLocaleString("en-IN"))} />
+          <StatPill label="Germinated" value={String(germinated.toLocaleString("en-IN"))} />
+          <StatPill label="Discarded" value={String(discarded.toLocaleString("en-IN"))} />
+        </View>
+      </CustomerCard>
+    </CustomerScreen>
   );
 }
 
-const styles = {
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+const styles = StyleSheet.create({
+  centerCard: {
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xl,
   },
-
-  // Header
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+  helperText: {
+    color: CustomerColors.textMuted,
   },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+  heroCard: {
     gap: Spacing.md,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+  summaryGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
   },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 22,
-    fontWeight: "700" as const,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 13,
-    fontWeight: "500" as const,
-  },
-
-  // Scroll Content
-  scrollContent: {
-    padding: Spacing.lg,
-    paddingBottom: 100,
-    gap: Spacing.md,
-  },
-
-  // Loading State
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: Spacing.md,
-  },
-  loadingText: {
-    color: Colors.textSecondary,
-    fontSize: 15,
-    fontWeight: "500" as const,
-  },
-
-  // Error State
-  errorContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: Spacing.xl,
-    gap: Spacing.md,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "600" as const,
-    color: Colors.error,
-    marginTop: Spacing.sm,
-  },
-  errorMessage: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: "center" as const,
-    lineHeight: 20,
-    paddingHorizontal: Spacing.xl,
-  },
-  errorButton: {
+  detailList: {
     marginTop: Spacing.md,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: 10,
-  },
-  errorButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600" as const,
-  },
-
-  // Status Overview
-  statusOverviewCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  statusRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.xs,
-  },
-  statusBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  statusValue: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  paymentBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 16,
-    gap: 4,
-  },
-  paymentText: {
-    fontSize: 11,
-    fontWeight: "600" as const,
-  },
-  categoryBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    marginTop: Spacing.xs,
-  },
-  categoryText: {
-    fontSize: 12,
-    color: Colors.info,
-    fontWeight: "500" as const,
-  },
-
-  // Cards
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  cardHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-
-  // Stats Grid
-  statsGrid: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center" as const,
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    marginBottom: 2,
-    textTransform: "uppercase" as const,
-    letterSpacing: 0.5,
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: "700" as const,
-    color: Colors.text,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.md,
-  },
-
-  // Details List
-  detailsList: {
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   detailRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-  },
-  detailIcon: {
-    width: 32,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
   },
   detailLabel: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.textSecondary,
+    color: CustomerColors.textMuted,
   },
   detailValue: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: Colors.text,
+    color: CustomerColors.text,
+    fontWeight: "600",
   },
-  totalRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginTop: Spacing.xs,
-    paddingTop: Spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  totalLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  totalValue: {
+  detailStrong: {
+    color: CustomerColors.primary,
+    fontWeight: "800",
     fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.primary,
   },
-
-  // Timeline
-  timelineContainer: {
-    marginTop: Spacing.sm,
+  successText: {
+    color: CustomerColors.success,
   },
-  timelineItem: {
-    flexDirection: "row" as const,
-    marginBottom: Spacing.md,
-    position: "relative" as const,
+  timeline: {
+    marginTop: Spacing.md,
   },
-  timelineLeft: {
-    width: 40,
-    alignItems: "center" as const,
-    position: "relative" as const,
+  timelineRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
   },
-  timelineIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    zIndex: 2,
+  timelineRail: {
+    width: 22,
+    alignItems: "center",
   },
-  timelineIconDone: {
-    backgroundColor: Colors.success + "20",
+  timelineDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  timelineDotDone: {
+    backgroundColor: CustomerColors.success,
+  },
+  timelineDotPending: {
+    backgroundColor: CustomerColors.border,
+    borderWidth: 1,
+    borderColor: CustomerColors.borderStrong,
   },
   timelineLine: {
-    position: "absolute" as const,
-    top: 32,
     width: 2,
-    height: 40,
-    backgroundColor: Colors.border,
-    zIndex: 1,
+    flex: 1,
+    marginVertical: 6,
+    backgroundColor: CustomerColors.borderStrong,
   },
   timelineLineDone: {
-    backgroundColor: Colors.success + "40",
+    backgroundColor: CustomerColors.success,
   },
-  timelineContent: {
+  timelineBody: {
     flex: 1,
-    marginLeft: Spacing.sm,
+    paddingBottom: Spacing.lg,
+    gap: 4,
   },
-  timelineLabel: {
-    fontSize: 14,
-    fontWeight: "500" as const,
-    color: Colors.textSecondary,
-    marginBottom: 2,
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: CustomerColors.text,
   },
-  timelineLabelDone: {
-    color: Colors.text,
-    fontWeight: "600" as const,
+  timelineCaption: {
+    color: CustomerColors.textMuted,
+    lineHeight: 20,
   },
-  timelineDescription: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
-  timelineCheck: {
-    marginLeft: Spacing.sm,
-    justifyContent: "center" as const,
-  },
-} as const;
+});

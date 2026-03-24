@@ -7,6 +7,7 @@ export interface Nursery {
   code?: string;
   status?: "ACTIVE" | "SUSPENDED" | string;
   address?: string;
+  phoneNumber?: string;
   settings?: {
     currency?: string;
     timezone?: string;
@@ -33,6 +34,7 @@ export interface CreateNurseryPayload {
   name: string;
   code?: string;
   address?: string;
+  phoneNumber?: string;
 }
 
 const normalize = (row: any): Nursery => ({
@@ -41,6 +43,7 @@ const normalize = (row: any): Nursery => ({
   code: row?.code,
   status: row?.status || "ACTIVE",
   address: row?.address,
+  phoneNumber: row?.phoneNumber,
   settings: row?.settings,
   createdAt: row?.createdAt,
   updatedAt: row?.updatedAt,

@@ -4,6 +4,7 @@ import { Redirect, Slot } from "expo-router";
 import { Bean, Home, Leaf, Receipt, Sprout } from "lucide-react-native";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
 
 import { useAuthStore } from "../../stores/auth.store";
 
@@ -28,7 +29,7 @@ export default function StaffLayout() {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: Colors.primary }}
+      style={{ flex: 1, backgroundColor: Colors.primaryDark }}
       edges={["top", "left", "right"]}
     >
       <View style={{ flex: 1, backgroundColor: Colors.background }}>

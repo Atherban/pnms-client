@@ -16,14 +16,18 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import SuperAdminCard from "../../components/super-admin/SuperAdminCard";
+import SuperAdminHeader from "../../components/super-admin/SuperAdminHeader";
+import SuperAdminKpiCard from "../../components/super-admin/SuperAdminKpiCard";
+import SuperAdminSectionHeader from "../../components/super-admin/SuperAdminSectionHeader";
+import SuperAdminStatusBadge from "../../components/super-admin/SuperAdminStatusBadge";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../../components/navigation/SharedBottomNav";
+import { SuperAdminTheme } from "../../components/super-admin/theme";
 import { AuthService } from "../../services/auth.service";
 import { NurseryService } from "../../services/nursery.service";
 import { SuperAdminService } from "../../services/super-admin.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors } from "../../theme";
-
-const BOTTOM_NAV_HEIGHT = 80;
+import { Colors, Spacing } from "@/src/theme";
 
 const formatMoney = (amount: number) =>
   `₹${Math.round(amount || 0).toLocaleString("en-IN")}`;
@@ -34,42 +38,6 @@ type OverviewData = {
   nurseries: Awaited<ReturnType<typeof NurseryService.list>>;
   summaries: Awaited<ReturnType<typeof SuperAdminService.getNurserySummary>>;
 };
-
-// ==================== STATS CARD ====================
-
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  icon: string;
-  color: string;
-  trend?: number;
-}
-
-const StatCard = ({ label, value, icon, color, trend }: StatCardProps) => (
-  <View style={[styles.statCard, { backgroundColor: `${color}08` }]}>
-    <View style={styles.statHeader}>
-      <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-        <MaterialIcons name={icon as any} size={18} color={color} />
-      </View>
-      {trend !== undefined && (
-        <View
-          style={[
-            styles.trendBadge,
-            { backgroundColor: trend > 0 ? "#ECFDF5" : "#FEF2F2" },
-          ]}
-        >
-          <MaterialIcons
-            name={trend > 0 ? "arrow-upward" : "arrow-downward"}
-            size={12}
-            color={trend > 0 ? Colors.success : Colors.error}
-          />
-        </View>
-      )}
-    </View>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
-  </View>
-);
 
 // ==================== NURSERY CARD ====================
 
@@ -91,10 +59,10 @@ const NurseryCard = ({ nursery, onPress }: NurseryCardProps) => (
         <View
           style={[
             styles.nurseryIcon,
-            { backgroundColor: `${Colors.primary}10` },
+            { backgroundColor: "rgba(15, 189, 73, 0.12)" },
           ]}
         >
-          <MaterialIcons name="store" size={18} color={Colors.primary} />
+          <MaterialIcons name="store" size={18} color={SuperAdminTheme.colors.primary} />
         </View>
         <View style={styles.nurseryInfo}>
           <Text style={styles.nurseryName} numberOfLines={1}>
@@ -108,25 +76,10 @@ const NurseryCard = ({ nursery, onPress }: NurseryCardProps) => (
           </View>
         </View>
       </View>
-      <View
-        style={[
-          styles.statusBadge,
-          nursery.status === "ACTIVE"
-            ? styles.activeBadge
-            : styles.suspendedBadge,
-        ]}
-      >
-        <Text
-          style={[
-            styles.statusText,
-            nursery.status === "ACTIVE"
-              ? styles.activeText
-              : styles.suspendedText,
-          ]}
-        >
-          {nursery.status}
-        </Text>
-      </View>
+      <SuperAdminStatusBadge
+        label={nursery.status}
+        tone={nursery.status === "ACTIVE" ? "active" : "inactive"}
+      />
     </View>
 
     <View style={styles.nurseryStats}>
@@ -145,7 +98,7 @@ const NurseryCard = ({ nursery, onPress }: NurseryCardProps) => (
 
     <View style={styles.viewDetails}>
       <Text style={styles.viewDetailsText}>View Details</Text>
-      <MaterialIcons name="chevron-right" size={16} color={Colors.primary} />
+      <MaterialIcons name="chevron-right" size={16} color={SuperAdminTheme.colors.primary} />
     </View>
   </Pressable>
 );
@@ -154,7 +107,6 @@ const NurseryCard = ({ nursery, onPress }: NurseryCardProps) => (
 
 export default function SuperAdminDashboard() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -234,17 +186,18 @@ export default function SuperAdminDashboard() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
+        <SuperAdminHeader
           title="Super Admin"
           subtitle="Loading dashboard..."
-          showBackButton
-          onBackPress={() => router.back()}
-          userName={user?.name || "Super Admin"}
-          userRoleLabel="Super Admin"
-          onLogout={handleLogout}
+          
+          actions={
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons name="refresh" size={20} color={SuperAdminTheme.colors.text} />
+            </Pressable>
+          }
         />
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={SuperAdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading dashboard data...</Text>
         </View>
       </SafeAreaView>
@@ -254,24 +207,25 @@ export default function SuperAdminDashboard() {
   if (error) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
+        <SuperAdminHeader
           title="Super Admin"
           subtitle="Error loading data"
-          showBackButton
-          onBackPress={() => router.back()}
-          userName={user?.name || "Super Admin"}
-          userRoleLabel="Super Admin"
-          onLogout={handleLogout}
+         
+          actions={
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons name="refresh" size={20} color={SuperAdminTheme.colors.text} />
+            </Pressable>
+          }
         />
         <View style={styles.centerContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={SuperAdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
           <Text style={styles.errorMessage}>
             Unable to load dashboard. Please try again.
           </Text>
           <Pressable onPress={handleRefresh} style={styles.retryButton}>
             <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+              colors={[SuperAdminTheme.colors.primary, SuperAdminTheme.colors.primaryDark]}
               style={styles.retryGradient}
             >
               <Text style={styles.retryButtonText}>Try Again</Text>
@@ -284,28 +238,23 @@ export default function SuperAdminDashboard() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <SuperAdminHeader
         title="Super Admin"
         subtitle="Cross-nursery business overview"
-        showBackButton
-        onBackPress={() => router.back()}
-        userName={user?.name || "Super Admin"}
-        userRoleLabel="Super Admin"
-        onLogout={handleLogout}
+       
         actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={handleRefresh}
-          >
-            <MaterialIcons
-              name={refreshing ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
-            />
-          </Pressable>
+          <>
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons
+                name={refreshing ? "sync" : "refresh"}
+                size={20}
+                color={SuperAdminTheme.colors.surface}
+              />
+            </Pressable>
+            <Pressable style={styles.headerIconBtn} onPress={handleLogout}>
+              <MaterialIcons name="logout" size={20} color={SuperAdminTheme.colors.surface} />
+            </Pressable>
+          </>
         }
       />
 
@@ -316,43 +265,54 @@ export default function SuperAdminDashboard() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[SuperAdminTheme.colors.primary]}
+            tintColor={SuperAdminTheme.colors.primary}
           />
         }
       >
         {/* Key Metrics */}
         <View style={styles.statsGrid}>
-          <StatCard
-            label="Total Revenue"
-            value={formatMoney(totalRevenue)}
-            icon="payments"
-            color={Colors.primary}
-          />
-          <StatCard
-            label="Total Sales"
-            value={formatNumber(totalSales)}
-            icon="shopping-cart"
-            color={Colors.success}
-          />
-          <StatCard
-            label="Active Nurseries"
-            value={activeNurseries}
-            icon="store"
-            color={Colors.info}
-          />
-          <StatCard
-            label="Avg Revenue"
-            value={formatMoney(averageRevenue)}
-            icon="trending-up"
-            color={Colors.warning}
-          />
+          <View style={styles.kpiItem}>
+            <SuperAdminKpiCard
+              label="Total Revenue"
+              value={formatMoney(totalRevenue)}
+              icon={<MaterialIcons name="payments" size={18} color={SuperAdminTheme.colors.primary} />}
+              helper="Updated this month"
+            />
+          </View>
+          <View style={styles.kpiItem}>
+            <SuperAdminKpiCard
+              label="Total Sales"
+              value={formatNumber(totalSales)}
+              icon={<MaterialIcons name="shopping-cart" size={18} color={SuperAdminTheme.colors.success} />}
+              tone="success"
+            />
+          </View>
+          <View style={styles.kpiItem}>
+            <SuperAdminKpiCard
+              label="Active Nurseries"
+              value={activeNurseries}
+              icon={<MaterialIcons name="store" size={18} color={SuperAdminTheme.colors.info} />}
+              tone="neutral"
+            />
+          </View>
+          <View style={styles.kpiItem}>
+            <SuperAdminKpiCard
+              label="Avg Revenue"
+              value={formatMoney(averageRevenue)}
+              icon={<MaterialIcons name="trending-up" size={18} color={SuperAdminTheme.colors.warning} />}
+              tone="warning"
+            />
+          </View>
         </View>
 
         {/* Top Performer Spotlight */}
         {topNursery && (
           <LinearGradient
-            colors={[Colors.primary + "20", Colors.primary + "08"]}
+            colors={[
+              SuperAdminTheme.colors.primary,
+              SuperAdminTheme.colors.primaryDark,
+            ]}
             style={styles.spotlightCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -361,13 +321,13 @@ export default function SuperAdminDashboard() {
               <View
                 style={[
                   styles.spotlightIcon,
-                  { backgroundColor: `${Colors.primary}20` },
+                  { backgroundColor: "rgba(255,255,255,0.2)" },
                 ]}
               >
                 <MaterialIcons
                   name="emoji-events"
                   size={24}
-                  color={Colors.primary}
+                  color={SuperAdminTheme.colors.surface}
                 />
               </View>
               <View style={styles.spotlightContent}>
@@ -399,35 +359,33 @@ export default function SuperAdminDashboard() {
 
         {/* Nursery Performance */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="store" size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Nursery Performance</Text>
-            </View>
-            <Pressable
-              onPress={() => router.push("/(super-admin)/nurseries" as any)}
-              style={({ pressed }) => [
-                styles.viewAllButton,
-                pressed && styles.viewAllButtonPressed,
-              ]}
-            >
-              <Text style={styles.viewAllText}>View All</Text>
-              <MaterialIcons
-                name="arrow-forward"
-                size={14}
-                color={Colors.primary}
-              />
-            </Pressable>
-          </View>
+          <SuperAdminSectionHeader
+            title="Top 5 Nurseries"
+            action={
+              <Pressable
+                onPress={() => router.push("/(super-admin)/nurseries" as any)}
+                style={styles.viewAllButton}
+              >
+                <Text style={styles.viewAllText}>View All</Text>
+                <MaterialIcons
+                  name="arrow-forward"
+                  size={14}
+                  color={SuperAdminTheme.colors.primary}
+                />
+              </Pressable>
+            }
+          />
 
           {rankedNurseries.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="store" size={48} color="#D1D5DB" />
+            <SuperAdminCard style={styles.emptyContainer}>
+              <View style={{ alignItems: "center" }}>
+                <MaterialIcons name="store" size={48} color={SuperAdminTheme.colors.textSoft} />
+              </View>
               <Text style={styles.emptyTitle}>No Nurseries Found</Text>
               <Text style={styles.emptyMessage}>
                 Create a nursery to start tracking performance.
               </Text>
-            </View>
+            </SuperAdminCard>
           ) : (
             <View style={styles.nurseryList}>
               {rankedNurseries.slice(0, 5).map((nursery) => (
@@ -454,20 +412,10 @@ export default function SuperAdminDashboard() {
           ]}
           onPress={() => router.push("/(super-admin)/audit-logs" as any)}
         >
-          <LinearGradient
-            colors={[Colors.info + "20", Colors.info + "08"]}
-            style={styles.auditGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
+          <View style={styles.auditGradient} >
             <View style={styles.auditContent}>
-              <View
-                style={[
-                  styles.auditIcon,
-                  { backgroundColor: `${Colors.info}20` },
-                ]}
-              >
-                <MaterialIcons name="history" size={24} color={Colors.info} />
+              <View style={styles.auditIcon}>
+                <MaterialIcons name="history" size={24} color={SuperAdminTheme.colors.info} />
               </View>
               <View style={styles.auditInfo}>
                 <Text style={styles.auditTitle}>Soft Delete Audit Logs</Text>
@@ -480,14 +428,14 @@ export default function SuperAdminDashboard() {
               <MaterialIcons
                 name="arrow-forward"
                 size={20}
-                color={Colors.info}
+                color={SuperAdminTheme.colors.info}
               />
             </View>
-          </LinearGradient>
+          </View>
         </Pressable>
 
         {/* Quick Stats Summary */}
-        <View style={styles.summaryCard}>
+        <SuperAdminCard style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Quick Overview</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
@@ -496,20 +444,18 @@ export default function SuperAdminDashboard() {
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryItemLabel}>Active</Text>
-              <Text
-                style={[styles.summaryItemValue, { color: Colors.success }]}
-              >
+              <Text style={[styles.summaryItemValue, { color: SuperAdminTheme.colors.success }]}>
                 {activeNurseries}
               </Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryItemLabel}>Suspended</Text>
-              <Text style={[styles.summaryItemValue, { color: Colors.error }]}>
+              <Text style={[styles.summaryItemValue, { color: SuperAdminTheme.colors.danger }]}>
                 {suspendedNurseries}
               </Text>
             </View>
           </View>
-        </View>
+        </SuperAdminCard>
       </ScrollView>
     </View>
   );
@@ -518,25 +464,18 @@ export default function SuperAdminDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.background,
   },
 
-  // Header
-  headerTitle: {
-    fontSize: 24,
-  },
   headerIconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.34)",
+    borderColor: "rgba(255, 255, 255, 0.21)",
+    backgroundColor: "rgba(255, 255, 255, 0.17)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    transform: [{ scale: 0.95 }],
   },
 
   // Center Container
@@ -544,72 +483,36 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: SuperAdminTheme.spacing.lg,
     gap: 12,
   },
   loadingText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
   },
 
   // Content
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
-    gap: 20,
+    paddingHorizontal: SuperAdminTheme.spacing.md,
+    paddingTop: SuperAdminTheme.spacing.md,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 100,
+    gap: SuperAdminTheme.spacing.lg,
   },
 
   // Stats Grid
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 12,
   },
-  statCard: {
+  kpiItem: {
     width: "48%",
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  statHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  trendBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: "700",
   },
 
   // Spotlight Card
   spotlightCard: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
+    borderRadius: SuperAdminTheme.radius.xl,
+    padding: SuperAdminTheme.spacing.md,
     gap: 12,
   },
   spotlightHeader: {
@@ -618,9 +521,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   spotlightIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: SuperAdminTheme.radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -628,21 +531,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   spotlightTitle: {
-    fontSize: 12,
-    color: "#6B7280",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.7)",
     marginBottom: 2,
   },
   spotlightName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
+    fontSize: 18,
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.surface,
   },
   spotlightStats: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.5)",
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: SuperAdminTheme.radius.lg,
+    padding: SuperAdminTheme.spacing.sm,
   },
   spotlightStat: {
     flex: 1,
@@ -650,68 +553,49 @@ const styles = StyleSheet.create({
   },
   spotlightStatLabel: {
     fontSize: 10,
-    color: "#6B7280",
+    color: "rgba(255,255,255,0.8)",
     marginBottom: 2,
   },
   spotlightStatValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: SuperAdminTheme.colors.surface,
   },
   spotlightStatDivider: {
     width: 1,
     height: 20,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: "rgba(255,255,255,0.4)",
     marginHorizontal: 8,
   },
 
   // Section
   section: {
-    gap: 12,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    gap: SuperAdminTheme.spacing.sm,
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  viewAllButtonPressed: {
-    opacity: 0.7,
-  },
   viewAllText: {
     fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "500",
+    color: SuperAdminTheme.colors.primary,
+    fontWeight: "700",
   },
 
   // Nursery List
   nurseryList: {
-    gap: 8,
+    gap: 12,
   },
   nurseryCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: SuperAdminTheme.colors.surface,
+    borderRadius: SuperAdminTheme.radius.lg,
+    padding: SuperAdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: SuperAdminTheme.colors.borderSoft,
     gap: 12,
   },
   nurseryCardPressed: {
-    backgroundColor: "#F9FAFB",
     transform: [{ scale: 0.98 }],
   },
   nurseryCardHeader: {
@@ -726,9 +610,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   nurseryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: SuperAdminTheme.radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -737,8 +621,8 @@ const styles = StyleSheet.create({
   },
   nurseryName: {
     fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
     marginBottom: 2,
   },
   nurseryMeta: {
@@ -748,35 +632,14 @@ const styles = StyleSheet.create({
   },
   nurseryMetaText: {
     fontSize: 11,
-    color: "#6B7280",
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  activeBadge: {
-    backgroundColor: "#ECFDF5",
-  },
-  suspendedBadge: {
-    backgroundColor: "#FEF2F2",
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  activeText: {
-    color: Colors.success,
-  },
-  suspendedText: {
-    color: Colors.error,
+    color: SuperAdminTheme.colors.textMuted,
   },
   nurseryStats: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    padding: 10,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
+    borderRadius: SuperAdminTheme.radius.md,
+    padding: SuperAdminTheme.spacing.sm,
   },
   nurseryStat: {
     flex: 1,
@@ -784,7 +647,7 @@ const styles = StyleSheet.create({
   },
   nurseryStatLabel: {
     fontSize: 10,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     marginBottom: 2,
     textTransform: "uppercase",
     letterSpacing: 0.3,
@@ -792,12 +655,12 @@ const styles = StyleSheet.create({
   nurseryStatValue: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: SuperAdminTheme.colors.text,
   },
   nurseryStatDivider: {
     width: 1,
     height: 20,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: SuperAdminTheme.colors.border,
     marginHorizontal: 8,
   },
   viewDetails: {
@@ -808,25 +671,31 @@ const styles = StyleSheet.create({
   },
   viewDetailsText: {
     fontSize: 11,
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "600",
   },
 
   // Audit Card
   auditCard: {
-    borderRadius: 16,
+    borderRadius: SuperAdminTheme.radius.lg,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: `${Colors.info}30`,
   },
   auditCardPressed: {
     transform: [{ scale: 0.98 }],
   },
   auditGradient: {
-    padding: 16,
+    borderRadius:Spacing.md,
+    backgroundColor: SuperAdminTheme.colors.surface,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal:Spacing.md,
+    paddingVertical:Spacing.md,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   auditContent: {
     flexDirection: "row",
@@ -837,22 +706,23 @@ const styles = StyleSheet.create({
   auditIcon: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: SuperAdminTheme.radius.md,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(14, 165, 233, 0.12)",
   },
   auditInfo: {
     flex: 1,
   },
   auditTitle: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
     marginBottom: 2,
   },
   auditDescription: {
     fontSize: 11,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
   },
   auditArrow: {
     width: 32,
@@ -860,22 +730,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.5)",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
 
   // Summary Card
   summaryCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
     gap: 10,
   },
   summaryTitle: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#374151",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
   },
   summaryGrid: {
     flexDirection: "row",
@@ -884,19 +749,19 @@ const styles = StyleSheet.create({
   summaryItem: {
     flex: 1,
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
+    borderRadius: SuperAdminTheme.radius.md,
     padding: 10,
   },
   summaryItemLabel: {
     fontSize: 10,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     marginBottom: 2,
   },
   summaryItemValue: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: SuperAdminTheme.colors.text,
   },
 
   // Empty State
@@ -904,20 +769,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 32,
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
     gap: 8,
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
+    textAlign:"center"
   },
   emptyMessage: {
     fontSize: 12,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     textAlign: "center",
     paddingHorizontal: 24,
   },
@@ -925,12 +787,12 @@ const styles = StyleSheet.create({
   // Error State
   errorTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#DC2626",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.danger,
   },
   errorMessage: {
     fontSize: 13,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     textAlign: "center",
     paddingHorizontal: 20,
   },
@@ -946,7 +808,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   retryButtonText: {
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600",
   },

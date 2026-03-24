@@ -2,36 +2,41 @@
 
 export const Colors = {
   // Brand (aligned with AppIcons + adaptive icon background)
-  primary: "#1F5E8C",
-  primaryLight: "#4A87B5",
-  primaryDark: "#184A6D",
-
+  primary: "#0FBD49",
+  primaryLight: "#42ca74",
+    primaryDark: "#12853D",
+    background: "#F7F8F3",
+    surface: "#FFFFFF",
+    surfaceMuted: "#F0F4F0",
+    text: "#111827",
+    textMuted: "#6B7280",
+    textSoft: "#9CA3AF",
+    border: "#E5E7EB",
+    borderSoft: "#E7ECE7",
+    success: "#16A34A",
+    warning: "#F59E0B",
+    danger: "#EF4444",
+    error: "#EF4444",
+    info: "#0EA5E9",
   // Secondary accent
   secondary: "#2E8B57",
 
   // Semantic
-  success: "#2E9D5B",
-  warning: "#E69A24",
-  error: "#D64545",
-  info: "#2F7CC0",
-
-  // Text
-  text: "#1C2733",
+  
   textPrimary: "#1C2733",
   textSecondary: "#5C6B7A",
   textTertiary: "#8A97A4",
   textInverse: "#FFFFFF",
 
   // Background
-  background: "#F5FAFF",
-  surface: "#FFFFFF",
+ 
   surfaceLight: "#FFFFFF",
   surfaceDark: "#EAF2FA",
 
   shadow: "#0F2A4026",
 
   // Border
-  border: "#D4E2F0",
+  
   borderLight: "#E7EEF6",
 
   // UI States

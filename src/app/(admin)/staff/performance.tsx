@@ -1,25 +1,31 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-import { useMemo } from "react";
+import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import {
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Dimensions,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../../components/common/FixedHeader";
+import StitchCard from "../../../components/common/StitchCard";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { StaffPerformanceService } from "../../../services/staff-performance.service";
-import { Colors, Spacing } from "../../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
+
+const DATE_FILTERS = [
+  { id: "ALL", label: "All Time", icon: "history" },
+  { id: "TODAY", label: "Today", icon: "today" },
+  { id: "WEEK", label: "7 Days", icon: "calendar-view-week" },
+  { id: "MONTH", label: "30 Days", icon: "calendar-month" },
+] as const;
 
 const formatMoney = (amount: number) => 
   new Intl.NumberFormat("en-IN", {
@@ -31,7 +37,7 @@ const formatMoney = (amount: number) =>
 
 const formatNumber = (num: number) => num.toLocaleString("en-IN");
 
-// ==================== STATS CARD ====================
+// ==================== STATS CARD - HORIZONTAL SCROLL ====================
 
 interface StatsCardProps {
   totalStaff: number;
@@ -41,81 +47,78 @@ interface StatsCardProps {
   collectionRate: number;
 }
 
-const StatsCard = ({ 
+const StatsCard = ({
   totalStaff, 
   totalRevenue, 
   totalCollected, 
   totalDue, 
   collectionRate 
 }: StatsCardProps) => (
-  <BlurView intensity={80} tint="light" style={styles.statsCard}>
-    <View style={styles.summaryGrid}>
-      <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: `${Colors.primary}15` }]}>
-          <MaterialIcons name="people" size={16} color={Colors.primary} />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{formatNumber(totalStaff)}</Text>
-          <Text style={styles.statLabel}>Staff</Text>
-        </View>
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.statsScrollContent}
+    style={styles.statsScroll}
+  >
+    {/* Staff Count Card */}
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
+        <MaterialIcons name="people" size={20} color={AdminTheme.colors.primary} />
       </View>
-
-      <View style={styles.statDivider} />
-
-      <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: "#10B98115" }]}>
-          <MaterialIcons name="trending-up" size={16} color="#10B981" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{formatMoney(totalRevenue)}</Text>
-          <Text style={styles.statLabel}>Revenue</Text>
-        </View>
-      </View>
-
-      <View style={styles.statDivider} />
-
-      <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: "#3B82F615" }]}>
-          <MaterialIcons name="payments" size={16} color="#3B82F6" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{formatMoney(totalCollected)}</Text>
-          <Text style={styles.statLabel}>Collected</Text>
-        </View>
+      <View style={styles.statContent}>
+        <Text style={styles.statNumber}>{formatNumber(totalStaff)}</Text>
+        <Text style={styles.statLabel}>Staff</Text>
       </View>
     </View>
 
-    <View style={styles.statsSecondaryRow}>
-      <View style={styles.statSecondaryItem}>
-        <Text style={styles.statSecondaryLabel}>Total Due</Text>
-        <Text style={[styles.statSecondaryValue, { color: "#D97706" }]}>
-          {formatMoney(totalDue)}
-        </Text>
+    {/* Revenue Card */}
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: "#10B98110" }]}>
+        <MaterialIcons name="trending-up" size={20} color="#10B981" />
       </View>
-      <View style={styles.statSecondaryDivider} />
-      <View style={styles.statSecondaryItem}>
-        <Text style={styles.statSecondaryLabel}>Collection Rate</Text>
-        <Text style={[styles.statSecondaryValue, { color: collectionRate >= 80 ? "#10B981" : "#D97706" }]}>
-          {collectionRate.toFixed(1)}%
-        </Text>
+      <View style={styles.statContent}>
+        <Text style={styles.statNumber}>{formatMoney(totalRevenue)}</Text>
+        <Text style={styles.statLabel}>Revenue</Text>
       </View>
     </View>
 
-    {/* Progress Bar */}
-    <View style={styles.statsProgressContainer}>
-      <View style={styles.statsProgressBar}>
-        <View 
-          style={[
-            styles.statsProgressFill,
-            { 
-              width: `${Math.min(collectionRate, 100)}%`,
-              backgroundColor: collectionRate >= 80 ? "#10B981" : collectionRate >= 50 ? "#3B82F6" : "#D97706",
-            }
-          ]} 
+    {/* Collected Card */}
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: "#3B82F610" }]}>
+        <MaterialIcons name="payments" size={20} color="#3B82F6" />
+      </View>
+      <View style={styles.statContent}>
+        <Text style={styles.statNumber}>{formatMoney(totalCollected)}</Text>
+        <Text style={styles.statLabel}>Collected</Text>
+      </View>
+    </View>
+
+    {/* Due Card */}
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: "#D9770610" }]}>
+        <MaterialIcons name="warning" size={20} color="#D97706" />
+      </View>
+      <View style={styles.statContent}>
+        <Text style={styles.statNumber}>{formatMoney(totalDue)}</Text>
+        <Text style={styles.statLabel}>Due</Text>
+      </View>
+    </View>
+
+    {/* Collection Rate Card */}
+    <View style={styles.statCard}>
+      <View style={[styles.statIconWrapper, { backgroundColor: collectionRate >= 80 ? "#10B98110" : collectionRate >= 50 ? "#3B82F610" : "#D9770610" }]}>
+        <MaterialIcons 
+          name={collectionRate >= 80 ? "stars" : collectionRate >= 50 ? "trending-up" : "trending-down"} 
+          size={20} 
+          color={collectionRate >= 80 ? "#10B981" : collectionRate >= 50 ? "#3B82F6" : "#D97706"} 
         />
       </View>
+      <View style={styles.statContent}>
+        <Text style={styles.statNumber}>{collectionRate.toFixed(1)}%</Text>
+        <Text style={styles.statLabel}>Collection Rate</Text>
+      </View>
     </View>
-  </BlurView>
+  </ScrollView>
 );
 
 // ==================== PERFORMANCE CARD ====================
@@ -139,25 +142,26 @@ const PerformanceCard = ({ staff, index }: PerformanceCardProps) => {
   };
 
   const performanceColor = getPerformanceColor(collectionRate);
+  const performanceIcon = collectionRate >= 80 ? "stars" : collectionRate >= 50 ? "trending-up" : "trending-down";
 
   return (
-    <View style={styles.card}>
+    <View style={styles.performanceCard}>
       {/* Header */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <View style={[styles.staffAvatar, { backgroundColor: `${Colors.primary}10` }]}>
+          <View style={[styles.staffAvatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
             <Text style={styles.staffInitial}>
               {staff.staffName?.charAt(0).toUpperCase() || "?"}
             </Text>
           </View>
           <View style={styles.staffInfo}>
-            <Text style={styles.staffName} numberOfLines={1}>
-              {staff.staffName}
-            </Text>
-            <View style={styles.staffMetaRow}>
-              <Text style={styles.staffRole}>{staffRole.replace(/_/g, " ")}</Text>
+            <View style={styles.staffNameRow}>
+              <Text style={styles.staffName} numberOfLines={1}>
+                {staff.staffName}
+              </Text>
               <Text style={styles.rankBadge}>#{index + 1}</Text>
             </View>
+            <Text style={styles.staffRole}>{staffRole.replace(/_/g, " ")}</Text>
             {!!staff.staffEmail && (
               <Text style={styles.staffContact} numberOfLines={1}>
                 {staff.staffEmail}
@@ -166,11 +170,7 @@ const PerformanceCard = ({ staff, index }: PerformanceCardProps) => {
           </View>
         </View>
         <View style={[styles.performanceBadge, { backgroundColor: performanceColor + "10" }]}>
-          <MaterialIcons 
-            name={collectionRate >= 80 ? "stars" : collectionRate >= 50 ? "trending-up" : "trending-down"} 
-            size={14} 
-            color={performanceColor} 
-          />
+          <MaterialIcons name={performanceIcon as any} size={14} color={performanceColor} />
           <Text style={[styles.performanceText, { color: performanceColor }]}>
             {collectionRate.toFixed(0)}%
           </Text>
@@ -232,20 +232,151 @@ const PerformanceCard = ({ staff, index }: PerformanceCardProps) => {
   );
 };
 
+// ==================== FILTERS CARD ====================
+
+interface FiltersCardProps {
+  dateFilter: string;
+  onDateFilterChange: (filter: string) => void;
+  selectedStaffId: string;
+  onStaffFilterChange: (staffId: string) => void;
+  staffOptions: any[];
+}
+
+const FiltersCard = ({
+  dateFilter,
+  onDateFilterChange,
+  selectedStaffId,
+  onStaffFilterChange,
+  staffOptions,
+}: FiltersCardProps) => (
+  <View style={styles.filtersCard}>
+    <View style={styles.filtersHeader}>
+      <MaterialIcons name="filter-alt" size={16} color="#6B7280" />
+      <Text style={styles.filtersTitle}>Filters</Text>
+    </View>
+
+    {/* Date Filters */}
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false} 
+      contentContainerStyle={styles.filterScrollContent}
+    >
+      {DATE_FILTERS.map((filter) => (
+        <Pressable
+          key={filter.id}
+          onPress={() => onDateFilterChange(filter.id)}
+          style={[
+            styles.filterChip,
+            dateFilter === filter.id && styles.filterChipActive,
+          ]}
+        >
+          <MaterialIcons 
+            name={filter.icon as any} 
+            size={14} 
+            color={dateFilter === filter.id ? AdminTheme.colors.primary : "#6B7280"} 
+          />
+          <Text
+            style={[
+              styles.filterChipText,
+              dateFilter === filter.id && styles.filterChipTextActive,
+            ]}
+          >
+            {filter.label}
+          </Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+
+    {/* Staff Filters */}
+    <ScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={false} 
+      contentContainerStyle={styles.filterScrollContent}
+    >
+      {staffOptions.map((staff) => (
+        <Pressable
+          key={staff.staffId}
+          onPress={() => onStaffFilterChange(staff.staffId)}
+          style={[
+            styles.filterChip,
+            selectedStaffId === staff.staffId && styles.filterChipActive,
+          ]}
+        >
+          <MaterialIcons 
+            name="person" 
+            size={14} 
+            color={selectedStaffId === staff.staffId ? AdminTheme.colors.primary : "#6B7280"} 
+          />
+          <Text
+            style={[
+              styles.filterChipText,
+              selectedStaffId === staff.staffId && styles.filterChipTextActive,
+            ]}
+          >
+            {staff.staffName}
+          </Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  </View>
+);
+
+// ==================== EMPTY STATE ====================
+
+const EmptyState = () => (
+  <View style={styles.emptyContainer}>
+    <View style={styles.emptyIconContainer}>
+      <MaterialIcons name="people" size={48} color="#9CA3AF" />
+    </View>
+    <Text style={styles.emptyTitle}>No Performance Data</Text>
+    <Text style={styles.emptyMessage}>
+      No staff sales matched the selected filters. Try another date range or staff member.
+    </Text>
+  </View>
+);
+
 // ==================== MAIN COMPONENT ====================
 
 export default function StaffPerformanceScreen() {
+  const router = useRouter();
+  const [dateFilter, setDateFilter] = useState<(typeof DATE_FILTERS)[number]["id"]>("ALL");
+  const [selectedStaffId, setSelectedStaffId] = useState<string>("ALL");
+
+  const filters = useMemo(() => {
+    const now = new Date();
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+
+    const start = new Date(now);
+    if (dateFilter === "TODAY") {
+      start.setHours(0, 0, 0, 0);
+    } else if (dateFilter === "WEEK") {
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+    } else if (dateFilter === "MONTH") {
+      start.setDate(start.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+    }
+
+    return {
+      dateFrom: dateFilter === "ALL" ? undefined : start.toISOString(),
+      dateTo: dateFilter === "ALL" ? undefined : end.toISOString(),
+      staffId: selectedStaffId === "ALL" ? undefined : selectedStaffId,
+    };
+  }, [dateFilter, selectedStaffId]);
+
   const { data, refetch, isRefetching } = useQuery({
-    queryKey: ["staff-performance"],
+    queryKey: ["staff-performance", filters],
+    queryFn: () => StaffPerformanceService.getRows(filters),
+  });
+  const { data: allStaffData } = useQuery({
+    queryKey: ["staff-performance-options"],
     queryFn: () => StaffPerformanceService.getRows(),
   });
 
-  const rows = data || [];
+  const rows = useMemo(() => data || [], [data]);
   const staffRows = useMemo(
-    () =>
-      rows.filter(
-        (row) => String(row?.staffRole || "").toUpperCase() === "STAFF",
-      ),
+    () => rows.filter((row) => String(row?.staffRole || "").toUpperCase() === "STAFF"),
     [rows],
   );
 
@@ -265,61 +396,67 @@ export default function StaffPerformanceScreen() {
     };
   }, [staffRows]);
 
+  const staffOptions = useMemo(
+    () => [{ staffId: "ALL", staffName: "All Staff" }, ...((allStaffData || []).filter((row) => String(row?.staffRole || "").toUpperCase() === "STAFF"))],
+    [allStaffData],
+  );
+
+  const handleRefresh = () => {
+    refetch();
+  };
+
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <StitchHeader
         title="Staff Performance"
         subtitle="Sales and collection tracking by staff"
-        titleStyle={styles.headerTitle}
+        onBackPress={() => router.back()}
         actions={
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
               styles.headerIconBtn,
               pressed && styles.headerIconBtnPressed,
-            ]} 
-            onPress={() => refetch()}
+            ]}
+            onPress={handleRefresh}
           >
             <MaterialIcons
               name={isRefetching ? "sync" : "refresh"}
               size={20}
-              color={Colors.white}
+              color={AdminTheme.colors.surface}
             />
           </Pressable>
         }
       />
 
-      {/* Stats Card */}
+      {/* Stats Cards */}
       {staffRows.length > 0 && (
-        <View style={styles.statsWrapper}>
-          <StatsCard
-            totalStaff={stats.totalStaff}
-            totalRevenue={stats.totalRevenue}
-            totalCollected={stats.totalCollected}
-            totalDue={stats.totalDue}
-            collectionRate={stats.collectionRate}
-          />
-        </View>
+        <StatsCard
+          totalStaff={stats.totalStaff}
+          totalRevenue={stats.totalRevenue}
+          totalCollected={stats.totalCollected}
+          totalDue={stats.totalDue}
+          collectionRate={stats.collectionRate}
+        />
       )}
 
       <ScrollView 
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Filters */}
+        {staffOptions.length > 1 && (
+          <FiltersCard
+            dateFilter={dateFilter}
+            onDateFilterChange={setDateFilter}
+            selectedStaffId={selectedStaffId}
+            onStaffFilterChange={setSelectedStaffId}
+            staffOptions={staffOptions}
+          />
+        )}
+
+        {/* Staff Performance List */}
         {staffRows.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <LinearGradient
-                colors={["#F3F4F6", "#F9FAFB"]}
-                style={styles.emptyIconGradient}
-              >
-                <MaterialIcons name="people" size={48} color="#9CA3AF" />
-              </LinearGradient>
-            </View>
-            <Text style={styles.emptyTitle}>No Performance Data</Text>
-            <Text style={styles.emptyText}>
-              Sales data will appear here once staff members start making sales
-            </Text>
-          </View>
+          <EmptyState />
         ) : (
           staffRows.map((row, index) => (
             <PerformanceCard 
@@ -337,128 +474,117 @@ export default function StaffPerformanceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  headerTitle: {
-    fontSize: 24,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    
     transform: [{ scale: 0.95 }],
   },
 
-  // Stats Card
-  statsWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+  // Stats Card - Horizontal Scroll
+  statsScroll: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 8,
   },
-  statsCard: {
-    borderRadius: 20,
-    padding: 16,
-    overflow: "hidden",
+  statsScrollContent: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  statCard: {
+    minWidth: 120,
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  summaryGrid: {
+    borderColor: "#E5E7EB",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
+    gap: 12,
+    ...AdminTheme.shadow.sm,
   },
-  statItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  statIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
-  statInfo: {
+  statContent: {
     flex: 1,
   },
   statNumber: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: "700",
     color: "#111827",
-    marginBottom: 2,
+    lineHeight: 22,
   },
   statLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
-  },
-  statsSecondaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  statSecondaryItem: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 4,
-  },
-  statSecondaryLabel: {
     fontSize: 11,
     color: "#6B7280",
+    fontWeight: "500",
+    marginTop: 2,
   },
-  statSecondaryValue: {
+
+  // Filters Card
+  filtersCard: {
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 12,
+    ...AdminTheme.shadow.sm,
+  },
+  filtersHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  filtersTitle: {
     fontSize: 13,
     fontWeight: "600",
+    color: "#374151",
   },
-  statSecondaryDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
+  filterScrollContent: {
+    gap: 8,
+    paddingRight: 16,
+    marginBottom: 8,
   },
-  statsProgressContainer: {
-    marginTop: 4,
+  filterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 30,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
-  statsProgressBar: {
-    height: 4,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 2,
-    overflow: "hidden",
+  filterChipActive: {
+    backgroundColor: `${AdminTheme.colors.primary}08`,
+    borderColor: AdminTheme.colors.primary,
   },
-  statsProgressFill: {
-    height: "100%",
-    borderRadius: 2,
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+  filterChipTextActive: {
+    color: AdminTheme.colors.primary,
+    fontWeight: "600",
   },
 
   // Content
@@ -469,24 +595,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  // Card
-  card: {
-    backgroundColor: Colors.white,
+  // Performance Card
+  performanceCard: {
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    ...AdminTheme.shadow.sm,
   },
   cardHeader: {
     flexDirection: "row",
@@ -510,45 +626,46 @@ const styles = StyleSheet.create({
   staffInitial: {
     fontSize: 20,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   staffInfo: {
     flex: 1,
   },
-  staffMetaRow: {
+  staffNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
+    marginBottom: 2,
   },
   staffName: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
-    marginBottom: 2,
+    flex: 1,
+  },
+  rankBadge: {
+    fontSize: 10,
+    color: AdminTheme.colors.primary,
+    fontWeight: "700",
+    backgroundColor: `${AdminTheme.colors.primary}10`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
   staffRole: {
     fontSize: 12,
     color: "#6B7280",
-  },
-  rankBadge: {
-    fontSize: 10,
-    color: Colors.primary,
-    fontWeight: "700",
-    backgroundColor: `${Colors.primary}14`,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
+    marginBottom: 2,
   },
   staffContact: {
     fontSize: 11,
-    color: "#6B7280",
-    marginTop: 2,
+    color: "#9CA3AF",
   },
   performanceBadge: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderRadius: 20,
     gap: 4,
   },
@@ -562,7 +679,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F9FAFB",
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 16,
   },
@@ -591,12 +708,12 @@ const styles = StyleSheet.create({
 
   // Card Footer
   cardFooter: {
-    gap: 8,
+    gap: 10,
   },
   dueContainer: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: "#FFFBEB",
     borderRadius: 12,
     padding: 10,
@@ -641,13 +758,10 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-  emptyIconGradient: {
-    flex: 1,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 16,
@@ -655,7 +769,7 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 4,
   },
-  emptyText: {
+  emptyMessage: {
     fontSize: 13,
     color: "#6B7280",
     textAlign: "center",

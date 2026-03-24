@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
@@ -14,11 +13,13 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { InventoryService } from "../../services/inventory.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
 import { resolveInventoryPricing } from "../../utils/inventory-pricing";
 import { formatQuantityUnit } from "../../utils/units";
 import BannerCardImage from "../ui/BannerCardImage";
+import { AdminTheme } from "../admin/theme";
+import { moduleBadge } from "../common/moduleStyles";
+import StitchHeader from "../common/StitchHeader";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -95,6 +96,15 @@ const getStockStatus = (quantity: number) => {
   };
 };
 
+const formatSourceType = (value?: string) => {
+  if (!value) return "Unknown";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 // Stat Card Component
 const StatCard = ({
   label,
@@ -124,7 +134,7 @@ const StatCard = ({
 const LoadingState = () => (
   <View style={styles.centerContainer}>
     <View style={styles.loadingCard}>
-      <ActivityIndicator size="large" color={Colors.primary} />
+      <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
       <Text style={styles.loadingText}>Loading inventory details...</Text>
     </View>
   </View>
@@ -158,27 +168,13 @@ const ErrorState = ({
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Inventory Details</Text>
-          <Text style={styles.headerSubtitle}>Unable to load data</Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </LinearGradient>
+      <StitchHeader
+        title="Inventory Details"
+        subtitle="Unable to load data"
+        variant="gradient"
+        showBackButton
+        onBackPress={onBack}
+      />
 
       <View style={styles.errorContainer}>
         <View style={styles.errorIconContainer}>
@@ -194,15 +190,15 @@ const ErrorState = ({
           onPress={onRetry}
         >
           <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-              style={styles.retryGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+            <View
+              style={[
+                styles.retryGradient,
+                { backgroundColor: AdminTheme.colors.primary },
+              ]}
             >
-              <MaterialIcons name="refresh" size={18} color={Colors.white} />
+              <MaterialIcons name="refresh" size={18} color={AdminTheme.colors.surface} />
               <Text style={styles.retryButtonText}>Try Again</Text>
-            </LinearGradient>
+            </View>
           </Animated.View>
         </Pressable>
       </View>
@@ -217,7 +213,6 @@ export function InventoryDetailScreen({
 }: InventoryDetailScreenProps) {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const backButtonScale = useRef(new Animated.Value(1)).current;
   const refreshButtonScale = useRef(new Animated.Value(1)).current;
   const role = useAuthStore((state) => state.user?.role);
   const isAdmin = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
@@ -283,6 +278,11 @@ export function InventoryDetailScreen({
     [data],
   );
 
+  const sourceLabel = useMemo(
+    () => formatSourceType(data?.sourceType),
+    [data?.sourceType],
+  );
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -299,34 +299,13 @@ export function InventoryDetailScreen({
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerRow}>
-          <Pressable
-            onPress={handleBack}
-            onPressIn={() => handlePressIn(backButtonScale)}
-            onPressOut={() => handlePressOut(backButtonScale)}
-          >
-            <Animated.View
-              style={[
-                styles.backButton,
-                { transform: [{ scale: backButtonScale }] },
-              ]}
-            >
-              <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-            </Animated.View>
-          </Pressable>
-
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <Text style={styles.headerSubtitle}>Stock summary</Text>
-          </View>
-
+      <StitchHeader
+        title={title}
+        subtitle={`${data.plantType?.name || "Inventory item"} overview`}
+        variant="gradient"
+        showBackButton
+        onBackPress={handleBack}
+        actions={
           <Pressable
             onPress={handleRefresh}
             onPressIn={() => handlePressIn(refreshButtonScale)}
@@ -338,11 +317,11 @@ export function InventoryDetailScreen({
                 { transform: [{ scale: refreshButtonScale }] },
               ]}
             >
-              <MaterialIcons name="refresh" size={20} color={Colors.white} />
+              <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
             </Animated.View>
           </Pressable>
-        </View>
-      </LinearGradient>
+        }
+      />
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
@@ -386,26 +365,20 @@ export function InventoryDetailScreen({
                 <MaterialIcons
                   name="category"
                   size={13}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.metaChipText}>
                   {data.plantType?.category || "Uncategorized"}
                 </Text>
               </View>
               <View style={styles.metaChip}>
-                <MaterialIcons name="inventory" size={13} color={Colors.textSecondary} />
+                <MaterialIcons name="inventory" size={13} color={AdminTheme.colors.textMuted} />
                 <Text style={styles.metaChipText}>
-                  {data.sourceType === "PURCHASED"
-                    ? "Purchased"
-                    : data.sourceType === "GERMINATION"
-                      ? "Germinated"
-                      : data.sourceType === "TRANSFER"
-                        ? "Transferred"
-                        : "Unknown"}
+                  {sourceLabel}
                 </Text>
               </View>
               <View style={styles.metaChip}>
-                <MaterialIcons name="sell" size={13} color={Colors.textSecondary} />
+                <MaterialIcons name="sell" size={13} color={AdminTheme.colors.textMuted} />
                 <Text style={styles.metaChipText}>
                   Sell:{" "}
                   {pricing.sellingPrice !== null
@@ -447,16 +420,26 @@ export function InventoryDetailScreen({
             <View
               style={[
                 styles.cardIcon,
-                { backgroundColor: `${Colors.primary}10` },
+                { backgroundColor: `${AdminTheme.colors.primary}10` },
               ]}
             >
               <MaterialIcons
                 name="inventory"
                 size={18}
-                color={Colors.primary}
+                color={AdminTheme.colors.primary}
               />
             </View>
-            <Text style={styles.cardTitle}>Source Information</Text>
+              <Text style={styles.cardTitle}>Source Information</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={styles.infoLabelContainer}>
+              <MaterialIcons name="inventory-2" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Available Stock</Text>
+            </View>
+            <Text style={styles.infoValue}>
+              {formatNumber(data.quantity)} {quantityUnit}
+            </Text>
           </View>
 
           <View style={styles.sourceRow}>
@@ -467,24 +450,28 @@ export function InventoryDetailScreen({
             <View
               style={[
                 styles.sourceBadge,
-                { backgroundColor: `${Colors.primary}10` },
+                { backgroundColor: `${AdminTheme.colors.primary}10` },
               ]}
             >
               <MaterialIcons
                 name="inventory"
                 size={12}
-                color={Colors.primary}
+                color={AdminTheme.colors.primary}
               />
               <Text style={styles.sourceBadgeText}>
-                {data.sourceType === "PURCHASED"
-                  ? "Purchased"
-                  : data.sourceType === "GERMINATION"
-                    ? "Germinated"
-                    : data.sourceType === "TRANSFER"
-                      ? "Transferred"
-                      : "Unknown"}
+                {sourceLabel}
               </Text>
             </View>
+          </View>
+
+          <View style={styles.infoRow}>
+            <View style={styles.infoLabelContainer}>
+              <MaterialIcons name="sync-alt" size={16} color="#6B7280" />
+              <Text style={styles.infoLabel}>Initial Stock</Text>
+            </View>
+            <Text style={styles.infoValue}>
+              {formatNumber(data.initialQuantity)} {quantityUnit}
+            </Text>
           </View>
 
           <View style={styles.dateRow}>
@@ -500,13 +487,21 @@ export function InventoryDetailScreen({
         </View>
 
         {/* Bottom Spacing */}
-        <View style={{ height: Spacing.xl }} />
+        <View style={{ height: AdminTheme.spacing.xl }} />
       </Animated.ScrollView>
     </SafeAreaView>
   );
 }
 
 /* -------------------- Styles -------------------- */
+
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
 
 const styles = {
   container: {
@@ -517,27 +512,10 @@ const styles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
     backgroundColor: "#F9FAFB",
   },
 
-  // Header Styles
-  headerGradient: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  headerRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
-  },
   backButton: {
     width: 44,
     height: 44,
@@ -562,38 +540,21 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     transform: [{ scale: 0.95 }],
   },
-  headerContent: {
-    flex: 1,
-    marginHorizontal: Spacing.md,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
-  },
-  headerSpacer: {
-    width: 44,
-  },
+  
 
   // Scroll Content
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.lg,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
   },
 
   // Hero Card
   heroCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 24,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     borderWidth: 1,
     borderColor: "#F3F4F6",
     overflow: "hidden" as const,
@@ -609,9 +570,9 @@ const styles = {
     borderRadius: 0,
   },
   heroInfo: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.md,
+    paddingBottom: AdminTheme.spacing.md,
   },
   plantName: {
     fontSize: 22,
@@ -626,7 +587,7 @@ const styles = {
     gap: 10,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
-    paddingTop: Spacing.sm,
+    paddingTop: AdminTheme.spacing.sm,
   },
   metaChip: {
     flexDirection: "row" as const,
@@ -635,19 +596,20 @@ const styles = {
   },
   metaChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   stockStatusBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
-    top: Spacing.md,
-    right: Spacing.md,
+    top: AdminTheme.spacing.md,
+    right: AdminTheme.spacing.md,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.md,
     paddingVertical: 6,
     borderRadius: 30,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   stockStatusText: {
     fontSize: 14,
@@ -657,14 +619,14 @@ const styles = {
   // Stats Grid - Simplified
   statsGrid: {
     flexDirection: "row" as const,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.md,
   },
   statItem: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     alignItems: "center" as const,
     borderWidth: 1,
     borderColor: "#F3F4F6",
@@ -680,7 +642,7 @@ const styles = {
     borderRadius: 14,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   statLabel: {
     fontSize: 11,
@@ -699,10 +661,11 @@ const styles = {
 
   // Info Card
   infoCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+    padding: AdminTheme.spacing.lg,
+    marginBottom: AdminTheme.spacing.md,
     borderWidth: 1,
     borderColor: "#F3F4F6",
     shadowColor: "#000",
@@ -714,8 +677,8 @@ const styles = {
   cardHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.md,
   },
   cardIcon: {
     width: 36,
@@ -733,7 +696,7 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -741,7 +704,7 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -749,12 +712,12 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
   },
   infoLabelContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   infoLabel: {
     fontSize: 13,
@@ -766,16 +729,17 @@ const styles = {
     fontWeight: "500" as const,
   },
   sourceBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 20,
     gap: 4,
   },
   sourceBadgeText: {
     fontSize: 12,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   dateContainer: {
@@ -791,10 +755,11 @@ const styles = {
 
   // Metadata Card
   metadataCard: {
+    ...cardSurface,
     backgroundColor: "#F9FAFB",
     borderRadius: 20,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+    padding: AdminTheme.spacing.lg,
+    marginBottom: AdminTheme.spacing.md,
     borderWidth: 1,
     borderColor: "#F3F4F6",
   },
@@ -807,7 +772,7 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -823,8 +788,9 @@ const styles = {
 
   // Loading State
   loadingCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.xl,
     borderRadius: 24,
     alignItems: "center" as const,
     justifyContent: "center" as const,
@@ -837,7 +803,7 @@ const styles = {
     elevation: 4,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 15,
     color: "#6B7280",
     fontWeight: "500" as const,
@@ -848,7 +814,7 @@ const styles = {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   errorIconContainer: {
     width: 100,
@@ -857,34 +823,34 @@ const styles = {
     backgroundColor: "#FEF2F2",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
     color: "#EF4444",
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
     letterSpacing: -0.5,
   },
   errorMessage: {
     fontSize: 14,
     color: "#6B7280",
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 20,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   retryGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
     borderRadius: 16,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },

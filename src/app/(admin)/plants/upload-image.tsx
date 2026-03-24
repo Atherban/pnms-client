@@ -10,10 +10,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Button } from "../../../components";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { UploadService } from "../../../services/upload.service";
-import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 
 export default function UploadPlantTypeImage() {
@@ -74,12 +76,19 @@ export default function UploadPlantTypeImage() {
   };
 
   return (
-    <View style={{ padding: Spacing.lg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: AdminTheme.colors.background }} edges={["left", "right"]}>
+      <StitchHeader
+        title="Upload Plant Image"
+        subtitle="Add or replace plant type image"
+        onBackPress={() => router.back()}
+      />
+      <View style={{ padding: AdminTheme.spacing.lg }}>
       <Text
         style={{
           fontSize: 18,
           fontWeight: "600",
-          marginBottom: Spacing.lg,
+          marginBottom: AdminTheme.spacing.lg,
+          color: AdminTheme.colors.text,
         }}
       >
         Upload Plant Type Image
@@ -91,8 +100,8 @@ export default function UploadPlantTypeImage() {
           style={{
             width: "100%",
             height: 200,
-            borderRadius: 8,
-            marginBottom: Spacing.md,
+            borderRadius: AdminTheme.radius.md,
+            marginBottom: AdminTheme.spacing.md,
           }}
           resizeMode="cover"
         />
@@ -101,19 +110,19 @@ export default function UploadPlantTypeImage() {
           style={{
             height: 200,
             borderWidth: 1,
-            borderColor: Colors.border,
-            borderRadius: 8,
+            borderColor: AdminTheme.colors.borderSoft,
+            borderRadius: AdminTheme.radius.md,
             justifyContent: "center",
             alignItems: "center",
-            marginBottom: Spacing.md,
+            marginBottom: AdminTheme.spacing.md,
           }}
         >
-          <Text style={{ color: Colors.textSecondary }}>No image selected</Text>
+          <Text style={{ color: AdminTheme.colors.textMuted }}>No image selected</Text>
         </View>
       )}
 
-      <Pressable onPress={pickImage} style={{ marginBottom: Spacing.md }}>
-        <Text style={{ color: Colors.primary, fontWeight: "600" }}>
+      <Pressable onPress={pickImage} style={{ marginBottom: AdminTheme.spacing.md }}>
+        <Text style={{ color: AdminTheme.colors.primary, fontWeight: "600" }}>
           Choose Image
         </Text>
       </Pressable>
@@ -125,8 +134,9 @@ export default function UploadPlantTypeImage() {
       />
 
       {mutation.isPending && (
-        <ActivityIndicator style={{ marginTop: Spacing.md }} />
+        <ActivityIndicator style={{ marginTop: AdminTheme.spacing.md }} color={AdminTheme.colors.primary} />
       )}
     </View>
+    </SafeAreaView>
   );
 }

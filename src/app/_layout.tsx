@@ -37,7 +37,7 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <StatusBar
             style="light"
-            backgroundColor={Colors.primary}
+            backgroundColor={Colors.primaryDark}
             translucent={false}
             animated
           />

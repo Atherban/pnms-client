@@ -1,9 +1,14 @@
 export interface SaleItem {
   _id?: string;
   inventoryId?: string;
+  inventoryLabel?: string;
+  plantTypeName?: string;
+  plantCategory?: string;
+  plantVariety?: string;
+  plantImage?: string;
   inventory?: {
     _id: string;
-    plantType?: { _id: string; name: string };
+    plantType?: { _id: string; name: string; category?: string; variety?: string; images?: any[] };
   };
   quantity: number;
   priceAtSale?: number;

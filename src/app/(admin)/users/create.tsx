@@ -13,11 +13,16 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchCard from "../../../components/common/StitchCard";
+import StitchSectionHeader from "../../../components/common/StitchSectionHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { UserService } from "../../../services/user.service";
 import { useAuthStore } from "../../../stores/auth.store";
-import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 import { isValidIndianUserPhone, normalizeIndianPhone } from "../../../utils/phone";
+import { Colors } from "@/src/theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -147,31 +152,14 @@ export default function CreateUser() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            router.back();
-          }}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Create New User</Text>
-          <Text style={styles.subtitle}>Add a new team member</Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </LinearGradient>
+      <StitchHeader
+        title="Create New User"
+        subtitle="Add a new team member"
+        onBackPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.back();
+        }}
+      />
 
       {/* Scrollable Content */}
       <ScrollView
@@ -179,34 +167,43 @@ export default function CreateUser() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
+        <StitchCard style={styles.heroCard}>
+          <View style={styles.heroIcon}>
+            <MaterialIcons name="person-add-alt-1" size={22} color={AdminTheme.colors.primary} />
+          </View>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroTitle}>Create a user with a clear access level</Text>
+            <Text style={styles.heroSubtitle}>
+              Keep identity, security, and permissions aligned with the updated admin experience.
+            </Text>
+          </View>
+        </StitchCard>
+
         {/* Form Card */}
         <View style={styles.formCard}>
           {/* User Information Section */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons name="person-add" size={22} color={Colors.text} />
-              <Text style={styles.sectionTitle}>User Information</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Enter the details for the new user account.
-            </Text>
+            <StitchSectionHeader
+              title="User Information"
+              subtitle="Enter the primary identity and contact details for this account."
+            />
 
             {/* Name Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
-                <MaterialIcons name="badge" size={18} color={Colors.text} />
+                <MaterialIcons name="badge" size={18} color={AdminTheme.colors.text} />
                 <Text style={styles.inputLabelText}>Full Name *</Text>
               </View>
               <TextInput
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter full name"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 style={styles.input}
               />
               {!name.trim() && (
                 <View style={styles.validationError}>
-                  <MaterialIcons name="error" size={14} color={Colors.error} />
+                  <MaterialIcons name="error" size={14} color={AdminTheme.colors.danger} />
                   <Text style={styles.validationText}>
                     Full name is required
                   </Text>
@@ -217,14 +214,14 @@ export default function CreateUser() {
             {/* Phone Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
-                <MaterialIcons name="phone" size={18} color={Colors.text} />
+                <MaterialIcons name="phone" size={18} color={AdminTheme.colors.text} />
                 <Text style={styles.inputLabelText}>Phone Number *</Text>
               </View>
               <TextInput
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
                 placeholder="9876543210 / +919876543210"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 keyboardType="phone-pad"
                 style={[
                   styles.input,
@@ -235,7 +232,7 @@ export default function CreateUser() {
               />
               {!phoneNumber.trim() ? (
                 <View style={styles.validationError}>
-                  <MaterialIcons name="error" size={14} color={Colors.error} />
+                  <MaterialIcons name="error" size={14} color={AdminTheme.colors.danger} />
                   <Text style={styles.validationText}>
                     Phone number is required
                   </Text>
@@ -246,7 +243,7 @@ export default function CreateUser() {
                   <MaterialIcons
                     name="error"
                     size={14}
-                    color={Colors.warning}
+                    color={AdminTheme.colors.warning}
                   />
                   <Text style={styles.validationText}>
                     Use 9876543210, 919876543210, or +919876543210
@@ -258,14 +255,14 @@ export default function CreateUser() {
             {/* Email Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
-                <MaterialIcons name="email" size={18} color={Colors.text} />
+                <MaterialIcons name="email" size={18} color={AdminTheme.colors.text} />
                 <Text style={styles.inputLabelText}>Email Address (Optional)</Text>
               </View>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
                 placeholder="user@example.com"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 style={[
@@ -280,7 +277,7 @@ export default function CreateUser() {
             {/* Password Field */}
             <View style={styles.inputContainer}>
               <View style={styles.inputLabel}>
-                <MaterialIcons name="lock" size={18} color={Colors.text} />
+                <MaterialIcons name="lock" size={18} color={AdminTheme.colors.text} />
                 <Text style={styles.inputLabelText}>Password *</Text>
               </View>
               <View style={styles.passwordContainer}>
@@ -288,7 +285,7 @@ export default function CreateUser() {
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Enter password"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                   secureTextEntry={!isPasswordVisible}
                   style={[
                     styles.passwordInput,
@@ -303,14 +300,14 @@ export default function CreateUser() {
                   <MaterialIcons
                     name={isPasswordVisible ? "visibility-off" : "visibility"}
                     size={20}
-                    color={Colors.textSecondary}
+                    color={AdminTheme.colors.textMuted}
                   />
                 </Pressable>
               </View>
 
               {!password.trim() ? (
                 <View style={styles.validationError}>
-                  <MaterialIcons name="error" size={14} color={Colors.error} />
+                  <MaterialIcons name="error" size={14} color={AdminTheme.colors.danger} />
                   <Text style={styles.validationText}>
                     Password is required
                   </Text>
@@ -320,7 +317,7 @@ export default function CreateUser() {
                   <MaterialIcons
                     name="error"
                     size={14}
-                    color={Colors.warning}
+                    color={AdminTheme.colors.warning}
                   />
                   <Text style={styles.validationText}>
                     Password must be at least 5 characters
@@ -331,7 +328,7 @@ export default function CreateUser() {
                   <MaterialIcons
                     name="check-circle"
                     size={14}
-                    color={Colors.success}
+                    color={AdminTheme.colors.success}
                   />
                   <Text style={styles.validationSuccessText}>
                     Password strength: {password.length < 8 ? "Good" : "Strong"}
@@ -368,17 +365,10 @@ export default function CreateUser() {
 
           {/* Role Selection Section */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialIcons
-                name="admin-panel-settings"
-                size={22}
-                color={Colors.text}
-              />
-              <Text style={styles.sectionTitle}>User Role</Text>
-            </View>
-            <Text style={styles.sectionDescription}>
-              Select the appropriate access level for this user.
-            </Text>
+            <StitchSectionHeader
+              title="User Role"
+              subtitle="Choose the role that matches what this person should be allowed to do."
+            />
 
             <View style={styles.roleGrid}>
               {(["NURSERY_ADMIN", "STAFF", "CUSTOMER"] as const).map((roleType) => (
@@ -398,16 +388,16 @@ export default function CreateUser() {
                     colors={
                       role === roleType
                         ? roleType === "NURSERY_ADMIN"
-                          ? [Colors.error, "#F87171"]
+                          ? [AdminTheme.colors.danger, "#F87171"]
                           : roleType === "STAFF"
                             ? [
-                                Colors.primary,
-                                Colors.primaryLight || Colors.primary,
+                                AdminTheme.colors.primary,
+                                AdminTheme.colors.primaryLight || AdminTheme.colors.primary,
                               ]
-                            : [Colors.success, "#34D399"]
+                            : [AdminTheme.colors.success, "#34D399"]
                         : [
-                            Colors.surface,
-                            Colors.surfaceLight || Colors.surface,
+                            AdminTheme.colors.surface,
+                            AdminTheme.colors.surfaceLight || AdminTheme.colors.surface,
                           ]
                     }
                     style={styles.roleGradient}
@@ -425,8 +415,8 @@ export default function CreateUser() {
                         size={24}
                         color={
                           role === roleType
-                            ? Colors.white
-                            : Colors.textSecondary
+                            ? AdminTheme.colors.surface
+                            : AdminTheme.colors.textMuted
                         }
                       />
                     </View>
@@ -454,7 +444,7 @@ export default function CreateUser() {
                         <MaterialIcons
                           name="check-circle"
                           size={16}
-                          color={Colors.white}
+                          color={AdminTheme.colors.surface}
                         />
                       </View>
                     )}
@@ -469,7 +459,7 @@ export default function CreateUser() {
                 <MaterialIcons
                   name="info"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.permissionsTitle}>
                   {role} Permissions Summary
@@ -483,7 +473,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>
                         Full system access
@@ -493,7 +483,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>User management</Text>
                     </View>
@@ -501,7 +491,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>
                         All inventory operations
@@ -511,7 +501,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>
                         Reports and analytics
@@ -526,7 +516,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>Process sales</Text>
                     </View>
@@ -534,7 +524,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>
                         Manage inventory
@@ -544,7 +534,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="block"
                         size={14}
-                        color={Colors.textTertiary}
+                        color={AdminTheme.colors.textSoft}
                       />
                       <Text style={styles.permissionText}>
                         No user management
@@ -554,7 +544,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>View reports</Text>
                     </View>
@@ -567,7 +557,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>View inventory</Text>
                     </View>
@@ -575,7 +565,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="check"
                         size={14}
-                        color={Colors.success}
+                        color={AdminTheme.colors.success}
                       />
                       <Text style={styles.permissionText}>View sales data</Text>
                     </View>
@@ -583,7 +573,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="block"
                         size={14}
-                        color={Colors.textTertiary}
+                        color={AdminTheme.colors.textSoft}
                       />
                       <Text style={styles.permissionText}>
                         No modifications
@@ -593,7 +583,7 @@ export default function CreateUser() {
                       <MaterialIcons
                         name="block"
                         size={14}
-                        color={Colors.textTertiary}
+                        color={AdminTheme.colors.textSoft}
                       />
                       <Text style={styles.permissionText}>
                         No user management
@@ -620,7 +610,7 @@ export default function CreateUser() {
               <MaterialIcons
                 name="close"
                 size={20}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
@@ -637,9 +627,8 @@ export default function CreateUser() {
             >
               <LinearGradient
                 colors={
-                  !isFormValid()
-                    ? [Colors.border, Colors.borderLight]
-                    : [Colors.success, "#34D399"]
+
+                     [AdminTheme.colors.success, "#34D399"]
                 }
                 style={styles.createGradient}
                 start={{ x: 0, y: 0 }}
@@ -650,7 +639,7 @@ export default function CreateUser() {
                     <MaterialIcons
                       name="hourglass-empty"
                       size={22}
-                      color={Colors.white}
+                      color={AdminTheme.colors.surface}
                     />
                     <Text style={styles.createButtonText}>Creating...</Text>
                   </>
@@ -659,7 +648,7 @@ export default function CreateUser() {
                     <MaterialIcons
                       name="person-add"
                       size={22}
-                      color={Colors.white}
+                      color={AdminTheme.colors.surface}
                     />
                     <Text style={styles.createButtonText}>Create User</Text>
                   </>
@@ -681,7 +670,7 @@ export default function CreateUser() {
           <MaterialIcons
             name="security"
             size={16}
-            color={Colors.textSecondary}
+            color={AdminTheme.colors.textMuted}
           />
           <Text style={styles.securityText}>
             User credentials will be encrypted and stored securely.
@@ -697,14 +686,14 @@ export default function CreateUser() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.lg,
+    paddingBottom: AdminTheme.spacing.lg,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
@@ -722,12 +711,12 @@ const styles = {
   },
   headerText: {
     flex: 1,
-    marginLeft: Spacing.md,
+    marginLeft: AdminTheme.spacing.md,
   },
   title: {
     fontSize: 24,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     marginBottom: 2,
   },
   subtitle: {
@@ -739,86 +728,89 @@ const styles = {
     width: 44,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.lg,
+  },
+  heroCard: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: AdminTheme.spacing.md,
+  },
+  heroIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
+  },
+  heroContent: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.text,
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: AdminTheme.colors.textMuted,
   },
   formCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-    marginBottom: Spacing.lg,
+    padding: AdminTheme.spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
   },
   section: {
-    marginBottom: Spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.lg,
-    lineHeight: 20,
+    marginBottom: AdminTheme.spacing.xl,
   },
   inputContainer: {
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   inputLabel: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   inputLabelText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.surface,
   },
   inputError: {
-    borderColor: Colors.warning,
-    backgroundColor: Colors.warning + "10",
+    borderColor: AdminTheme.colors.warning,
+    backgroundColor: AdminTheme.colors.warning + "10",
   },
   passwordContainer: {
     position: "relative" as const,
   },
   passwordInput: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    padding: Spacing.md,
-    paddingRight: Spacing.xl,
+    padding: AdminTheme.spacing.md,
+    paddingRight: AdminTheme.spacing.xl,
     fontSize: 16,
-    color: Colors.text,
-    backgroundColor: Colors.surface,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.surface,
   },
   passwordToggle: {
     position: "absolute" as const,
-    right: Spacing.md,
+    right: AdminTheme.spacing.md,
     top: 0,
     bottom: 0,
     justifyContent: "center" as const,
@@ -827,70 +819,70 @@ const styles = {
   validationError: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.error + "10",
-    padding: Spacing.sm,
+    backgroundColor: AdminTheme.colors.danger + "10",
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.xs,
   },
   validationText: {
     fontSize: 13,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
     fontWeight: "500" as const,
     flex: 1,
   },
   validationSuccess: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.success + "10",
-    padding: Spacing.sm,
+    backgroundColor: AdminTheme.colors.success + "10",
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
-    gap: Spacing.sm,
-    marginTop: Spacing.xs,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.xs,
   },
   validationSuccessText: {
     fontSize: 13,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
     fontWeight: "500" as const,
     flex: 1,
   },
   strengthIndicator: {
     height: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: AdminTheme.colors.border,
     borderRadius: 2,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
     position: "relative" as const,
   },
   strengthBar: {
     position: "absolute" as const,
     height: "100%",
     borderRadius: 2,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
   },
   strengthBarMedium: {
-    backgroundColor: Colors.warning,
+    backgroundColor: AdminTheme.colors.warning,
   },
   strengthBarStrong: {
-    backgroundColor: Colors.success,
+    backgroundColor: AdminTheme.colors.success,
   },
   strengthText: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     textAlign: "right" as const,
     marginTop: 2,
   },
   roleGrid: {
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
+    gap: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.lg,
   },
   roleCard: {
     borderRadius: 16,
     overflow: "hidden" as const,
     borderWidth: 2,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.border,
   },
   roleCardSelected: {
-    shadowColor: Colors.primary,
+    shadowColor: AdminTheme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -900,7 +892,7 @@ const styles = {
     transform: [{ scale: 0.98 }],
   },
   roleGradient: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderRadius: 14,
     position: "relative" as const,
   },
@@ -911,23 +903,23 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   roleIconContainerUnselected: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.border,
   },
   roleTitle: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.xs,
   },
   roleTitleSelected: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   roleDescription: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     lineHeight: 18,
   },
   roleDescriptionSelected: {
@@ -935,79 +927,81 @@ const styles = {
   },
   roleSelectedIndicator: {
     position: "absolute" as const,
-    top: Spacing.md,
-    right: Spacing.md,
+    top: AdminTheme.spacing.md,
+    right: AdminTheme.spacing.md,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     borderRadius: 12,
     padding: 4,
   },
   permissionsCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   permissionsHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   permissionsTitle: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   permissionsList: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   permissionItem: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   permissionText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   actionsContainer: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
+    gap: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   cancelButton: {
     flex: 1,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
-    padding: Spacing.lg,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.lg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: Spacing.sm,
+    borderColor: AdminTheme.colors.border,
+    gap: AdminTheme.spacing.sm,
   },
   cancelButtonPressed: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.surface,
     transform: [{ scale: 0.98 }],
   },
   cancelButtonText: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "600" as const,
   },
   createButton: {
+    backgroundColor: "red",
     flex: 2,
     borderRadius: 16,
     overflow: "hidden" as const,
-    shadowColor: Colors.success,
+    shadowColor: AdminTheme.colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
   createButtonDisabled: {
+    opacity: 0.6,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1021,35 +1015,35 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.lg,
-    gap: Spacing.sm,
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.sm,
   },
   createButtonText: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: Colors.surface,
   },
   hintText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
     fontStyle: "italic" as const,
   },
   securityNotice: {
     flexDirection: "row" as const,
     alignItems: "flex-start" as const,
-    backgroundColor: Colors.surface,
-    padding: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.md,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing.md,
-    marginBottom: 3 * Spacing.xl,
+    borderColor: AdminTheme.colors.border,
+    gap: AdminTheme.spacing.md,
+    marginBottom: 3 * AdminTheme.spacing.xl,
   },
   securityText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     lineHeight: 16,
   },
 };

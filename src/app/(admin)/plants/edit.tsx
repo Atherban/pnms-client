@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -15,8 +14,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { PlantTypeService } from "../../../services/plant-type.service";
-import { Colors, Spacing } from "../../../theme";
 import type { PlantTypeGrowthStage } from "../../../types/plant.types";
 import { formatErrorMessage } from "../../../utils/error";
 
@@ -304,22 +304,14 @@ export default function EditPlantType() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.headerGradient}
-        >
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Edit Plant Type</Text>
-            <Text style={styles.subtitle}>Loading plant type details...</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </LinearGradient>
+        <StitchHeader
+          title="Edit Plant Type"
+          subtitle="Loading plant type details..."
+          onBackPress={() => router.back()}
+        />
 
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading plant type data...</Text>
         </View>
       </SafeAreaView>
@@ -329,22 +321,14 @@ export default function EditPlantType() {
   if (error || !plantType) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight]}
-          style={styles.headerGradient}
-        >
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Edit Plant Type</Text>
-            <Text style={styles.subtitle}>Unable to load data</Text>
-          </View>
-          <View style={styles.headerSpacer} />
-        </LinearGradient>
+        <StitchHeader
+          title="Edit Plant Type"
+          subtitle="Unable to load data"
+          onBackPress={() => router.back()}
+        />
 
         <View style={styles.errorContainer}>
-          <MaterialIcons name="error-outline" size={64} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={64} color={AdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load Plant Type</Text>
           <Text style={styles.errorMessage}>
             Unable to fetch plant type details. Please try again.
@@ -434,27 +418,11 @@ export default function EditPlantType() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Edit Plant Type</Text>
-          <Text style={styles.subtitle}>Update plant type details</Text>
-        </View>
-        <View style={styles.headerSpacer} />
-      </LinearGradient>
+      <StitchHeader
+        title="Edit Plant Type"
+        subtitle="Update plant type details"
+        onBackPress={() => router.back()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -463,28 +431,28 @@ export default function EditPlantType() {
         <View style={styles.formCard}>
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="label" size={18} color={Colors.text} />
+              <MaterialIcons name="label" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Plant Type Name *</Text>
             </View>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="Edit plant type name"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               style={styles.input}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="category" size={18} color={Colors.text} />
+              <MaterialIcons name="category" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Category *</Text>
             </View>
             <TextInput
               value={category}
               onChangeText={setCategory}
               placeholder="Edit category"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               autoCapitalize="characters"
               style={styles.input}
             />
@@ -492,28 +460,28 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="spa" size={18} color={Colors.text} />
+              <MaterialIcons name="spa" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Variety</Text>
             </View>
             <TextInput
               value={variety}
               onChangeText={setVariety}
               placeholder="Edit variety"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               style={styles.input}
             />
           </View>
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="schedule" size={18} color={Colors.text} />
+              <MaterialIcons name="schedule" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Lifecycle Days</Text>
             </View>
             <TextInput
               value={lifecycleDays}
               onChangeText={setLifecycleDays}
               placeholder="Edit lifecycle days"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               keyboardType="numeric"
               style={styles.input}
             />
@@ -521,14 +489,14 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="attach-money" size={18} color={Colors.text} />
+              <MaterialIcons name="attach-money" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Selling Price *</Text>
             </View>
             <TextInput
               value={sellingPrice}
               onChangeText={setSellingPrice}
               placeholder="Edit selling price"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               keyboardType="numeric"
               style={styles.input}
             />
@@ -536,14 +504,14 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="warning" size={18} color={Colors.text} />
+              <MaterialIcons name="warning" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Min Stock Level</Text>
             </View>
             <TextInput
               value={minStockLevel}
               onChangeText={setMinStockLevel}
               placeholder="Edit min stock level"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               keyboardType="numeric"
               style={styles.input}
             />
@@ -551,14 +519,14 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="paid" size={18} color={Colors.text} />
+              <MaterialIcons name="paid" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Default Cost Price</Text>
             </View>
             <TextInput
               value={defaultCostPrice}
               onChangeText={setDefaultCostPrice}
               placeholder="Edit default cost price"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               keyboardType="numeric"
               style={styles.input}
             />
@@ -566,14 +534,14 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="grain" size={18} color={Colors.text} />
+              <MaterialIcons name="grain" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Expected Seed Qty / Batch</Text>
             </View>
             <TextInput
               value={expectedSeedQtyPerBatch}
               onChangeText={setExpectedSeedQtyPerBatch}
               placeholder="Edit expected seed quantity"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               keyboardType="numeric"
               style={styles.input}
             />
@@ -581,7 +549,7 @@ export default function EditPlantType() {
               value={expectedSeedUnit}
               onChangeText={setExpectedSeedUnit}
               placeholder="Edit expected seed unit"
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={AdminTheme.colors.textSoft}
               style={[styles.input, { marginTop: 8 }]}
             />
             {seedSowingGuidance ? (
@@ -595,7 +563,7 @@ export default function EditPlantType() {
 
           <View style={styles.inputContainer}>
             <View style={styles.inputLabel}>
-              <MaterialIcons name="timeline" size={18} color={Colors.text} />
+              <MaterialIcons name="timeline" size={18} color={AdminTheme.colors.text} />
               <Text style={styles.inputLabelText}>Growth Stages (Optional)</Text>
             </View>
             <Text style={styles.growthStageHint}>
@@ -615,7 +583,7 @@ export default function EditPlantType() {
                           parsedGrowthStages === null && styles.inputError,
                         ]}
                       >
-                        <MaterialIcons name="event" size={15} color={Colors.primary} />
+                        <MaterialIcons name="event" size={15} color={AdminTheme.colors.primary} />
                         <Text
                           style={[
                             styles.growthStageDayButtonText,
@@ -630,7 +598,7 @@ export default function EditPlantType() {
                           onPress={() => handleGrowthStageShift(entry.stage, "dayFrom", -1)}
                           style={styles.growthStageAdjustButton}
                         >
-                          <MaterialIcons name="remove" size={14} color={Colors.textSecondary} />
+                          <MaterialIcons name="remove" size={14} color={AdminTheme.colors.textMuted} />
                         </Pressable>
                         <Pressable
                           onPress={() => handleGrowthStageClear(entry.stage, "dayFrom")}
@@ -642,7 +610,7 @@ export default function EditPlantType() {
                           onPress={() => handleGrowthStageShift(entry.stage, "dayFrom", 1)}
                           style={styles.growthStageAdjustButton}
                         >
-                          <MaterialIcons name="add" size={14} color={Colors.textSecondary} />
+                          <MaterialIcons name="add" size={14} color={AdminTheme.colors.textMuted} />
                         </Pressable>
                       </View>
                     </View>
@@ -655,7 +623,7 @@ export default function EditPlantType() {
                           parsedGrowthStages === null && styles.inputError,
                         ]}
                       >
-                        <MaterialIcons name="event" size={15} color={Colors.primary} />
+                        <MaterialIcons name="event" size={15} color={AdminTheme.colors.primary} />
                         <Text
                           style={[
                             styles.growthStageDayButtonText,
@@ -670,7 +638,7 @@ export default function EditPlantType() {
                           onPress={() => handleGrowthStageShift(entry.stage, "dayTo", -1)}
                           style={styles.growthStageAdjustButton}
                         >
-                          <MaterialIcons name="remove" size={14} color={Colors.textSecondary} />
+                          <MaterialIcons name="remove" size={14} color={AdminTheme.colors.textMuted} />
                         </Pressable>
                         <Pressable
                           onPress={() => handleGrowthStageClear(entry.stage, "dayTo")}
@@ -682,7 +650,7 @@ export default function EditPlantType() {
                           onPress={() => handleGrowthStageShift(entry.stage, "dayTo", 1)}
                           style={styles.growthStageAdjustButton}
                         >
-                          <MaterialIcons name="add" size={14} color={Colors.textSecondary} />
+                          <MaterialIcons name="add" size={14} color={AdminTheme.colors.textMuted} />
                         </Pressable>
                       </View>
                     </View>
@@ -711,15 +679,21 @@ export default function EditPlantType() {
                 !isFormValid && styles.saveButtonDisabled,
               ]}
             >
-              <LinearGradient
-                colors={[Colors.success, Colors.primary]}
-                style={styles.saveGradient}
+              <View
+                style={[
+                  styles.saveGradient,
+                  {
+                    backgroundColor: !isFormValid
+                      ? AdminTheme.colors.border
+                      : AdminTheme.colors.primary,
+                  },
+                ]}
               >
-                <MaterialIcons name="check" size={20} color={Colors.white} />
+                <MaterialIcons name="check" size={20} color={AdminTheme.colors.surface} />
                 <Text style={styles.saveButtonText}>
                   {mutation.isPending ? "Saving..." : "Save Changes"}
                 </Text>
-              </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </View>
@@ -788,26 +762,26 @@ export default function EditPlantType() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerGradient: {
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: AdminTheme.spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.white + "20",
+    backgroundColor: AdminTheme.colors.surface + "20",
     justifyContent: "center" as const,
     alignItems: "center" as const,
   },
   backButtonPressed: {
-    backgroundColor: Colors.white + "35",
+    backgroundColor: AdminTheme.colors.surface + "35",
     transform: [{ scale: 0.96 }],
   },
   headerText: {
@@ -819,99 +793,99 @@ const styles = {
   title: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   subtitle: {
     fontSize: 13,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     opacity: 0.9,
   },
   scrollContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     paddingBottom: 100,
   },
   formCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderLight,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 2,
   },
   inputContainer: {
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   inputLabel: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.xs,
-    marginBottom: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
+    marginBottom: AdminTheme.spacing.xs,
   },
   inputLabelText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 10,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     fontSize: 15,
-    color: Colors.text,
-    backgroundColor: Colors.background,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.background,
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: AdminTheme.colors.danger,
   },
   validationText: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
     fontSize: 12,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   hintText: {
     marginTop: 6,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontSize: 12,
     lineHeight: 16,
   },
   guidanceText: {
     marginTop: 6,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
     fontSize: 12,
     fontWeight: "600" as const,
     lineHeight: 16,
   },
   growthStageHint: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.textMuted,
+    marginBottom: AdminTheme.spacing.xs,
   },
   growthStagesCard: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 10,
-    backgroundColor: Colors.background,
-    padding: Spacing.sm,
-    gap: Spacing.sm,
+    backgroundColor: AdminTheme.colors.background,
+    padding: AdminTheme.spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   growthStageRow: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   growthStageName: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "700" as const,
     letterSpacing: 0.5,
   },
   growthStageInputs: {
     flexDirection: "row" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   growthStageFieldGroup: {
     flex: 1,
@@ -919,7 +893,7 @@ const styles = {
   },
   growthStageFieldLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "600" as const,
   },
   growthStageDayButton: {
@@ -927,71 +901,71 @@ const styles = {
     alignItems: "center" as const,
     gap: 6,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 10,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surface,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
   },
   growthStageDayButtonText: {
     fontSize: 14,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "600" as const,
   },
   growthStageDayButtonPlaceholder: {
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "400" as const,
   },
   growthStageAdjustRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   growthStageAdjustButton: {
     width: 28,
     height: 28,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   growthStageClearButton: {
     flex: 1,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderLight,
     paddingVertical: 5,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   growthStageClearButtonText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "600" as const,
   },
   actionsContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.md,
-    marginTop: Spacing.md,
+    gap: AdminTheme.spacing.md,
+    marginTop: AdminTheme.spacing.md,
   },
   cancelButton: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   cancelButtonText: {
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "600" as const,
   },
   saveButton: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 22,
     overflow: "hidden" as const,
   },
   saveButtonDisabled: {
@@ -1001,11 +975,11 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
+    paddingVertical: 12,
+    gap: AdminTheme.spacing.xs,
   },
   saveButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },
@@ -1016,38 +990,38 @@ const styles = {
     paddingBottom: 80,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginTop: Spacing.md,
+    color: AdminTheme.colors.text,
+    marginTop: AdminTheme.spacing.md,
   },
   errorMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.lg,
+    marginTop: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.lg,
   },
   retryButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.sm,
     borderRadius: 12,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontWeight: "600" as const,
   },
   modalBackdrop: {
@@ -1056,8 +1030,8 @@ const styles = {
     justifyContent: "flex-end" as const,
   },
   sheet: {
-    backgroundColor: Colors.surface,
-    padding: Spacing.lg,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.lg,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%" as const,
@@ -1065,39 +1039,39 @@ const styles = {
   sheetTitle: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.xs,
   },
   sheetSubTitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.textMuted,
+    marginBottom: AdminTheme.spacing.sm,
   },
   quickDayRow: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
+    gap: AdminTheme.spacing.xs,
+    marginBottom: AdminTheme.spacing.sm,
   },
   quickDayChip: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 999,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 6,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   quickDayChipSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + "12",
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: AdminTheme.colors.primary + "12",
   },
   quickDayChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "600" as const,
   },
   quickDayChipTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   dayGridScroll: {
     maxHeight: 300,
@@ -1105,29 +1079,29 @@ const styles = {
   dayGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.xs,
-    paddingBottom: Spacing.sm,
+    gap: AdminTheme.spacing.xs,
+    paddingBottom: AdminTheme.spacing.sm,
   },
   dayCell: {
     width: 40,
     height: 36,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 8,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   dayCellSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + "15",
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: AdminTheme.colors.primary + "15",
   },
   dayCellText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "600" as const,
   },
   dayCellTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
 };

@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -25,8 +26,8 @@ import {
   BannerPayload,
   BannerService,
 } from "../../services/banner.service";
-import { Colors } from "../../theme";
-import FixedHeader from "../common/FixedHeader";
+import SuperAdminHeader from "../super-admin/SuperAdminHeader";
+import { SuperAdminTheme } from "../super-admin/theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
 const STATUS_FILTERS = ["ALL", "ACTIVE", "INACTIVE"] as const;
@@ -181,50 +182,18 @@ interface StatsCardProps {
 }
 
 const StatsCard = ({ total, active, inactive }: StatsCardProps) => (
-  <View style={styles.statsCard}>
-    <View style={styles.statsRow}>
-      <View style={styles.statItem}>
-        <View
-          style={[styles.statIcon, { backgroundColor: `${Colors.primary}10` }]}
-        >
-          <MaterialIcons name="campaign" size={16} color={Colors.primary} />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{total}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-      </View>
-
-      <View style={styles.statDivider} />
-
-      <View style={styles.statItem}>
-        <View
-          style={[styles.statIcon, { backgroundColor: `${Colors.success}10` }]}
-        >
-          <MaterialIcons name="check-circle" size={16} color={Colors.success} />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{active}</Text>
-          <Text style={styles.statLabel}>Active</Text>
-        </View>
-      </View>
-
-      <View style={styles.statDivider} />
-
-      <View style={styles.statItem}>
-        <View
-          style={[
-            styles.statIcon,
-            { backgroundColor: `${Colors.textSecondary}10` },
-          ]}
-        >
-          <MaterialIcons name="block" size={16} color={Colors.textSecondary} />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{inactive}</Text>
-          <Text style={styles.statLabel}>Inactive</Text>
-        </View>
-      </View>
+  <View style={styles.statsRow}>
+    <View style={styles.statsPill}>
+      <Text style={styles.statsLabel}>Total</Text>
+      <Text style={styles.statsValue}>{total}</Text>
+    </View>
+    <View style={styles.statsPill}>
+      <Text style={[styles.statsLabel, { color: SuperAdminTheme.colors.success }]}>Active</Text>
+      <Text style={[styles.statsValue, { color: SuperAdminTheme.colors.success }]}>{active}</Text>
+    </View>
+    <View style={styles.statsPill}>
+      <Text style={styles.statsLabel}>Inactive</Text>
+      <Text style={styles.statsValue}>{inactive}</Text>
     </View>
   </View>
 );
@@ -323,12 +292,12 @@ const BannerCard = ({ banner, onPress, onDelete }: BannerCardProps) => {
 
   const getStatusBadge = () => {
     if (isExpired)
-      return { label: "Expired", color: Colors.error, bg: "#FEF2F2" };
+      return { label: "Expired", color: SuperAdminTheme.colors.danger, bg: "#FEF2F2" };
     if (isScheduled)
-      return { label: "Scheduled", color: Colors.warning, bg: "#FFFBEB" };
+      return { label: "Scheduled", color: SuperAdminTheme.colors.warning, bg: "#FFFBEB" };
     if (isActive)
-      return { label: "Active", color: Colors.success, bg: "#ECFDF5" };
-    return { label: "Inactive", color: Colors.textSecondary, bg: "#F3F4F6" };
+      return { label: "Active", color: SuperAdminTheme.colors.success, bg: "#ECFDF5" };
+    return { label: "Inactive", color: SuperAdminTheme.colors.textMuted, bg: "#F3F4F6" };
   };
 
   const status = getStatusBadge();
@@ -341,77 +310,77 @@ const BannerCard = ({ banner, onPress, onDelete }: BannerCardProps) => {
       ]}
       onPress={onPress}
     >
-      {banner.imageUrl ? (
-        <Image
-          source={{ uri: banner.imageUrl }}
-          style={styles.bannerImage}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={styles.bannerImagePlaceholder}>
-          <MaterialIcons name="campaign" size={24} color="#D1D5DB" />
+      <View style={styles.bannerMedia}>
+        {banner.imageUrl ? (
+          <Image
+            source={{ uri: banner.imageUrl }}
+            style={styles.bannerImage}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={styles.bannerImagePlaceholder}>
+            <MaterialIcons name="image" size={28} color={SuperAdminTheme.colors.textSoft} />
+          </View>
+        )}
+        <View style={styles.bannerOverlay}>
+          <View style={[styles.bannerStatus, { backgroundColor: status.bg }]}>
+            <Text style={[styles.bannerStatusText, { color: status.color }]}>
+              {status.label}
+            </Text>
+          </View>
+          <View style={styles.bannerActions}>
+            <Pressable
+              style={styles.bannerIconBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                onPress();
+              }}
+            >
+              <MaterialIcons name="edit" size={16} color={SuperAdminTheme.colors.text} />
+            </Pressable>
+            <Pressable
+              style={styles.bannerIconBtn}
+              onPress={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <MaterialIcons name="delete" size={16} color={SuperAdminTheme.colors.danger} />
+            </Pressable>
+          </View>
         </View>
-      )}
+      </View>
 
       <View style={styles.bannerContent}>
-        <View style={styles.bannerHeader}>
-          <View style={styles.bannerTitleRow}>
-            <Text style={styles.bannerTitle} numberOfLines={1}>
-              {banner.title}
-            </Text>
-            <View style={[styles.bannerStatus, { backgroundColor: status.bg }]}>
-              <Text style={[styles.bannerStatusText, { color: status.color }]}>
-                {status.label}
-              </Text>
-            </View>
-          </View>
-
-          {banner.subtitle && (
-            <Text style={styles.bannerSubtitle} numberOfLines={2}>
-              {banner.subtitle}
-            </Text>
-          )}
+        <View style={styles.bannerTitleRow}>
+          <Text style={styles.bannerTitle} numberOfLines={1}>
+            {banner.title}
+          </Text>
+          <Text style={styles.priorityText}>PRIORITY: {banner.priority ?? 0}</Text>
         </View>
 
-        <View style={styles.bannerMeta}>
+        {banner.subtitle ? (
+          <Text style={styles.bannerSubtitle} numberOfLines={2}>
+            {banner.subtitle}
+          </Text>
+        ) : null}
+
+        {(banner.startAt || banner.endAt) && (
           <View style={styles.metaRow}>
-            <MaterialIcons name="priority-high" size={12} color="#9CA3AF" />
+            <MaterialIcons name="calendar-today" size={12} color={SuperAdminTheme.colors.textSoft} />
             <Text style={styles.metaText}>
-              Priority: {banner.priority ?? 0}
+              {banner.startAt ? formatDateTime(banner.startAt) : "No start"} →{" "}
+              {banner.endAt ? formatDateTime(banner.endAt) : "No end"}
             </Text>
           </View>
+        )}
 
-          {banner.cta && (
-            <View style={styles.metaRow}>
-              <MaterialIcons name="call-to-action" size={12} color="#9CA3AF" />
-              <Text style={styles.metaText}>CTA: {banner.cta}</Text>
-            </View>
-          )}
-
-          {(banner.startAt || banner.endAt) && (
-            <View style={styles.metaRow}>
-              <MaterialIcons name="date-range" size={12} color="#9CA3AF" />
-              <Text style={styles.metaText}>
-                {banner.startAt ? formatDateTime(banner.startAt) : "No start"} →{" "}
-                {banner.endAt ? formatDateTime(banner.endAt) : "No end"}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.deleteButton,
-            pressed && styles.deleteButtonPressed,
-          ]}
-          onPress={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <MaterialIcons name="delete-outline" size={14} color={Colors.error} />
-          <Text style={styles.deleteButtonText}>Delete</Text>
-        </Pressable>
+        {banner.cta && (
+          <View style={styles.metaRow}>
+            <MaterialIcons name="link" size={12} color={SuperAdminTheme.colors.textSoft} />
+            <Text style={[styles.metaText, styles.ctaText]}>CTA: {banner.cta}</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -459,7 +428,7 @@ const BannerFormModal = ({
               <MaterialIcons
                 name={editingId ? "edit" : "add-chart"}
                 size={20}
-                color={Colors.primary}
+                color={SuperAdminTheme.colors.primary}
               />
               <Text style={styles.modalTitle}>
                 {editingId ? "Edit Banner" : "Create New Banner"}
@@ -533,7 +502,7 @@ const BannerFormModal = ({
                   <LinearGradient
                     colors={
                       form.status === "ACTIVE"
-                        ? [Colors.success, "#059669"]
+                        ? [SuperAdminTheme.colors.success, "#059669"]
                         : ["#9CA3AF", "#6B7280"]
                     }
                     style={styles.statusGradient}
@@ -543,7 +512,7 @@ const BannerFormModal = ({
                     <MaterialIcons
                       name={form.status === "ACTIVE" ? "check-circle" : "block"}
                       size={14}
-                      color={Colors.white}
+                      color={SuperAdminTheme.colors.surface}
                     />
                     <Text style={styles.statusText}>{form.status}</Text>
                   </LinearGradient>
@@ -565,7 +534,7 @@ const BannerFormModal = ({
                   <MaterialIcons
                     name="calendar-today"
                     size={14}
-                    color={Colors.primary}
+                    color={SuperAdminTheme.colors.primary}
                   />
                   <Text
                     style={
@@ -591,7 +560,7 @@ const BannerFormModal = ({
                   <MaterialIcons
                     name="calendar-today"
                     size={14}
-                    color={Colors.primary}
+                    color={SuperAdminTheme.colors.primary}
                   />
                   <Text
                     style={
@@ -654,7 +623,7 @@ const BannerFormModal = ({
                   <MaterialIcons
                     name="photo-library"
                     size={18}
-                    color={Colors.primary}
+                    color={SuperAdminTheme.colors.primary}
                   />
                 </Pressable>
               </View>
@@ -681,7 +650,7 @@ const BannerFormModal = ({
                     })
                   }
                 >
-                  <MaterialIcons name="close" size={16} color={Colors.error} />
+                  <MaterialIcons name="close" size={16} color={SuperAdminTheme.colors.danger} />
                 </Pressable>
               </View>
             ) : null}
@@ -704,7 +673,7 @@ const BannerFormModal = ({
                         ]}
                       >
                         {isSelected ? (
-                          <MaterialIcons name="check" size={14} color={Colors.white} />
+                          <MaterialIcons name="check" size={14} color={SuperAdminTheme.colors.surface} />
                         ) : null}
                       </Pressable>
                     );
@@ -751,21 +720,21 @@ const BannerFormModal = ({
               >
                 <LinearGradient
                   colors={[
-                    Colors.primary,
-                    Colors.primaryLight || Colors.primary,
+                    SuperAdminTheme.colors.primary,
+                    SuperAdminTheme.colors.primaryDark || SuperAdminTheme.colors.primary,
                   ]}
                   style={styles.modalSaveButtonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                 >
                   {isSaving ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
+                    <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
                   ) : (
                     <>
                       <MaterialIcons
                         name={editingId ? "update" : "add"}
                         size={18}
-                        color={Colors.white}
+                        color={SuperAdminTheme.colors.surface}
                       />
                       <Text style={styles.modalSaveButtonText}>
                         {editingId ? "Update Banner" : "Create Banner"}
@@ -812,10 +781,10 @@ const EmptyState = ({
     ) : (
       <Pressable onPress={onCreatePress} style={styles.emptyCreateButton}>
         <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+          colors={[SuperAdminTheme.colors.primary, SuperAdminTheme.colors.primaryDark || SuperAdminTheme.colors.primary]}
           style={styles.emptyCreateButtonGradient}
         >
-          <MaterialIcons name="add" size={18} color={Colors.white} />
+          <MaterialIcons name="add" size={18} color={SuperAdminTheme.colors.surface} />
           <Text style={styles.emptyCreateButtonText}>Create Banner</Text>
         </LinearGradient>
       </Pressable>
@@ -832,6 +801,7 @@ export default function BannerManagementScreen({
   queryKey,
 }: Props) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -843,7 +813,7 @@ export default function BannerManagementScreen({
   const [isModalVisible, setIsModalVisible] = useState(false);
   const scope = toScope(role);
 
-  const { data, isLoading, refetch, isRefetching } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey,
     queryFn: () => BannerService.list({ scope }),
   });
@@ -1007,9 +977,23 @@ export default function BannerManagementScreen({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader title={title} subtitle="Loading..." />
+        <SuperAdminHeader
+          title={title}
+          subtitle="Loading..."
+          onBackPress={() => router.back()}
+          actions={
+            <View style={styles.headerActions}>
+              <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+                <MaterialIcons name="refresh" size={20} color={SuperAdminTheme.colors.surface} />
+              </Pressable>
+              <Pressable style={[styles.headerIconBtn]}>
+                <MaterialIcons name="add" size={20} color={SuperAdminTheme.colors.surface} />
+              </Pressable>
+            </View>
+          }
+        />
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={SuperAdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading banners...</Text>
         </View>
       </SafeAreaView>
@@ -1018,32 +1002,21 @@ export default function BannerManagementScreen({
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <SuperAdminHeader
         title={title}
         subtitle={subtitle}
+        onBackPress={() => router.back()}
         actions={
           <View style={styles.headerActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                pressed && styles.headerIconBtnPressed,
-              ]}
-              onPress={handleRefresh}
-            >
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
               <MaterialIcons
                 name={refreshing ? "sync" : "refresh"}
                 size={20}
-                color={Colors.white}
+                color={SuperAdminTheme.colors.surface}
               />
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                pressed && styles.headerIconBtnPressed,
-              ]}
-              onPress={openCreateModal}
-            >
-              <MaterialIcons name="add" size={20} color={Colors.white} />
+            <Pressable style={[styles.headerIconBtn]} onPress={openCreateModal}>
+              <MaterialIcons name="add" size={20} color={SuperAdminTheme.colors.surface} />
             </Pressable>
           </View>
         }
@@ -1056,8 +1029,8 @@ export default function BannerManagementScreen({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[SuperAdminTheme.colors.primary]}
+            tintColor={SuperAdminTheme.colors.primary}
           />
         }
       >
@@ -1083,7 +1056,7 @@ export default function BannerManagementScreen({
         <View style={styles.bannersSection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="campaign" size={18} color={Colors.primary} />
+              <MaterialIcons name="campaign" size={18} color={SuperAdminTheme.colors.primary} />
               <Text style={styles.sectionTitle}>Banners</Text>
             </View>
             <Text style={styles.sectionCount}>{filtered.length} total</Text>
@@ -1163,13 +1136,9 @@ export default function BannerManagementScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.background,
   },
 
-  // Header
-  headerTitle: {
-    fontSize: 24,
-  },
   headerActions: {
     flexDirection: "row",
     gap: 8,
@@ -1182,104 +1151,87 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.34)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  headerIconBtnPressed: {
     backgroundColor: "rgba(255,255,255,0.1)",
-    transform: [{ scale: 0.95 }],
   },
+ 
 
   // Center Container
   centerContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: SuperAdminTheme.spacing.lg,
     gap: 12,
   },
   loadingText: {
     fontSize: 14,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
   },
 
   // Content
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: SuperAdminTheme.spacing.md,
+    paddingTop: SuperAdminTheme.spacing.md,
     paddingBottom: BOTTOM_NAV_HEIGHT + 100,
-    gap: 20,
+    gap: SuperAdminTheme.spacing.lg,
   },
 
   // Stats Card
-  statsCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
   statsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statItem: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statInfo: {
+  statsPill: {
     flex: 1,
+    backgroundColor: SuperAdminTheme.colors.surface,
+    borderRadius: SuperAdminTheme.radius.lg,
+    borderWidth: 1,
+    borderColor: SuperAdminTheme.colors.borderSoft,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 2,
+  statsLabel: {
+    fontSize: 12,
+    color: SuperAdminTheme.colors.textMuted,
+    marginBottom: 6,
+    fontWeight: "600",
   },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 12,
+  statsValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: SuperAdminTheme.colors.text,
   },
 
   // Filter Bar
   filterCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: SuperAdminTheme.colors.borderSoft,
     gap: 12,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
+    borderRadius: 999,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: SuperAdminTheme.colors.border,
     height: 48,
     gap: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#111827",
+    color: SuperAdminTheme.colors.text,
     padding: 0,
   },
   searchClear: {
@@ -1292,8 +1244,8 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontSize: 13,
-    fontWeight: "500",
-    color: "#374151",
+    fontWeight: "600",
+    color: SuperAdminTheme.colors.textMuted,
   },
   filterChips: {
     gap: 8,
@@ -1304,28 +1256,28 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    borderColor: SuperAdminTheme.colors.border,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   filterChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}05`,
+    borderColor: SuperAdminTheme.colors.primary,
+    backgroundColor: SuperAdminTheme.colors.primary,
   },
   filterChipPressed: {
     transform: [{ scale: 0.96 }],
   },
   filterChipText: {
     fontSize: 12,
-    color: "#374151",
+    color: SuperAdminTheme.colors.textMuted,
     fontWeight: "500",
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.surface,
     fontWeight: "600",
   },
   searchResults: {
     fontSize: 12,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
   },
 
   // Banners Section
@@ -1344,12 +1296,16 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
   },
   sectionCount: {
     fontSize: 12,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   bannersList: {
     gap: 12,
@@ -1357,33 +1313,60 @@ const styles = StyleSheet.create({
 
   // Banner Card
   bannerCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
+    backgroundColor: SuperAdminTheme.colors.surface,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: SuperAdminTheme.colors.borderSoft,
     overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   bannerCardPressed: {
-    backgroundColor: "#F9FAFB",
     transform: [{ scale: 0.98 }],
+  },
+  bannerMedia: {
+    position: "relative",
   },
   bannerImage: {
     width: "100%",
-    height: 140,
+    height: 150,
   },
   bannerImagePlaceholder: {
     width: "100%",
-    height: 140,
-    backgroundColor: "#F9FAFB",
+    height: 150,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
+  bannerOverlay: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bannerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  bannerIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: SuperAdminTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: SuperAdminTheme.colors.border,
+  },
   bannerContent: {
     padding: 14,
-    gap: 12,
-  },
-  bannerHeader: {
-    gap: 6,
+    gap: 10,
   },
   bannerTitleRow: {
     flexDirection: "row",
@@ -1392,30 +1375,28 @@ const styles = StyleSheet.create({
   },
   bannerTitle: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
     flex: 1,
   },
   bannerStatus: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
+    borderRadius: 999,
   },
   bannerStatusText: {
     fontSize: 10,
+    fontWeight: "700",
+  },
+  priorityText: {
+    fontSize: 11,
     fontWeight: "600",
+    color: SuperAdminTheme.colors.textSoft,
   },
   bannerSubtitle: {
-    fontSize: 13,
-    color: "#6B7280",
-    lineHeight: 18,
-  },
-  bannerMeta: {
-    gap: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    fontSize: 12,
+    color: SuperAdminTheme.colors.textMuted,
+    lineHeight: 16,
   },
   metaRow: {
     flexDirection: "row",
@@ -1424,28 +1405,12 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 11,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     flex: 1,
   },
-  deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: `${Colors.error}30`,
-    backgroundColor: `${Colors.error}05`,
-    marginTop: 4,
-  },
-  deleteButtonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  deleteButtonText: {
-    fontSize: 12,
+  ctaText: {
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "600",
-    color: Colors.error,
   },
 
   // Empty State
@@ -1453,20 +1418,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 48,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: SuperAdminTheme.colors.borderSoft,
     gap: 12,
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "700",
+    color: SuperAdminTheme.colors.text,
   },
   emptyMessage: {
     fontSize: 13,
-    color: "#6B7280",
+    color: SuperAdminTheme.colors.textMuted,
     textAlign: "center",
     paddingHorizontal: 32,
   },
@@ -1475,11 +1440,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   emptyButtonText: {
     fontSize: 13,
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "600",
   },
   emptyCreateButton: {
@@ -1496,7 +1461,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyCreateButtonText: {
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1511,7 +1476,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   modalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "90%",
@@ -1557,7 +1522,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   requiredStar: {
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
   input: {
     borderWidth: 1,
@@ -1597,7 +1562,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontWeight: "600",
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
   },
   dateButton: {
     flexDirection: "row",
@@ -1661,7 +1626,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   colorSwatchSelected: {
-    borderColor: Colors.primary,
+    borderColor: SuperAdminTheme.colors.primary,
     borderWidth: 2,
   },
   previewContainer: {
@@ -1682,7 +1647,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     alignItems: "center",
@@ -1737,6 +1702,6 @@ const styles = StyleSheet.create({
   modalSaveButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
   },
 });

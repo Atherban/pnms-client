@@ -1,21 +1,23 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React from "react";
+import React, { useMemo } from "react";
 import {
-  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import FixedHeader from "../../../components/common/FixedHeader";
-import { Colors, Spacing } from "../../../theme";
+import StitchCard from "../../../components/common/StitchCard";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BOTTOM_NAV_HEIGHT = 80; // Adjust based on your bottom nav height
-const CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md) / 2;
+const BOTTOM_NAV_HEIGHT = 80;
+
+// Calculate card width for 2-column grid
+const GRID_GAP = AdminTheme.spacing.md;
+const HORIZONTAL_PADDING = AdminTheme.spacing.md;
 
 const QUICK_LINKS = [
   {
@@ -152,65 +154,136 @@ export default function MoreScreen() {
     router.push(path as any);
   };
 
+  // Split items into left and right columns for masonry layout
+  const { leftColumn, rightColumn } = useMemo(() => {
+    const left: typeof QUICK_LINKS = [];
+    const right: typeof QUICK_LINKS = [];
+    
+    QUICK_LINKS.forEach((item, index) => {
+      if (index % 2 === 0) {
+        left.push(item);
+      } else {
+        right.push(item);
+      }
+    });
+    
+    return { leftColumn: left, rightColumn: right };
+  }, []);
+
   return (
     <View style={styles.container}>
-      <FixedHeader
-        title="More Options"
-        subtitle="Quick access to features"
-        titleStyle={styles.title}
-        subtitleStyle={styles.subtitle}
-        actions={<MaterialIcons name="widgets" size={24} color={Colors.white} />}
+      <StitchHeader
+        title="More"
+        subtitle="Quick access to tools"
+        actions={<MaterialIcons name="widgets" size={20} color={AdminTheme.colors.surface} />}
       />
 
-      {/* Scrollable Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Quick Links Grid */}
-        <View style={styles.grid}>
-          {QUICK_LINKS.map((item) => (
-            <Pressable
-              key={item.title}
-              onPress={() => handleNavigation(item.path)}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && styles.cardPressed,
-              ]}
-            >
-              {/* Icon */}
-              <View
-                style={[
-                  styles.iconContainer,
-                  {
-                    backgroundColor: item.color + "10",
-                    borderColor: item.color + "30",
-                  },
+        {/* Masonry Grid Layout */}
+        <View style={styles.masonryGrid}>
+          {/* Left Column */}
+          <View style={styles.column}>
+            {leftColumn.map((item) => (
+              <Pressable
+                key={item.title}
+                onPress={() => handleNavigation(item.path)}
+                style={({ pressed }) => [
+                  styles.cardWrapper,
+                  pressed && styles.cardPressed,
                 ]}
               >
-                <MaterialIcons
-                  name={item.icon as any}
-                  size={22}
-                  color={item.color}
-                />
-              </View>
+                <StitchCard style={styles.card}>
+                  {/* Icon Container */}
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: item.color + "15" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={item.icon as any}
+                      size={24}
+                      color={item.color}
+                    />
+                  </View>
 
-              {/* Content */}
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{item.title}</Text>
-                <Text style={styles.cardDescription}>{item.description}</Text>
-              </View>
+                  {/* Content */}
+                  <View style={styles.contentContainer}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.cardDescription}>
+                      {item.description}
+                    </Text>
+                  </View>
 
-              {/* Arrow */}
-              <MaterialIcons
-                name="chevron-right"
-                size={20}
-                color={Colors.textTertiary}
-                style={styles.arrow}
-              />
-            </Pressable>
-          ))}
+                  {/* Arrow Indicator */}
+                  <View style={styles.arrowContainer}>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={16}
+                      color={AdminTheme.colors.textSoft}
+                    />
+                  </View>
+                </StitchCard>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Right Column */}
+          <View style={styles.column}>
+            {rightColumn.map((item) => (
+              <Pressable
+                key={item.title}
+                onPress={() => handleNavigation(item.path)}
+                style={({ pressed }) => [
+                  styles.cardWrapper,
+                  pressed && styles.cardPressed,
+                ]}
+              >
+                <StitchCard style={styles.card}>
+                  {/* Icon Container */}
+                  <View
+                    style={[
+                      styles.iconContainer,
+                      { backgroundColor: item.color + "15" },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={item.icon as any}
+                      size={24}
+                      color={item.color}
+                    />
+                  </View>
+
+                  {/* Content */}
+                  <View style={styles.contentContainer}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.cardDescription}>
+                      {item.description}
+                    </Text>
+                  </View>
+
+                  {/* Arrow Indicator */}
+                  <View style={styles.arrowContainer}>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={16}
+                      color={AdminTheme.colors.textSoft}
+                    />
+                  </View>
+                </StitchCard>
+              </Pressable>
+            ))}
+          </View>
         </View>
+
+        
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -225,118 +298,145 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.92)",
+    backgroundColor: AdminTheme.colors.background,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 2 * Spacing.xl,
+    paddingHorizontal: HORIZONTAL_PADDING,
+    paddingTop: AdminTheme.spacing.md,
+    paddingBottom: BOTTOM_NAV_HEIGHT + 2 * AdminTheme.spacing.lg,
   },
-  grid: {
+  
+  // Masonry Grid Layout
+  masonryGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
+    gap: GRID_GAP,
+    marginBottom: AdminTheme.spacing.lg,
   },
+  
+  // Column - each takes half width
+  column: {
+    flex: 1,
+    gap: GRID_GAP,
+  },
+  
+  // Card Wrapper - full width of column
+  cardWrapper: {
+    width: "100%",
+  },
+  
+  // Card - dynamic height based on content
   card: {
-    width: CARD_WIDTH,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    position: "relative",
+    width: "100%",
+    padding: AdminTheme.spacing.sm,
   },
+  
+  // Pressed state
   cardPressed: {
-    backgroundColor: Colors.surfaceDark,
+    opacity: 0.9,
     transform: [{ scale: 0.98 }],
   },
+  
+  // Icon container - fixed size
   iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: AdminTheme.spacing.xs,
+  },
+  
+  // Content container - allows natural height
+  contentContainer: {
+    // No flex:1 here - let content determine height
+  },
+  
+  // Card title - truncated
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.text,
+    marginBottom: 2,
+  },
+  
+  // Card description - wraps naturally
+  cardDescription: {
+    fontSize: 11,
+    color: AdminTheme.colors.textMuted,
+    lineHeight: 14,
+  },
+  
+  // Arrow container - positioned absolutely
+  arrowContainer: {
+    position: "absolute",
+    top: AdminTheme.spacing.sm,
+    right: AdminTheme.spacing.sm,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: AdminTheme.colors.surfaceMuted,
+  },
+
+  // Support section (full width)
+  supportSection: {
+    marginBottom: AdminTheme.spacing.lg,
+    width: "100%",
+  },
+  supportCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.md,
+  },
+  supportIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  cardDescription: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  arrow: {
-    position: "absolute",
-    top: Spacing.md,
-    right: Spacing.md,
-  },
-  supportCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: Spacing.md,
   },
   supportContent: {
     flex: 1,
   },
   supportTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: Colors.text,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   supportText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    color: AdminTheme.colors.textMuted,
   },
   supportButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: 8,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    borderRadius: AdminTheme.radius.full,
+    ...AdminTheme.shadow,
   },
   supportButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.98 }],
   },
   supportButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600",
+    color: AdminTheme.colors.surface,
+    fontSize: 13,
+    fontWeight: "600" as const,
   },
+
+  // Footer
   footer: {
     alignItems: "center",
-    paddingTop: Spacing.lg,
+    paddingTop: AdminTheme.spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    gap: Spacing.xs,
+    borderTopColor: AdminTheme.colors.borderSoft,
+    gap: AdminTheme.spacing.xs,
   },
   footerText: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
   },
 });

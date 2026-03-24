@@ -2,29 +2,29 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform,
   RefreshControl,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ModuleScreenFrame from "../common/ModuleScreenFrame";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../navigation/SharedBottomNav";
 import { Seed, SeedService } from "../../services/seed.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors } from "../../theme";
 import { formatErrorMessage } from "../../utils/error";
 import { canViewSourcingDetails } from "../../utils/rbac";
 import { formatQuantityUnit } from "../../utils/units";
+import { AdminTheme } from "../admin/theme";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import { moduleBadge } from "../common/moduleStyles";
 
-const BOTTOM_NAV_HEIGHT = 80;
 type RoleGroup = "staff" | "admin" | "customer";
 
 interface SeedsListScreenProps {
@@ -112,62 +112,6 @@ const getExpiryStatus = (expiryDate: string) => {
   };
 };
 
-// ==================== SEARCH BAR ====================
-
-interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  onClear: () => void;
-  resultCount: number;
-  showSourcingDetails: boolean;
-}
-
-const SearchBar = ({
-  value,
-  onChangeText,
-  onClear,
-  resultCount,
-  showSourcingDetails,
-}: SearchBarProps) => (
-  <View style={styles.searchWrapper}>
-    <View style={styles.searchContainer}>
-      <View style={styles.searchInputContainer}>
-        <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={
-            showSourcingDetails
-              ? "Search by name, supplier, or category..."
-              : "Search by name or category..."
-          }
-          placeholderTextColor={Colors.textTertiary}
-          value={value}
-          onChangeText={onChangeText}
-          returnKeyType="search"
-        />
-        {value.length > 0 && (
-          <TouchableOpacity
-            onPress={onClear}
-            style={styles.searchClearButton}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="close"
-              size={18}
-              color={Colors.textSecondary}
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
-    {value.length > 0 && (
-      <Text style={styles.searchResults}>
-        Found {resultCount} {resultCount === 1 ? "result" : "results"}
-      </Text>
-    )}
-  </View>
-);
-
 // ==================== SEED CARD ====================
 
 interface SeedCardProps {
@@ -250,7 +194,7 @@ const SeedCard = ({
               <MaterialIcons
                 name="business"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.metaText} numberOfLines={1}>
                 Supplier: {seed.supplierName}
@@ -258,7 +202,7 @@ const SeedCard = ({
             </View>
           )}
           <View style={styles.metaRow}>
-            <MaterialIcons name="event" size={14} color={Colors.textSecondary} />
+            <MaterialIcons name="event" size={14} color={AdminTheme.colors.textMuted} />
             <Text style={styles.metaText}>
               Expiry: {formatDate(seed.expiryDate ?? "")}
             </Text>
@@ -271,7 +215,7 @@ const SeedCard = ({
               <MaterialIcons
                 name="inventory"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.stockLabel}>Stock Level</Text>
             </View>
@@ -279,15 +223,15 @@ const SeedCard = ({
               <View
                 style={[
                   styles.lowStockBadge,
-                  { backgroundColor: `${Colors.warning}10` },
+                  { backgroundColor: `${AdminTheme.colors.warning}10` },
                 ]}
               >
                 <MaterialIcons
                   name="warning"
                   size={12}
-                  color={Colors.warning}
+                  color={AdminTheme.colors.warning}
                 />
-                <Text style={[styles.lowStockText, { color: Colors.warning }]}>
+                <Text style={[styles.lowStockText, { color: AdminTheme.colors.warning }]}>
                   Low Stock
                 </Text>
               </View>
@@ -300,7 +244,7 @@ const SeedCard = ({
                   styles.stockBarFill,
                   {
                     width: `${stockPercentage}%`,
-                    backgroundColor: isLowStock ? Colors.warning : Colors.success,
+                    backgroundColor: isLowStock ? AdminTheme.colors.warning : AdminTheme.colors.success,
                   },
                 ]}
               />
@@ -319,7 +263,7 @@ const SeedCard = ({
               <MaterialIcons
                 name="shopping-cart"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.detailValue}>
                 {formatNumber(seed.totalPurchased ?? 0)} {quantityUnit}
@@ -335,7 +279,7 @@ const SeedCard = ({
               <MaterialIcons
                 name="check-circle"
                 size={14}
-                color={Colors.success}
+                color={AdminTheme.colors.success}
               />
               <Text style={styles.detailValue}>
                 {formatNumber(availableStock)} {quantityUnit}
@@ -351,7 +295,7 @@ const SeedCard = ({
               style={[styles.actionButton, styles.editButton]}
               activeOpacity={0.7}
             >
-              <MaterialIcons name="edit" size={16} color={Colors.primary} />
+              <MaterialIcons name="edit" size={16} color={AdminTheme.colors.primary} />
               <Text style={styles.actionButtonText}>Edit</Text>
             </TouchableOpacity>
 
@@ -363,9 +307,9 @@ const SeedCard = ({
               <MaterialIcons
                 name="delete-outline"
                 size={16}
-                color={Colors.error}
+                color={AdminTheme.colors.danger}
               />
-              <Text style={[styles.actionButtonText, { color: Colors.error }]}>
+              <Text style={[styles.actionButtonText, { color: AdminTheme.colors.danger }]}>
                 Delete
               </Text>
             </TouchableOpacity>
@@ -386,16 +330,13 @@ interface EmptyStateProps {
 const EmptyState = ({ hasSearch, onClearSearch }: EmptyStateProps) => (
   <View style={styles.emptyContainer}>
     <View style={styles.emptyIconContainer}>
-      <LinearGradient
-        colors={[Colors.surface, Colors.background]}
-        style={styles.emptyIconGradient}
-      >
+      <View style={[styles.emptyIconGradient, { backgroundColor: AdminTheme.colors.background }]}>
         <MaterialIcons
           name={hasSearch ? "search-off" : "grass"}
           size={48}
-          color={Colors.textTertiary}
+          color={AdminTheme.colors.textSoft}
         />
-      </LinearGradient>
+      </View>
     </View>
 
     <Text style={styles.emptyTitle}>
@@ -414,15 +355,15 @@ const EmptyState = ({ hasSearch, onClearSearch }: EmptyStateProps) => (
         style={styles.emptyButton}
         activeOpacity={0.7}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="clear-all" size={18} color={Colors.white} />
+          <MaterialIcons name="clear-all" size={18} color={AdminTheme.colors.surface} />
           <Text style={styles.emptyButtonText}>Clear Search</Text>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     )}
   </View>
@@ -432,7 +373,7 @@ const EmptyState = ({ hasSearch, onClearSearch }: EmptyStateProps) => (
 
 const LoadingState = () => (
   <View style={styles.centerContainer}>
-    <ActivityIndicator size="large" color={Colors.primary} />
+    <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
     <Text style={styles.loadingText}>Loading seeds...</Text>
   </View>
 );
@@ -547,6 +488,11 @@ export function SeedsListScreen({
     router.push(`/${`(${routeGroup})`}/seeds/create` as any);
   }, [canWrite, routeGroup, router]);
 
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.back();
+  }, [router]);
+
   const handleEditPress = useCallback(
     (id: string) => {
       if (!canWrite) return;
@@ -595,310 +541,158 @@ export function SeedsListScreen({
   const hasRecords = seeds.length > 0;
 
   return (
-    <View style={styles.container}>
-      {/* Fixed Blue Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <SafeAreaView edges={[ "left", "right"]} style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.headerTitle}>{title}</Text>
-              <Text style={styles.headerSubtitle}>
-                {filteredSeeds.length}{" "}
-                {filteredSeeds.length === 1 ? "seed" : "seeds"}
-              </Text>
+    <ModuleScreenFrame
+      title={title}
+      subtitle={`${filteredSeeds.length} ${
+        filteredSeeds.length === 1 ? "seed" : "seeds"
+      }`}
+      onBackPress={handleBack}
+      actions={
+        canWrite ? (
+          <TouchableOpacity
+            onPress={handleCreatePress}
+            style={styles.createButton}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.createGradient,
+            
+              ]}
+            >
+              <MaterialIcons
+                name="add"
+                size={20}
+                color={AdminTheme.colors.surface}
+              />
             </View>
-
-            {canWrite && (
-              <TouchableOpacity
-                onPress={handleCreatePress}
-                style={styles.createButton}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={[Colors.success, "#059669"]}
-                  style={styles.createGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <MaterialIcons name="add" size={20} color={Colors.white} />
-                  <Text style={styles.createButtonText}>Add Seed</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Stats Grid in Header */}
-          {hasRecords && (
-            <View style={styles.headerStatsContainer}>
-              <View style={styles.statsRow}>
-                <View style={styles.statCompactItem}>
-                  <MaterialIcons name="grass" size={16} color={Colors.white} />
-                  <Text style={styles.statCompactValue}>
-                    {stats.totalSeeds}
-                  </Text>
-                  <Text style={styles.statCompactLabel}>Total</Text>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.statCompactItem}>
-                  <MaterialIcons
-                    name="check-circle"
-                    size={16}
-                    color={Colors.white}
-                  />
-                  <Text style={styles.statCompactValue}>
-                    {stats.validSeeds}
-                  </Text>
-                  <Text style={styles.statCompactLabel}>Valid</Text>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.statCompactItem}>
-                  <MaterialIcons
-                    name="warning"
-                    size={16}
-                    color={Colors.white}
-                  />
-                  <Text style={styles.statCompactValue}>
-                    {stats.lowStockSeeds}
-                  </Text>
-                  <Text style={styles.statCompactLabel}>Low</Text>
-                </View>
-
-                <View style={styles.statDivider} />
-
-                <View style={styles.statCompactItem}>
-                  <MaterialIcons name="error" size={16} color={Colors.white} />
-                  <Text style={styles.statCompactValue}>
-                    {stats.expiredSeeds}
-                  </Text>
-                  <Text style={styles.statCompactLabel}>Expired</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </SafeAreaView>
-      </LinearGradient>
-
-      {/* Search Bar - Below Header */}
-      <SearchBar
-        value={searchQuery}
-        onChangeText={handleSearchChange}
-        onClear={handleSearchClear}
-        resultCount={filteredSeeds.length}
-        showSourcingDetails={showSourcingDetails}
-      />
-
-      {/* Content Area */}
-      {hasRecords ? (
-        <FlatList
-          data={filteredSeeds}
-          keyExtractor={keyExtractor}
-          renderItem={renderItem}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
-              progressViewOffset={20}
+          </TouchableOpacity>
+        ) : null
+      }
+    >
+      <FlatList
+        data={hasRecords ? filteredSeeds : []}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
+            progressViewOffset={20}
+          />
+        }
+        contentContainerStyle={[
+          styles.listContent,
+          !hasRecords && styles.emptyListContent,
+        ]}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          hasRecords ? (
+            <ModuleScreenIntro
+              stats={
+                hasRecords
+                  ? [
+                      {
+                        label: "Total Seeds",
+                        value: stats.totalSeeds,
+                        icon: "grass",
+                        tone: "success",
+                      },
+                      {
+                        label: "Valid Stock",
+                        value: stats.validSeeds,
+                        icon: "check-circle",
+                        tone: "info",
+                      },
+                      {
+                        label: "Low Stock",
+                        value: stats.lowStockSeeds,
+                        icon: "warning",
+                        tone: "warning",
+                      },
+                      {
+                        label: "Expired",
+                        value: stats.expiredSeeds,
+                        icon: "error-outline",
+                        tone: "danger",
+                      },
+                    ]
+                  : undefined
+              }
+              search={{
+                value: searchQuery,
+                onChangeText: handleSearchChange,
+                onClear: handleSearchClear,
+                placeholder: showSourcingDetails
+                  ? "Search by name, supplier, or category..."
+                  : "Search by name or category...",
+                resultText: hasActiveSearch
+                  ? `Found ${filteredSeeds.length} ${
+                      filteredSeeds.length === 1 ? "result" : "results"
+                    }`
+                  : undefined,
+              }}
             />
-          }
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
+          ) : null
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
             <EmptyState
               hasSearch={hasActiveSearch}
               onClearSearch={handleSearchClear}
             />
-          }
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <EmptyState hasSearch={false} onClearSearch={handleSearchClear} />
-        </View>
-      )}
-    </View>
+          </View>
+        }
+      />
+    </ModuleScreenFrame>
   );
 }
 
 // ==================== STYLES ====================
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-
-  // Header Styles
-  headerGradient: {
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
+    backgroundColor: AdminTheme.colors.background,
   },
   createButton: {
     borderRadius: 20,
     overflow: "hidden" as const,
   },
   createGradient: {
+    height: 44,
+    width:44,
+    borderRadius: 24,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 6,
-    minWidth: 100,
+    backgroundColor: "rgba(166, 212, 168, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(166, 212, 168, 0.3)",
   },
   createButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600" as const,
   },
-  headerStatsContainer: {
-    marginTop: 4,
-  },
-  statsRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-around" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-  },
-  statCompactItem: {
-    alignItems: "center" as const,
-    flex: 1,
-  },
-  statCompactValue: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginTop: 2,
-  },
-  statCompactLabel: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500" as const,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: 8,
-  },
-
-  // Stat Card Styles (for potential future use)
-  statCard: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
-  },
-  statIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    color: "#111827",
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "500" as const,
-  },
-
-  // Search Bar Styles
-  searchWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: "#F9FAFB",
-  },
-  searchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-  },
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === "ios" ? 12 : 0,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    height: 48,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: "#111827",
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    marginLeft: 4,
-  },
-  searchClearButton: {
-    padding: 6,
-  },
-  searchResults: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 8,
-    marginLeft: 4,
-  },
-
-  // List Content
   listContent: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 20,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 20,
+    gap: 12,
+    flexGrow: 1,
+  },
+  emptyListContent: {
+    flexGrow: 1,
   },
 
   // Center Container
@@ -921,7 +715,7 @@ const styles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingHorizontal: 24,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 24,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 24,
   },
   emptyIconContainer: {
     width: 100,
@@ -962,14 +756,15 @@ const styles = {
     gap: 8,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600" as const,
   },
 
   // Seed Card
   seedCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -1014,6 +809,7 @@ const styles = {
     color: "#6B7280",
   },
   statusBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: 8,
@@ -1063,6 +859,7 @@ const styles = {
     fontWeight: "500" as const,
   },
   lowStockBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: 8,
@@ -1142,18 +939,18 @@ const styles = {
     gap: 8,
   },
   editButton: {
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
     borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
+    borderColor: `${AdminTheme.colors.primary}30`,
   },
   deleteButton: {
-    backgroundColor: `${Colors.error}10`,
+    backgroundColor: `${AdminTheme.colors.danger}10`,
     borderWidth: 1,
-    borderColor: `${Colors.error}30`,
+    borderColor: `${AdminTheme.colors.danger}30`,
   },
   actionButtonText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
 } as const;

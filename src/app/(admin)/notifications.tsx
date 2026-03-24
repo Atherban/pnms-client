@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -11,18 +10,15 @@ import {
   Text,
   TextInput,
   View,
-  Dimensions,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import StitchHeader from "../../components/common/StitchHeader";
+import { AdminTheme } from "../../components/admin/theme";
 import { CustomerService } from "../../services/customer.service";
 import { NotificationService } from "../../services/notification.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
 const formatDateTime = (dateString?: string) => {
@@ -61,11 +57,11 @@ interface StatsCardProps {
 }
 
 const StatsCard = ({ totalNotifications, broadcastCount, targetedCount }: StatsCardProps) => (
-  <BlurView intensity={80} tint="light" style={styles.statsCard}>
+  <View style={styles.statsCard}>
     <View style={styles.statsRow}>
       <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: `${Colors.primary}15` }]}>
-          <MaterialIcons name="notifications" size={16} color={Colors.primary} />
+        <View style={[styles.statIcon, { backgroundColor: `${AdminTheme.colors.primary}15` }]}>
+          <MaterialIcons name="notifications" size={16} color={AdminTheme.colors.primary} />
         </View>
         <View style={styles.statInfo}>
           <Text style={styles.statNumber}>{totalNotifications}</Text>
@@ -97,7 +93,7 @@ const StatsCard = ({ totalNotifications, broadcastCount, targetedCount }: StatsC
         </View>
       </View>
     </View>
-  </BlurView>
+  </View>
 );
 
 // ==================== NOTIFICATION CARD ====================
@@ -162,6 +158,7 @@ const NotificationCard = ({ notification }: NotificationCardProps) => {
 // ==================== MAIN COMPONENT ====================
 
 export default function AdminNotificationsScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [title, setTitle] = useState("");
@@ -309,29 +306,28 @@ export default function AdminNotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
-        title="Notification Center"
+      <StitchHeader
+        title="Notifications"
         subtitle="Send updates to customers and staff"
-        titleStyle={styles.headerTitle}
+        onBackPress={() => router.back()}
         actions={
           <View style={styles.headerActions}>
-            <Pressable 
+            <Pressable
               style={({ pressed }) => [
                 styles.headerIconBtn,
                 pressed && styles.headerIconBtnPressed,
-              ]} 
+              ]}
               onPress={() => refetch()}
             >
               <MaterialIcons
                 name={isRefetching ? "sync" : "refresh"}
-                size={20}
-                color={Colors.white}
+                size={18}
+                color={AdminTheme.colors.surface}
               />
             </Pressable>
             <Pressable
               style={({ pressed }) => [
                 styles.headerIconBtn,
-                styles.headerDangerBtn,
                 pressed && styles.headerIconBtnPressed,
               ]}
               onPress={handleClearAll}
@@ -339,8 +335,8 @@ export default function AdminNotificationsScreen() {
             >
               <MaterialIcons
                 name={clearAllMutation.isPending ? "hourglass-empty" : "delete-sweep"}
-                size={20}
-                color={Colors.white}
+                size={18}
+                color={AdminTheme.colors.surface}
               />
             </Pressable>
           </View>
@@ -460,7 +456,7 @@ export default function AdminNotificationsScreen() {
               {selectedCustomer && (
                 <View style={styles.selectedCustomerCard}>
                   <View style={styles.selectedCustomerInfo}>
-                    <View style={[styles.customerAvatar, { backgroundColor: `${Colors.primary}10` }]}>
+                    <View style={[styles.customerAvatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
                       <Text style={styles.customerInitial}>
                         {selectedCustomer.name?.charAt(0).toUpperCase() || "?"}
                       </Text>
@@ -492,7 +488,7 @@ export default function AdminNotificationsScreen() {
                       style={styles.customerResultItem}
                       onPress={() => handleCustomerSelect(customer)}
                     >
-                      <View style={[styles.resultAvatar, { backgroundColor: `${Colors.primary}10` }]}>
+                      <View style={[styles.resultAvatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
                         <Text style={styles.resultInitial}>
                           {customer.name?.charAt(0).toUpperCase() || "?"}
                         </Text>
@@ -544,15 +540,12 @@ export default function AdminNotificationsScreen() {
             onPress={() => createMutation.mutate()}
             disabled={!title.trim() || !body.trim() || createMutation.isPending}
           >
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-              style={styles.sendButtonGradient}
-            >
+            <View style={styles.sendButtonGradient}>
               {createMutation.isPending ? (
                 <Text style={styles.sendButtonText}>Sending...</Text>
               ) : (
                 <>
-                  <MaterialIcons name="send" size={18} color={Colors.white} />
+                  <MaterialIcons name="send" size={18} color={AdminTheme.colors.surface} />
                   <Text style={styles.sendButtonText}>
                     {audience === "CUSTOMER" && selectedCustomerId
                       ? "Send Targeted Notification"
@@ -560,7 +553,7 @@ export default function AdminNotificationsScreen() {
                   </Text>
                 </>
               )}
-            </LinearGradient>
+            </View>
           </Pressable>
         </View>
 
@@ -568,7 +561,7 @@ export default function AdminNotificationsScreen() {
         <View style={styles.reminderCard}>
           <View style={styles.reminderHeader}>
             <View style={styles.reminderIconContainer}>
-              <MaterialIcons name="repeat" size={20} color={Colors.primary} />
+              <MaterialIcons name="repeat" size={20} color={AdminTheme.colors.primary} />
             </View>
             <View style={styles.reminderTitleContainer}>
               <Text style={styles.reminderTitle}>Due Reminder Cadence</Text>
@@ -595,12 +588,9 @@ export default function AdminNotificationsScreen() {
               ]}
               onPress={() => configMutation.mutate()}
             >
-              <LinearGradient
-                colors={[Colors.success, "#059669"]}
-                style={styles.reminderSaveGradient}
-              >
+              <View style={styles.reminderSaveGradient}>
                 <Text style={styles.reminderSaveText}>Save</Text>
-              </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </View>
@@ -615,12 +605,9 @@ export default function AdminNotificationsScreen() {
           {notifications.length === 0 ? (
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
-                <LinearGradient
-                  colors={["#F3F4F6", "#F9FAFB"]}
-                  style={styles.emptyIconGradient}
-                >
+                <View style={styles.emptyIconGradient}>
                   <MaterialIcons name="notifications-none" size={48} color="#9CA3AF" />
-                </LinearGradient>
+                </View>
               </View>
               <Text style={styles.emptyTitle}>No Notifications Yet</Text>
               <Text style={styles.emptyText}>
@@ -641,30 +628,24 @@ export default function AdminNotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  headerTitle: {
-    fontSize: 24,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    borderColor: "rgba(255, 255, 255, 0.3)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   headerActions: {
     flexDirection: "row",
     gap: 8,
   },
-  headerDangerBtn: {
-    backgroundColor: "transparent",
-    borderColor: "rgba(255,255,255,0.3)",
-  },
   headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    
     transform: [{ scale: 0.95 }],
   },
 
@@ -742,7 +723,7 @@ const styles = StyleSheet.create({
 
   // Composer Card
   composerCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -782,8 +763,8 @@ const styles = StyleSheet.create({
   },
   audienceChip: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -791,16 +772,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   audienceChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}10`,
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
   },
   audienceChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: "#6B7280",
   },
   audienceChipTextActive: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
 
   // Input Sections
@@ -856,12 +837,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
     borderRadius: 12,
     padding: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: `${Colors.primary}20`,
+    borderColor: `${AdminTheme.colors.primary}20`,
   },
   selectedCustomerInfo: {
     flexDirection: "row",
@@ -879,7 +860,7 @@ const styles = StyleSheet.create({
   customerInitial: {
     fontSize: 16,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   selectedCustomerDetails: {
     flex: 1,
@@ -908,7 +889,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   customerResults: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -933,7 +914,7 @@ const styles = StyleSheet.create({
   resultInitial: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   resultInfo: {
     flex: 1,
@@ -984,6 +965,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   sendButtonGradient: {
+    backgroundColor: AdminTheme.colors.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -991,14 +973,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sendButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600",
   },
 
   // Reminder Card
   reminderCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -1025,7 +1007,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1079,11 +1061,12 @@ const styles = StyleSheet.create({
   },
   reminderSaveGradient: {
     flex: 1,
+    backgroundColor: AdminTheme.colors.success,
     alignItems: "center",
     justifyContent: "center",
   },
   reminderSaveText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1111,7 +1094,7 @@ const styles = StyleSheet.create({
 
   // Notification Card
   notificationCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -1219,6 +1202,7 @@ const styles = StyleSheet.create({
   },
   emptyIconGradient: {
     flex: 1,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
     justifyContent: "center",
   },

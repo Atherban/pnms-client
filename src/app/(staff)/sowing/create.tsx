@@ -17,6 +17,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchCard from "../../../components/common/StitchCard";
 import { CustomerService } from "../../../services/customer.service";
 import { CustomerSeedBatchService } from "../../../services/customer-seed-batch.service";
 import { Seed, SeedService } from "../../../services/seed.service";
@@ -538,35 +540,13 @@ export default function StaffSowingCreate() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Blue Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-            </TouchableOpacity>
-
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Record Sowing</Text>
-              <Text style={styles.headerSubtitle}>
-                {availableSeeds.length}{" "}
-                {availableSeeds.length === 1 ? "seed" : "seeds"} available
-              </Text>
-            </View>
-
-            <View style={styles.headerRight} />
-          </View>
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title="Record Sowing"
+        subtitle={`${availableSeeds.length} ${availableSeeds.length === 1 ? "seed" : "seeds"} available`}
+        variant="solid"
+        showBackButton
+        onBackPress={handleBack}
+      />
 
       {/* Form Content with Keyboard Handling */}
       <KeyboardAvoidingView
@@ -580,6 +560,13 @@ export default function StaffSowingCreate() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
+          <StitchCard style={styles.heroCard}>
+            <Text style={styles.heroTitle}>Create a sowing record with a cleaner flow</Text>
+            <Text style={styles.heroSubtitle}>
+              Select the seed source, optionally attach a farmer batch, then capture the sowing quantity.
+            </Text>
+          </StitchCard>
+
           <View style={styles.formCard}>
             {/* Seed Selection Section */}
             <View style={styles.formSection}>
@@ -1007,8 +994,22 @@ const styles = {
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingBottom: BOTTOM_NAV_HEIGHT + 20,
+  },
+  heroCard: {
+    marginBottom: 16,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: "700" as const,
+    color: "#111827",
+  },
+  heroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6B7280",
   },
   bottomNavSpacer: {
     height: BOTTOM_NAV_HEIGHT,

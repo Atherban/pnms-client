@@ -1,6 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,7 +10,6 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -18,10 +17,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { GerminationService } from "../../services/germination.service";
 import { SowingService } from "../../services/sowing.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { toImageUrl } from "../../utils/image";
 import { canViewSourcingDetails } from "../../utils/rbac";
 import BannerCardImage from "../ui/BannerCardImage";
+import { AdminTheme } from "../admin/theme";
+import ModuleScreenHeader from "../common/ModuleScreenHeader";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import { moduleBadge } from "../common/moduleStyles";
+import { Colors } from "@/src/theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -280,125 +283,6 @@ const mergeSowingDetails = (rows: SowingDetails[]): SowingDetails[] => {
   );
 };
 
-interface StatsCardProps {
-  totalSowings: number;
-  totalSeeds: number;
-  totalDiscarded: number;
-  uniquePlants: number;
-}
-
-const StatsCard = ({
-  totalSowings,
-  totalSeeds,
-  totalDiscarded,
-  uniquePlants,
-}: StatsCardProps) => (
-  <View style={styles.statsCard}>
-    <View style={styles.statsRow}>
-      <View style={styles.statItem}>
-        <MaterialIcons
-          name="format-list-bulleted"
-          size={16}
-          color={Colors.white}
-        />
-        <Text style={styles.statNumber}>{formatNumber(totalSowings)}</Text>
-        <Text style={styles.statLabel}>Records</Text>
-      </View>
-      <View style={styles.statDivider} />
-      <View style={styles.statItem}>
-        <MaterialIcons name="spa" size={16} color={Colors.white} />
-        <Text style={styles.statNumber}>{formatNumber(totalSeeds)}</Text>
-        <Text style={styles.statLabel}>Seeds Sown</Text>
-      </View>
-      <View style={styles.statDivider} />
-      <View style={styles.statItem}>
-        <MaterialIcons name="delete-outline" size={16} color={Colors.white} />
-        <Text style={styles.statNumber}>{formatNumber(totalDiscarded)}</Text>
-        <Text style={styles.statLabel}>Discarded</Text>
-      </View>
-      <View style={styles.statDivider} />
-      <View style={styles.statItem}>
-        <MaterialIcons name="eco" size={16} color={Colors.white} />
-        <Text style={styles.statNumber}>{formatNumber(uniquePlants)}</Text>
-        <Text style={styles.statLabel}>Plant Types</Text>
-      </View>
-    </View>
-  </View>
-);
-
-interface SearchBarProps {
-  value: string;
-  onChangeText: (text: string) => void;
-  onClear: () => void;
-  resultCount: number;
-  onFilterPress: () => void;
-  activeFilterCount: number;
-  showSourcingDetails: boolean;
-}
-
-const SearchBar = ({
-  value,
-  onChangeText,
-  onClear,
-  resultCount,
-  onFilterPress,
-  activeFilterCount,
-  showSourcingDetails,
-}: SearchBarProps) => (
-  <View style={styles.searchWrapper}>
-    <View style={styles.searchRow}>
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={18} color="rgba(255,255,255,0.8)" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={
-            showSourcingDetails
-              ? "Search seed, plant, supplier, staff..."
-              : "Search seed, plant, staff..."
-          }
-          placeholderTextColor="rgba(255,255,255,0.6)"
-          value={value}
-          onChangeText={onChangeText}
-          returnKeyType="search"
-        />
-        {value.length > 0 && (
-          <TouchableOpacity onPress={onClear} style={styles.searchClearButton}>
-            <MaterialIcons
-              name="close"
-              size={16}
-              color="rgba(255,255,255,0.8)"
-            />
-          </TouchableOpacity>
-        )}
-      </View>
-      <Pressable
-        onPress={onFilterPress}
-        style={({ pressed }) => [
-          styles.filterButton,
-          activeFilterCount > 0 && styles.filterButtonActive,
-          pressed && styles.filterButtonPressed,
-        ]}
-      >
-        <MaterialIcons
-          name="tune"
-          size={18}
-          color={activeFilterCount > 0 ? Colors.primary : Colors.white}
-        />
-        {activeFilterCount > 0 && (
-          <View style={styles.filterBadge}>
-            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-          </View>
-        )}
-      </Pressable>
-    </View>
-    {value.length > 0 && (
-      <Text style={styles.searchResults}>
-        Found {resultCount} {resultCount === 1 ? "record" : "records"}
-      </Text>
-    )}
-  </View>
-);
-
 const SowingCard = ({
   details,
   showSourcingDetails,
@@ -466,21 +350,21 @@ const SowingCard = ({
             <MaterialIcons
               name="category"
               size={12}
-              color={Colors.textTertiary}
+              color={AdminTheme.colors.textSoft}
             />
             <Text style={styles.footerText}>
               {details.category || "Uncategorized"}
             </Text>
           </View>
           <View style={styles.footerItem}>
-            <MaterialIcons name="person" size={12} color={Colors.textTertiary} />
+            <MaterialIcons name="person" size={12} color={AdminTheme.colors.textSoft} />
             <Text style={styles.footerText}>{details.performedBy}</Text>
           </View>
           <View style={styles.footerItem}>
             <MaterialIcons
               name="calendar-today"
               size={12}
-              color={Colors.textTertiary}
+              color={AdminTheme.colors.textSoft}
             />
             <Text style={styles.footerText}>
               {formatDate(details.sowingDate)}
@@ -507,7 +391,7 @@ const EmptyState = ({
     <MaterialIcons
       name={hasSearch ? "search-off" : "grass"}
       size={56}
-      color={Colors.textTertiary}
+      color={AdminTheme.colors.textSoft}
     />
     <Text style={styles.emptyTitle}>
       {hasSearch ? "No Matching Records" : "No Sowing Records"}
@@ -572,7 +456,7 @@ const SowingFilterModal = ({
               <MaterialIcons
                 name="close"
                 size={18}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
             </Pressable>
           </View>
@@ -688,6 +572,7 @@ export function SowingReadScreen({
   canCreate = false,
   onCreatePress,
 }: SowingReadScreenProps) {
+  const router = useRouter();
   const role = useAuthStore((state) => state.user?.role);
   const showSourcingDetails = canViewSourcingDetails(role);
   const [searchQuery, setSearchQuery] = useState("");
@@ -834,7 +719,7 @@ export function SowingReadScreen({
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading sowing records...</Text>
         </View>
       </SafeAreaView>
@@ -845,7 +730,7 @@ export function SowingReadScreen({
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
         <View style={styles.centerContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load Records</Text>
           <Text style={styles.errorMessage}>
             {(sowingError as any)?.message || "Please try again"}
@@ -860,64 +745,30 @@ export function SowingReadScreen({
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <SafeAreaView edges={["left", "right"]} style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>{title}</Text>
-              <Text style={styles.headerSubtitle}>
-                {filtered.length} {filtered.length === 1 ? "record" : "records"}
-              </Text>
-            </View>
-            {canCreate && onCreatePress && (
-              <TouchableOpacity
-                onPress={onCreatePress}
-                style={styles.headerCreateButton}
-              >
-                <MaterialIcons name="add" size={18} color={Colors.primary} />
-                <Text style={styles.headerCreateText}>Record</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <SearchBar
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onClear={handleClearSearch}
-            resultCount={filtered.length}
-            onFilterPress={() => setIsFilterVisible(true)}
-            activeFilterCount={activeFilterCount}
-            showSourcingDetails={showSourcingDetails}
-          />
+      <ModuleScreenHeader
+        title={title}
+        subtitle={`${filtered.length} ${
+          filtered.length === 1 ? "record" : "records"
+        }`}
+        onBack={() => router.back()}
+        actions={
+          canCreate && onCreatePress ? (
+            <TouchableOpacity
+              onPress={onCreatePress}
+              style={styles.headerCreateButton}
+            >
+              <View
+                            style={[
+                              styles.addGradient,
+                            ]}
+                          >
 
-          {activeFilterCount > 0 && (
-            <View style={styles.activeFilterRow}>
-              <Text style={styles.activeFilterText}>
-                Filters active: {activeFilterCount}
-              </Text>
-              <Pressable
-                onPress={clearFilters}
-                style={styles.activeFilterClear}
-              >
-                <Text style={styles.activeFilterClearText}>Clear</Text>
-              </Pressable>
-            </View>
-          )}
-          {mergedRecords.length > 0 && (
-            <StatsCard
-              totalSowings={stats.totalSowings}
-              totalSeeds={stats.totalSeeds}
-              totalDiscarded={stats.totalDiscarded}
-              uniquePlants={stats.uniquePlants}
-            />
-          )}
-        </SafeAreaView>
-      </LinearGradient>
-
+              <MaterialIcons name="add" size={20} color={Colors.white}  />
+                          </View>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -928,12 +779,76 @@ export function SowingReadScreen({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <ModuleScreenIntro
+            stats={
+              mergedRecords.length > 0
+                ? [
+                    {
+                      label: "Records",
+                      value: formatNumber(stats.totalSowings),
+                      icon: "format-list-bulleted",
+                      tone: "info",
+                    },
+                    {
+                      label: "Seeds Sown",
+                      value: formatNumber(stats.totalSeeds),
+                      icon: "spa",
+                      tone: "success",
+                    },
+                    {
+                      label: "Discarded",
+                      value: formatNumber(stats.totalDiscarded),
+                      icon: "delete-outline",
+                      tone: "danger",
+                    },
+                    {
+                      label: "Plant Types",
+                      value: formatNumber(stats.uniquePlants),
+                      icon: "eco",
+                      tone: "warning",
+                    },
+                  ]
+                : undefined
+            }
+            search={{
+              value: searchQuery,
+              onChangeText: setSearchQuery,
+              onClear: handleClearSearch,
+              placeholder: showSourcingDetails
+                ? "Search seed, plant, supplier, staff..."
+                : "Search seed, plant, staff...",
+              onFilterPress: () => setIsFilterVisible(true),
+              activeFilterCount,
+              resultText: searchQuery.length
+                ? `Found ${filtered.length} ${
+                    filtered.length === 1 ? "record" : "records"
+                  }`
+                : undefined,
+            }}
+            helperRow={
+              activeFilterCount > 0 ? (
+                <View style={styles.activeFilterRow}>
+                  <Text style={styles.activeFilterText}>
+                    Filters active: {activeFilterCount}
+                  </Text>
+                  <Pressable
+                    onPress={clearFilters}
+                    style={styles.activeFilterClear}
+                  >
+                    <Text style={styles.activeFilterClearText}>Clear</Text>
+                  </Pressable>
+                </View>
+              ) : null
+            }
+          />
+        }
         ListEmptyComponent={
           <EmptyState
             hasSearch={searchQuery.length > 0}
@@ -956,215 +871,75 @@ export function SowingReadScreen({
   );
 }
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  headerGradient: {
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerCreateButton: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.7)",
-  },
-  headerCreateText: {
-    fontSize: 12,
-    fontWeight: "700" as const,
-    color: Colors.primary,
-  },
-  statsCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    marginTop: 12,
-    marginBottom: 8,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  statsRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center" as const,
-  },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginTop: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500" as const,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: 8,
   },
-  searchWrapper: {
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  searchRow: {
+  addGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: 8,
-  },
-  searchContainer: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    height: 46,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.white,
-    padding: 0,
-  },
-  searchClearButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-  },
-  filterButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  filterButtonActive: {
-    borderColor: "rgba(255,255,255,0.9)",
-    backgroundColor: Colors.white,
-  },
-  filterButtonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  filterBadge: {
-    position: "absolute" as const,
-    top: -4,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 10,
-    backgroundColor: Colors.error,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: Colors.white,
-  },
-  filterBadgeText: {
-    color: Colors.white,
-    fontSize: 10,
-    fontWeight: "700" as const,
-  },
-  searchResults: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.85)",
-    marginTop: 6,
-    marginLeft: 4,
+    width: "100%",
+    height: "100%",
   },
   activeFilterRow: {
-    marginHorizontal: 20,
-    marginBottom: 8,
+    marginHorizontal: AdminTheme.spacing.lg,
+    marginBottom: 6,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
   },
   activeFilterText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   activeFilterClear: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
   },
   activeFilterClearText: {
     fontSize: 12,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: 2,
     paddingBottom: BOTTOM_NAV_HEIGHT + 28,
   },
   card: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.borderSoft,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
   },
   cardContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
   },
   cardHeader: {
     marginBottom: 10,
@@ -1176,6 +951,7 @@ const styles = {
     marginBottom: 0,
   },
   bannerRoleBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
     top: 8,
     right: 8,
@@ -1191,7 +967,7 @@ const styles = {
     borderRadius: 10,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
   },
   titleBlock: {
     flex: 1,
@@ -1207,6 +983,7 @@ const styles = {
     color: "#6B7280",
   },
   roleBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     paddingHorizontal: 8,
@@ -1262,10 +1039,11 @@ const styles = {
     color: "#6B7280",
   },
   emptyContainer: {
+    ...cardSurface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     paddingVertical: 48,
-    paddingHorizontal: 20,
+    paddingHorizontal: AdminTheme.spacing.lg,
   },
   emptyTitle: {
     fontSize: 16,
@@ -1284,12 +1062,12 @@ const styles = {
   },
   emptyButton: {
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600" as const,
   },
@@ -1308,7 +1086,7 @@ const styles = {
     marginTop: 12,
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   errorMessage: {
     marginTop: 6,
@@ -1319,12 +1097,12 @@ const styles = {
   },
   retryButton: {
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600" as const,
   },
@@ -1343,7 +1121,7 @@ const styles = {
     } as const),
   },
   filterModalSheet: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
@@ -1360,7 +1138,7 @@ const styles = {
   filterModalTitle: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   filterModalClose: {
     width: 30,
@@ -1377,7 +1155,7 @@ const styles = {
   filterSectionTitle: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterChipsRow: {
     flexDirection: "row" as const,
@@ -1391,18 +1169,18 @@ const styles = {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   filterChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}12`,
+    borderColor: AdminTheme.colors.primary,
+    backgroundColor: `${AdminTheme.colors.primary}12`,
   },
   filterChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   filterActionsRow: {
@@ -1423,19 +1201,19 @@ const styles = {
   filterClearBtnText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   filterApplyBtn: {
     flex: 1.3,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     paddingVertical: 11,
   },
   filterApplyBtnText: {
     fontSize: 13,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
 } as const;

@@ -1,6 +1,5 @@
 import { MaterialIcons as Icon } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
@@ -10,15 +9,17 @@ import {
   Pressable,
   RefreshControl,
   Text,
-  TextInput,
   View,
 } from "react-native";
 
 import { ConfirmModal } from "../../../components/ConfirmModal";
 import { RoleSelectModal } from "../../../components/RoleSelectModal";
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchInput from "../../../components/common/StitchInput";
+import AdminKpiCard from "../../../components/admin/AdminKpiCard";
+import { AdminTheme } from "../../../components/admin/theme";
 import { User, UserService } from "../../../services/user.service";
 import { useAuthStore } from "../../../stores/auth.store";
-import { Colors, Spacing } from "../../../theme";
 
 const PAGE_SIZE = 10;
 const BOTTOM_NAV_HEIGHT = 80; // Adjust based on your bottom nav height
@@ -146,7 +147,7 @@ export default function Users() {
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading users...</Text>
         </View>
       );
@@ -155,7 +156,7 @@ export default function Users() {
     if (filteredUsers.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Icon name="group-off" size={64} color={Colors.border} />
+          <Icon name="group-off" size={64} color={AdminTheme.colors.border} />
           <Text style={styles.emptyTitle}>No users found</Text>
           <Text style={styles.emptyMessage}>
             {search.length > 0 || roleFilter !== "ALL" || statusFilter !== "ALL"
@@ -184,8 +185,8 @@ export default function Users() {
           <RefreshControl
             refreshing={isRefetching || refreshing}
             onRefresh={onRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
         contentContainerStyle={styles.listContent}
@@ -201,10 +202,10 @@ export default function Users() {
           const isSelf = item._id === currentUser?.id;
           const roleColor =
             item.role === "NURSERY_ADMIN"
-              ? Colors.error
+              ? AdminTheme.colors.danger
               : item.role === "STAFF"
-                ? Colors.warning
-                : Colors.success;
+                ? AdminTheme.colors.warning
+                : AdminTheme.colors.success;
 
           return (
             <View
@@ -243,8 +244,8 @@ export default function Users() {
                         styles.statusBadge,
                         {
                           backgroundColor: item.isActive
-                            ? `${Colors.success}15`
-                            : `${Colors.error}15`,
+                            ? `${AdminTheme.colors.success}15`
+                            : `${AdminTheme.colors.danger}15`,
                         },
                       ]}
                     >
@@ -253,8 +254,8 @@ export default function Users() {
                           styles.statusDot,
                           {
                             backgroundColor: item.isActive
-                              ? Colors.success
-                              : Colors.error,
+                              ? AdminTheme.colors.success
+                              : AdminTheme.colors.danger,
                           },
                         ]}
                       />
@@ -263,8 +264,8 @@ export default function Users() {
                           styles.statusText,
                           {
                             color: item.isActive
-                              ? Colors.success
-                              : Colors.error,
+                              ? AdminTheme.colors.success
+                              : AdminTheme.colors.danger,
                           },
                         ]}
                       >
@@ -291,7 +292,7 @@ export default function Users() {
                     pressed && styles.actionButtonPressed,
                   ]}
                 >
-                  <Icon name="swap-horiz" size={16} color={Colors.primary} />
+                  <Icon name="swap-horiz" size={16} color={AdminTheme.colors.primary} />
                   <Text style={styles.actionButtonText}>Role</Text>
                 </Pressable>
 
@@ -304,11 +305,11 @@ export default function Users() {
                     pressed && styles.actionButtonPressed,
                   ]}
                 >
-                  <Icon name="lock-reset" size={16} color={Colors.warning} />
+                  <Icon name="lock-reset" size={16} color={AdminTheme.colors.warning} />
                   <Text
                     style={[
                       styles.actionButtonText,
-                      { color: Colors.warning },
+                      { color: AdminTheme.colors.warning },
                     ]}
                   >
                     {resetMutation.isPending ? "Resetting..." : "Reset"}
@@ -329,13 +330,13 @@ export default function Users() {
                   <Icon
                     name={item.isActive ? "block" : "check-circle"}
                     size={16}
-                    color={item.isActive ? Colors.error : Colors.success}
+                    color={item.isActive ? AdminTheme.colors.danger : AdminTheme.colors.success}
                   />
                   <Text
                     style={[
                       styles.actionButtonText,
                       {
-                        color: item.isActive ? Colors.error : Colors.success,
+                        color: item.isActive ? AdminTheme.colors.danger : AdminTheme.colors.success,
                       },
                     ]}
                   >
@@ -346,7 +347,7 @@ export default function Users() {
 
               {isSelf && (
                 <View style={styles.selfIndicator}>
-                  <Icon name="person" size={12} color={Colors.textTertiary} />
+                  <Icon name="person" size={12} color={AdminTheme.colors.textSoft} />
                   <Text style={styles.selfIndicatorText}>Current User</Text>
                 </View>
               )}
@@ -359,21 +360,11 @@ export default function Users() {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Header Section */}
       <View style={styles.fixedHeader}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        >
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>User Management</Text>
-              <Text style={styles.subtitle}>
-                {totalUsers} total users • {filteredUsers.length} filtered
-              </Text>
-            </View>
+        <StitchHeader
+          title="User Management"
+          subtitle={`${totalUsers} total users • ${filteredUsers.length} filtered`}
+          actions={
             <Pressable
               onPress={() => router.push("/(admin)/users/create")}
               style={({ pressed }) => [
@@ -381,59 +372,43 @@ export default function Users() {
                 pressed && styles.createButtonPressed,
               ]}
             >
-              <Icon name="person-add" size={18} color={Colors.primary} />
-              <Text style={styles.createButtonText}>User</Text>
+              <Icon name="person-add" size={20} color={AdminTheme.colors.surface} />
             </Pressable>
-          </View>
+          }
+        />
 
-          {/* Stats Cards */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Icon name="people" size={18} color={Colors.white} />
-              <Text style={styles.statValue}>{stats.totalUsers}</Text>
-              <Text style={styles.statLabel}>Total</Text>
-            </View>
+        <View style={styles.statsGrid}>
+          <AdminKpiCard
+            label="Total"
+            value={`${stats.totalUsers}`}
+            tone="primary"
+          />
+          <AdminKpiCard
+            label="Active"
+            value={`${stats.activeUsers}`}
+            tone="success"
+          />
+          <AdminKpiCard
+            label="Disabled"
+            value={`${stats.disabledUsers}`}
+            tone="danger"
+          />
+        </View>
 
-            <View style={styles.statCard}>
-              <Icon name="check-circle" size={18} color={Colors.white} />
-              <Text style={styles.statValue}>{stats.activeUsers}</Text>
-              <Text style={styles.statLabel}>Active</Text>
-            </View>
-
-            <View style={styles.statCard}>
-              <Icon name="block" size={18} color={Colors.white} />
-              <Text style={styles.statValue}>{stats.disabledUsers}</Text>
-              <Text style={styles.statLabel}>Disabled</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* Search Bar */}
         <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <Icon
-              name="search"
-              size={20}
-              color={Colors.textSecondary}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              placeholder="Search by name, phone or email..."
-              placeholderTextColor={Colors.textTertiary}
-              value={search}
-              onChangeText={setSearch}
-              style={styles.searchInput}
-              clearButtonMode="while-editing"
-            />
-            {search.length > 0 && (
-              <Pressable
-                onPress={() => setSearch("")}
-                style={styles.clearButton}
-              >
-                <Icon name="close" size={16} color={Colors.textSecondary} />
-              </Pressable>
-            )}
-          </View>
+          <StitchInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search by name, phone or email..."
+            icon={<Icon name="search" size={18} color={AdminTheme.colors.textSoft} />}
+            right={
+              search.length > 0 ? (
+                <Pressable onPress={() => setSearch("")} style={styles.clearButton}>
+                  <Icon name="close" size={16} color={AdminTheme.colors.textSoft} />
+                </Pressable>
+              ) : null
+            }
+          />
         </View>
 
         {/* Filter Chips - Fixed Row */}
@@ -474,7 +449,7 @@ export default function Users() {
                       : "visibility"
                 }
                 size={12}
-                color={Colors.primary}
+                color={AdminTheme.colors.primary}
                 style={styles.filterIcon}
               />
             )}
@@ -509,7 +484,7 @@ export default function Users() {
                 name={statusFilter === "ACTIVE" ? "check-circle" : "block"}
                 size={12}
                 color={
-                  statusFilter === "ACTIVE" ? Colors.success : Colors.error
+                  statusFilter === "ACTIVE" ? AdminTheme.colors.success : AdminTheme.colors.danger
                 }
                 style={styles.filterIcon}
               />
@@ -529,7 +504,7 @@ export default function Users() {
               <Icon
                 name="filter-alt-off"
                 size={12}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={[styles.filterChipText, { marginLeft: 4 }]}>
                 Clear
@@ -554,7 +529,7 @@ export default function Users() {
             : "They will regain access to the system."
         }`}
         confirmText={confirmUser?.isActive ? "Disable User" : "Enable User"}
-        confirmColor={confirmUser?.isActive ? Colors.error : Colors.success}
+        confirmColor={confirmUser?.isActive ? AdminTheme.colors.danger : AdminTheme.colors.success}
         icon={confirmUser?.isActive ? "warning" : "check-circle"}
         onCancel={() => setConfirmUser(null)}
         onConfirm={() => {
@@ -589,164 +564,104 @@ export default function Users() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   fixedHeader: {
-    backgroundColor: Colors.background,
-    paddingBottom: Spacing.md,
-  },
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.md,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  header: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.88)",
-    marginTop: Spacing.xs,
+    backgroundColor: AdminTheme.colors.background,
+    paddingBottom: AdminTheme.spacing.md,
   },
   createButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 10,
-    gap: Spacing.xs,
+    justifyContent:"center",
+    backgroundColor: "rgba(146, 243, 175, 0.24)",
+    height:44,
+    width:44,
+    borderRadius: 24,
+    // borderWidth: 1,
+    // borderColor: "rgba(255, 255, 255, 0.3)",
+    gap: AdminTheme.spacing.xs,
   },
   createButtonPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
   createButtonText: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontSize: 13,
     fontWeight: "700" as const,
   },
   statsGrid: {
+
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
-    gap: Spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    padding: Spacing.sm,
-    borderRadius: 12,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.28)",
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  statValue: {
-    fontSize: 17,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginTop: Spacing.xs,
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.88)",
-    fontWeight: "600" as const,
-    marginTop: Spacing.xs,
-    textAlign: "center" as const,
+    gap: AdminTheme.spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.sm,
   },
   searchSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  searchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    height: 46,
-  },
-  searchIcon: {
-    marginRight: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.text,
-    padding: 0,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.md,
   },
   clearButton: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   filterRow: {
     marginTop: 10,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.md,
     flexDirection: "row" as const,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
     flexWrap: "wrap" as const,
   },
   filterChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xs,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.borderSoft,
     height: 32,
   },
   filterChipActive: {
-    backgroundColor: Colors.primary + "10",
-    borderColor: Colors.primary,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
+    borderColor: AdminTheme.colors.primary,
   },
   filterChipPressed: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
     transform: [{ scale: 0.98 }],
   },
   filterChipText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   filterChipTextActive: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   filterIcon: {
-    marginLeft: Spacing.xs,
+    marginLeft: AdminTheme.spacing.xs,
   },
   contentArea: {
     flex: 1,
   },
   listHeader: {
-    height: Spacing.md,
+    height: AdminTheme.spacing.md,
   },
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.lg,
   },
   listFooter: {
-    paddingVertical: Spacing.md,
+    paddingVertical: AdminTheme.spacing.md,
     alignItems: "center" as const,
   },
   listFooterText: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "500" as const,
   },
   loadingContainer: {
@@ -756,55 +671,55 @@ const styles = {
     paddingBottom: BOTTOM_NAV_HEIGHT,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   emptyContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    padding: AdminTheme.spacing.xl,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.text,
+    marginTop: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.xs,
   },
   emptyMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
     lineHeight: 20,
   },
   emptyButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: 12,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.md,
+    borderRadius: AdminTheme.radius.lg,
   },
   emptyButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.98 }],
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "600" as const,
   },
   userCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: AdminTheme.radius.lg,
+    padding: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.text,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -816,7 +731,7 @@ const styles = {
   userInfo: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   avatar: {
     width: 44,
@@ -824,7 +739,7 @@ const styles = {
     borderRadius: 22,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginRight: Spacing.md,
+    marginRight: AdminTheme.spacing.md,
   },
   avatarText: {
     fontSize: 18,
@@ -836,21 +751,21 @@ const styles = {
   userName: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   userEmail: {
     fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.textMuted,
+    marginBottom: AdminTheme.spacing.sm,
   },
   userMeta: {
     flexDirection: "row" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   badge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xs,
     borderRadius: 6,
   },
   badgeText: {
@@ -860,8 +775,8 @@ const styles = {
   statusBadge: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xs,
     borderRadius: 6,
     gap: 4,
   },
@@ -876,7 +791,7 @@ const styles = {
   },
   actionsContainer: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   actionsDisabled: {
     opacity: 0.5,
@@ -886,29 +801,29 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.sm,
-    borderRadius: 10,
-    gap: Spacing.xs,
+    paddingVertical: AdminTheme.spacing.sm,
+    borderRadius: AdminTheme.radius.md,
+    gap: AdminTheme.spacing.xs,
   },
   actionButtonOutline: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   actionButtonSuccess: {
-    backgroundColor: Colors.success + "15",
+    backgroundColor: `${AdminTheme.colors.success}15`,
     borderWidth: 1,
-    borderColor: Colors.success + "30",
+    borderColor: `${AdminTheme.colors.success}30`,
   },
   actionButtonDanger: {
-    backgroundColor: Colors.error + "15",
+    backgroundColor: `${AdminTheme.colors.danger}15`,
     borderWidth: 1,
-    borderColor: Colors.error + "30",
+    borderColor: `${AdminTheme.colors.danger}30`,
   },
   actionButtonWarning: {
-    backgroundColor: Colors.warning + "15",
+    backgroundColor: `${AdminTheme.colors.warning}15`,
     borderWidth: 1,
-    borderColor: Colors.warning + "30",
+    borderColor: `${AdminTheme.colors.warning}30`,
   },
   actionButtonPressed: {
     transform: [{ scale: 0.98 }],
@@ -916,20 +831,20 @@ const styles = {
   actionButtonText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   selfIndicator: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    gap: Spacing.xs,
+    borderTopColor: AdminTheme.colors.borderSoft,
+    gap: AdminTheme.spacing.xs,
   },
   selfIndicatorText: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "500" as const,
   },
 };

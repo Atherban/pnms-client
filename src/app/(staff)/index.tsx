@@ -8,15 +8,21 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  ScrollView,
+  StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import KpiCard from "../../components/common/KpiCard";
-import FixedHeader from "../../components/common/FixedHeader";
+import AdminKpiCard from "../../components/admin/AdminKpiCard";
+import { AdminTheme } from "../../components/admin/theme";
+import StitchCard from "../../components/common/StitchCard";
+import {
+  StaffCard,
+  StaffScreen,
+  StaffSectionHeader,
+} from "../../components/common/StitchScreen";
 import { AuthService } from "../../services/auth.service";
 import { StaffDashboardService } from "../../services/staff-dashboard.service";
 import { useAuthStore } from "../../stores/auth.store";
@@ -33,10 +39,8 @@ export default function StaffDashboard() {
   const actionCardWidth = (width - Spacing.lg * 2 - Spacing.md) / 2;
   const bottomContentPadding = NAV_HEIGHT + insets.bottom + Spacing.lg;
 
-  /* ---------------- AUTH ---------------- */
   const storeUser = useAuthStore((state) => state.user);
   const clearAuth = useAuthStore((state) => state.clearAuth);
-
   const [storageUser, setStorageUser] = useState<any>(null);
 
   useEffect(() => {
@@ -58,26 +62,39 @@ export default function StaffDashboard() {
 
   const user = storeUser ?? storageUser;
   const userName = user?.name || "Staff Member";
+  const userRole = user?.role || "STAFF";
+  const roleLabel =
+    userRole === "NURSERY_STAFF" || userRole === "STAFF"
+      ? "Staff Member"
+      : String(userRole)
+          .toLowerCase()
+          .split("_")
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ");
+  const avatarText = userName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part: string) => part[0]?.toUpperCase() || "")
+    .join("");
 
-  /* ---------------- DATA ---------------- */
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["staff-dashboard"],
     queryFn: StaffDashboardService.getStats,
   });
 
-  /* ---------------- NORMALIZED STATS ---------------- */
-  const stats = useMemo(() => {
-    return {
+  const stats = useMemo(
+    () => ({
       totalInventory: Number(data?.totalInventory ?? 0),
       totalSeeds: Number(data?.totalSeeds ?? 0),
       todaySowingCount: Number(data?.todaySowingCount ?? 0),
       todaySalesCount: Number(data?.todaySalesCount ?? 0),
       lowStockItems: Number(data?.lowStockItems ?? 0),
       pendingTasks: Number(data?.pendingTasks ?? 0),
-    };
-  }, [data]);
+    }),
+    [data],
+  );
 
-  /* ---------------- ACTIONS ---------------- */
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
       { text: "Cancel", style: "cancel" },
@@ -109,109 +126,13 @@ export default function StaffDashboard() {
       case "sowing":
         router.push("/(staff)/sowing/create");
         break;
+      default:
+        break;
     }
   };
 
-  /* ---------------- LOADING ---------------- */
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <FixedHeader
-          title="Dashboard"
-          subtitle="Loading insights..."
-          contentStyle={styles.headerContent}
-          titleStyle={styles.title}
-          subtitleStyle={styles.subtitle}
-          userName={userName}
-          userRoleLabel="Staff Member"
-          onLogout={handleLogout}
-        />
-
-        <View
-          style={[styles.loadingContainer, { paddingBottom: bottomContentPadding }]}
-        >
-          <ActivityIndicator size="large" color={Colors.info} />
-          <Text style={styles.loadingText}>Loading dashboard...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  /* ---------------- ERROR ---------------- */
-  if (error || !data) {
-    return (
-      <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <FixedHeader
-          title="Dashboard"
-          subtitle="Error loading data"
-          contentStyle={styles.headerContent}
-          titleStyle={styles.title}
-          subtitleStyle={styles.subtitle}
-          userName={userName}
-          userRoleLabel="Staff Member"
-          onLogout={handleLogout}
-        />
-
-        <View
-          style={[styles.errorContainer, { paddingBottom: bottomContentPadding }]}
-        >
-          <MaterialIcons name="error-outline" size={64} color={Colors.error} />
-          <Text style={styles.errorTitle}>Unable to Load Dashboard</Text>
-          <Text style={styles.errorMessage}>
-            Please check your connection and try again
-          </Text>
-          <Pressable onPress={() => refetch()} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Try Again</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  /* ---------------- KPI CONFIG ---------------- */
-  const KPIS = [
-    {
-      title: "Inventory Items",
-      value: stats.totalInventory.toLocaleString(),
-      icon: "📦",
-      color: Colors.success,
-      type: "inventory",
-      gradient: [Colors.success, "#34D399"],
-    },
-    {
-      title: "Total Seeds",
-      value: stats.totalSeeds.toLocaleString(),
-      icon: "🌱",
-      color: Colors.info,
-      type: "seeds",
-      gradient: [Colors.info, "#60A5FA"],
-    },
-    {
-      title: "Today's Sowings",
-      value: stats.todaySowingCount.toLocaleString(),
-      icon: "🌱",
-      color: Colors.warning,
-      type: "sowing",
-      gradient: [Colors.warning, "#FBBF24"],
-    },
-    {
-      title: "Today's Sales",
-      value: stats.todaySalesCount.toLocaleString(),
-      icon: "💰",
-      color: Colors.primary,
-      type: "sales",
-      gradient: [Colors.primary, Colors.primaryLight],
-    },
-  ] as const;
-
-  const QUICK_ACTIONS = [
-    {
-      title: "Record Sale",
-      subtitle: "Create sales entry",
-      icon: "receipt-long",
-      color: Colors.primary,
-      action: () => router.push("/(staff)/sales"),
-    },
+  const quickActions = [
+    
     {
       title: "Record Sowing",
       subtitle: "Log new sowing activity",
@@ -236,7 +157,7 @@ export default function StaffDashboard() {
     {
       title: "View Plants",
       subtitle: "Browse plant inventory",
-      icon: "inventory",
+      icon: "local-florist",
       color: Colors.success,
       action: () => router.push("/(staff)/plants"),
     },
@@ -275,142 +196,219 @@ export default function StaffDashboard() {
       color: Colors.success,
       action: () => router.push("/(staff)/labours"),
     },
+    {
+      title: "Record Sale",
+      subtitle: "Create sales entry",
+      icon: "receipt-long",
+      color: Colors.primary,
+      action: () => router.push("/(staff)/sales"),
+    },
   ];
 
-  const todaySales = data.todaySalesCount || 0;
-  const todaySowings = data.todaySowingCount || 0;
-  const totalInventory = data.totalInventory || 0;
+  const kpis = [
+    {
+      label: "Inventory Items",
+      value: stats.totalInventory.toLocaleString(),
+      tone: "info" as const,
+      type: "inventory",
+      icon: "inventory-2",
+    },
+    {
+      label: "Total Seeds",
+      value: stats.totalSeeds.toLocaleString(),
+      tone: "primary" as const,
+      type: "seeds",
+      icon: "grass",
+    },
+    {
+      label: "Today's Sowings",
+      value: stats.todaySowingCount.toLocaleString(),
+      tone: "warning" as const,
+      type: "sowing",
+      icon: "spa",
+    },
+    {
+      label: "Today's Sales",
+      value: stats.todaySalesCount.toLocaleString(),
+      tone: "success" as const,
+      type: "sales",
+      icon: "payments",
+    },
+  ];
 
-  return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <FixedHeader
-        title="Dashboard"
-        contentStyle={styles.headerContent}
-        titleStyle={styles.title}
-        userName={userName}
-        userRoleLabel="Staff Member"
-        onLogout={handleLogout}
-        actions={
-          <Pressable
-            onPress={refetch}
-            style={({ pressed }) => [
-              styles.refreshButton,
-              pressed && styles.refreshButtonPressed,
-            ]}
-          >
-            <MaterialIcons
-              name={isRefetching ? "refresh" : "refresh"}
-              size={20}
-              color={Colors.white}
-              style={isRefetching ? styles.refreshingIcon : undefined}
-            />
-          </Pressable>
-        }
-      >
-        {/* Stats Summary - Same as Admin */}
-        <View style={styles.statsSummary}>
-          <View style={styles.statItem}>
-            <MaterialIcons
-              name="trending-up"
-              size={16}
-              color="rgba(255, 255, 255, 0.8)"
-            />
-            <Text style={styles.statLabel}>Today&apos;s Sales</Text>
-            <Text style={styles.statValue}>
-              {todaySales?.toLocaleString() || "0"}
-            </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <MaterialIcons
-              name="grass"
-              size={16}
-              color="rgba(255, 255, 255, 0.8)"
-            />
-            <Text style={styles.statLabel}>Today&apos;s Sowings</Text>
-            <Text style={styles.statValue}>
-              {todaySowings?.toLocaleString() || "0"}
-            </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <MaterialIcons
-              name="spa"
-              size={16}
-              color="rgba(255, 255, 255, 0.8)"
-            />
-            <Text style={styles.statLabel}>Inventory Items</Text>
-            <Text style={styles.statValue}>
-              {totalInventory?.toLocaleString() || "0"}
-            </Text>
-          </View>
-        </View>
-      </FixedHeader>
-
-      {/* Scrollable Content */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            colors={[Colors.info]}
-            tintColor={Colors.info}
-          />
-        }
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: bottomContentPadding },
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <Pressable
+        onPress={() => refetch()}
+        style={({ pressed }) => [
+          styles.iconButton,
+          pressed && styles.iconButtonPressed,
         ]}
       >
-        {/* KPI Cards */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="dashboard" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Today&apos;s Overview</Text>
+        <MaterialIcons
+          name="refresh"
+          size={18}
+          color={AdminTheme.colors.surfaceMuted}
+          style={isRefetching ? styles.refreshingIcon : undefined}
+        />
+      </Pressable>
+      <Pressable
+        onPress={handleLogout}
+        style={({ pressed }) => [
+          styles.iconButton,
+          pressed && styles.iconButtonPressed,
+        ]}
+      >
+        <MaterialIcons
+          name="logout"
+          size={18}
+          color={AdminTheme.colors.surfaceMuted}
+        />
+      </Pressable>
+    </View>
+  );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
+        <StaffScreen
+          title="Dashboard"
+          subtitle="Loading staff operations..."
+          userName={userName}
+          userRoleLabel={roleLabel}
+          userAvatarText={avatarText || "SM"}
+          userActions={headerActions}
+          contentContainerStyle={{ paddingBottom: bottomContentPadding }}
+        >
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.info} />
+            <Text style={styles.loadingText}>Loading dashboard...</Text>
           </View>
-          <View style={styles.grid}>
-            {KPIS.map((kpi) => (
-              <Pressable
-                key={kpi.title}
-                onPress={() => handleCardPress(kpi.type)}
-                style={({ pressed }) => [
-                  styles.gridItem,
-                  pressed && styles.gridItemPressed,
-                ]}
-              >
-                <KpiCard
-                  title={kpi.title}
-                  value={kpi.value}
-                  icon={kpi.icon}
-                  color={kpi.color}
-                  gradient={kpi.gradient}
-                />
-              </Pressable>
-            ))}
+        </StaffScreen>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <SafeAreaView style={styles.container} edges={["left", "right"]}>
+        <StaffScreen
+          title="Dashboard"
+          subtitle="Unable to load staff operations"
+          userName={userName}
+          userRoleLabel={roleLabel}
+          userAvatarText={avatarText || "SM"}
+          userActions={headerActions}
+          contentContainerStyle={{ paddingBottom: bottomContentPadding }}
+        >
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={64} color={Colors.error} />
+            <Text style={styles.errorTitle}>Unable to Load Dashboard</Text>
+            <Text style={styles.errorMessage}>
+              Please check your connection and try again
+            </Text>
+            <Pressable onPress={() => refetch()} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </Pressable>
+          </View>
+        </StaffScreen>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <StaffScreen
+      title="Dashboard"
+      subtitle="Daily staff operations overview"
+      userName={userName}
+      userRoleLabel={roleLabel}
+      userAvatarText={avatarText || "SM"}
+      userActions={headerActions}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          colors={[Colors.info]}
+          tintColor={Colors.info}
+        />
+      }
+      contentContainerStyle={{ paddingBottom: bottomContentPadding }}
+    >
+      <StaffCard style={styles.summaryCard}>
+        <StaffSectionHeader
+          title="Today's Snapshot"
+          subtitle="Live counts from active staff work"
+        />
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              {stats.todaySalesCount.toLocaleString()}
+            </Text>
+            <Text style={styles.summaryLabel}>Today&apos;s Sales</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              {stats.todaySowingCount.toLocaleString()}
+            </Text>
+            <Text style={styles.summaryLabel}>Today&apos;s Sowings</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              {stats.totalInventory.toLocaleString()}
+            </Text>
+            <Text style={styles.summaryLabel}>Inventory Items</Text>
           </View>
         </View>
+      </StaffCard>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="bolt" size={24} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-          </View>
-          <View style={styles.actionsGrid}>
-            {QUICK_ACTIONS.map((action) => (
-              <Pressable
-                key={action.title}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  action.action();
-                }}
-                style={({ pressed }) => [
-                  styles.actionCard,
-                  { width: actionCardWidth },
-                  pressed && styles.actionCardPressed,
-                ]}
-              >
+      <View style={styles.section}>
+        <StaffSectionHeader
+          title="Today's Overview"
+          subtitle="Primary staff metrics"
+        />
+        <View style={styles.kpiGrid}>
+          {kpis.map((kpi) => (
+            <Pressable
+              key={kpi.label}
+              onPress={() => handleCardPress(kpi.type)}
+              style={({ pressed }) => [
+                styles.kpiWrap,
+                pressed && styles.gridItemPressed,
+              ]}
+            >
+              <AdminKpiCard
+                label={kpi.label}
+                value={kpi.value}
+                helper="Open module"
+                tone={kpi.tone}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <StaffSectionHeader
+          title="Quick Actions"
+          subtitle="Common tasks across the staff module"
+        />
+        <View style={styles.actionsGrid}>
+          {quickActions.map((action) => (
+            <Pressable
+              key={action.title}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                action.action();
+              }}
+              style={({ pressed }) => [
+                styles.actionCard,
+                { width: actionCardWidth },
+                pressed && styles.actionCardPressed,
+              ]}
+            >
+              <StitchCard style={styles.actionCardInner}>
                 <View
                   style={[
                     styles.actionIcon,
@@ -419,7 +417,7 @@ export default function StaffDashboard() {
                 >
                   <MaterialIcons
                     name={action.icon as any}
-                    size={24}
+                    size={22}
                     color={action.color}
                   />
                 </View>
@@ -431,203 +429,72 @@ export default function StaffDashboard() {
                   color={Colors.textTertiary}
                   style={styles.actionArrow}
                 />
-              </Pressable>
-            ))}
-          </View>
+              </StitchCard>
+            </Pressable>
+          ))}
         </View>
+      </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.lastUpdated}>
-            Last updated:{" "}
-            {new Date().toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </Text>
-          <Text style={styles.version}>PNMS Staff Portal • v1.0.0</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={styles.footer}>
+        <Text style={styles.lastUpdated}>
+          Last updated:{" "}
+          {new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </Text>
+        <Text style={styles.version}>PNMS Staff Portal • v1.0.0</Text>
+      </View>
+    </StaffScreen>
   );
 }
 
-/* Updated Styles to Match Admin Dashboard */
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  fixedHeader: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-  },
   headerActions: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
-  },
-  refreshButton: {
+  iconButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    justifyContent:"center",
+    alignItems:"center"
   },
-  refreshButtonPressed: {
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    transform: [{ scale: 0.95 }],
-  },
-  logoutButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  logoutButtonPressed: {
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    transform: [{ scale: 0.95 }],
+  iconButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
   },
   refreshingIcon: {
     transform: [{ rotate: "360deg" }],
   },
-  userWelcome: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  userAvatarText: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500" as const,
-    marginBottom: 2,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "600" as const,
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  userDetails: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-    flexWrap: "wrap" as const,
-  },
-  userEmail: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.7)",
-    fontWeight: "500" as const,
-  },
-  roleBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  roleText: {
-    fontSize: 12,
-    color: Colors.white,
-    fontWeight: "500" as const,
-  },
-  statsSummary: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
-  },
-  statItem: {
-    alignItems: "center" as const,
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.7)",
-    fontWeight: "500" as const,
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-  },
-  contentArea: {
-    flex: 1,
-  },
   loadingContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    minHeight: 360,
+    alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.xl,
-    paddingBottom: NAV_HEIGHT,
   },
   loadingText: {
     marginTop: Spacing.md,
     fontSize: 16,
     color: Colors.textSecondary,
-    fontWeight: "500" as const,
+    fontWeight: "500",
   },
   errorContainer: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
+    minHeight: 360,
+    alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.xl,
-    paddingBottom: NAV_HEIGHT,
   },
   errorTitle: {
     fontSize: 20,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: Colors.error,
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,
@@ -635,7 +502,7 @@ const styles = {
   errorMessage: {
     fontSize: 14,
     color: Colors.textSecondary,
-    textAlign: "center" as const,
+    textAlign: "center",
     marginBottom: Spacing.lg,
     lineHeight: 20,
   },
@@ -645,224 +512,110 @@ const styles = {
     paddingVertical: Spacing.md,
     borderRadius: 12,
   },
-  retryButtonPressed: {
-    backgroundColor: Colors.infoDark || "#1D4ED8",
-    transform: [{ scale: 0.98 }],
-  },
   retryButtonText: {
     color: Colors.white,
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "600",
   },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: NAV_HEIGHT + Spacing.xl,
-  },
-  welcomeCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  welcomeContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+  summaryCard: {
     gap: Spacing.md,
   },
-  welcomeTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: 4,
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  welcomeMessage: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
+  summaryItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: AdminTheme.colors.text,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: AdminTheme.colors.textMuted,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  summaryDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: AdminTheme.colors.borderSoft,
   },
   section: {
-    marginBottom: Spacing.xl,
+    gap: Spacing.md,
   },
-  sectionHeader: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.lg,
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.text,
-    flex: 1,
-  },
-  viewAllButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: Colors.info,
-    fontWeight: "600" as const,
-  },
-  grid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    marginHorizontal: -Spacing.sm,
-  },
-  gridItem: {
-    width: "50%",
-    paddingHorizontal: Spacing.sm,
-    marginBottom: Spacing.md,
+  kpiWrap: {
+    width: "48%",
   },
   gridItemPressed: {
     transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+    opacity: 0.92,
   },
   actionsGrid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.md,
   },
   actionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    position: "relative" as const,
+    borderRadius: 20,
   },
   actionCardPressed: {
-    backgroundColor: Colors.surfaceDark,
     transform: [{ scale: 0.98 }],
+    opacity: 0.95,
+  },
+  actionCardInner: {
+    minHeight: 150,
+    gap: Spacing.sm,
   },
   actionIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginBottom: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xs,
   },
   actionTitle: {
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "700",
     color: Colors.text,
     marginBottom: 2,
   },
   actionSubtitle: {
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 18,
   },
   actionArrow: {
-    position: "absolute" as const,
+    position: "absolute",
     top: Spacing.lg,
     right: Spacing.lg,
   },
-  statsGrid: {
-    flexDirection: "row" as const,
-    gap: Spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  statCardHeader: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  statChange: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 2,
-  },
-  statChangeText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-  },
-  statCardValue: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  statCardTitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
-  },
-  activityList: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    overflow: "hidden" as const,
-  },
-  activityItem: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  activityIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.info + "10",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    marginRight: Spacing.md,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 15,
-    color: Colors.text,
-    marginBottom: 2,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-  },
   footer: {
-    marginTop: Spacing.md,
+    marginTop: Spacing.sm,
     paddingVertical: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    alignItems: "center" as const,
+    alignItems: "center",
     gap: Spacing.xs,
   },
   lastUpdated: {
     fontSize: 12,
     color: Colors.textTertiary,
-    fontWeight: "500" as const,
+    fontWeight: "500",
   },
   version: {
-    fontSize: 11,
+    fontSize: 12,
     color: Colors.textTertiary,
-    fontWeight: "500" as const,
-    textAlign: "center" as const,
   },
-};
+});

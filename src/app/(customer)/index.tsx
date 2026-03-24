@@ -4,93 +4,64 @@ import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
+  FlatList,
   Linking,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeInDown,
-  FadeInUp,
   SlideInRight,
 } from "react-native-reanimated";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import StitchHeader, { StitchHeaderActionButton } from "../../components/common/StitchHeader";
+import {
+  CustomerEmptyState,
+  SectionHeader,
+  StatusChip,
+} from "../../components/common/StitchScreen";
+import { CustomerFilterChip } from "../../components/customer/CustomerFilterChip";
+import { CustomerSurfaceCard } from "../../components/customer/CustomerSurfaceCard";
 import { AuthService } from "../../services/auth.service";
 import type { BannerItem } from "../../services/banner.service";
 import type { CustomerDashboardOverview } from "../../services/customer-dashboard.service";
 import { CustomerDashboardService } from "../../services/customer-dashboard.service";
-import type { NurseryPublicProfile } from "../../types/public-profile.types";
+import {
+  ProductFeedItem,
+  ProductFeedResponse,
+  ProductFeedService,
+} from "../../services/product-feed.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
+import { CustomerColors, Spacing } from "../../theme";
+import { ProductFeedCard } from "../../components/customer/ProductFeedCard";
+import { CUSTOMER_BOTTOM_NAV_HEIGHT } from "../../components/navigation/SharedBottomNav";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BANNER_CARD_WIDTH = SCREEN_WIDTH - 40; // Full width minus padding
 const BANNER_CARD_HEIGHT = 200;
+const FEED_HORIZONTAL_PADDING = Spacing.md * 2;
+const FEED_COLUMN_GAP = Spacing.sm;
 
-const formatMoney = (amount: number) =>
-  `₹${Math.round(amount).toLocaleString("en-IN")}`;
+const normalizeCategoryKey = (value?: string) =>
+  String(value || "").trim().toUpperCase();
+const normalizePhone = (value?: string) => String(value || "").replace(/[^\d]/g, "");
 
-const formatCompactMoney = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
-  return `₹${amount}`;
+const getWhatsAppUrl = (phone: string | undefined, message: string) => {
+  const digits = normalizePhone(phone);
+  if (!digits) return null;
+  const normalizedPhone = digits.startsWith("91") ? digits : `91${digits}`;
+  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
 };
-
-const digitsOnly = (value?: string) => (value || "").replace(/[^\d]/g, "");
-const formatCount = (value: number) =>
-  Math.round(value).toLocaleString("en-IN");
-
-// ==================== STAT CARD COMPONENT ====================
-
-interface StatCardProps {
-  icon: string;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  color: string;
-  gradient?: readonly [string, string];
-  delay?: number;
-}
-
-const StatCard = ({
-  icon,
-  label,
-  value,
-  subValue,
-  color,
-  gradient,
-  delay = 0,
-}: StatCardProps) => (
-  <Animated.View
-    entering={FadeInDown.delay(delay).springify().damping(35)}
-    style={styles.statCard}
-  >
-    <LinearGradient
-      colors={gradient || [color + "15", color + "05"]}
-      style={styles.statCardGradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
-      <View
-        style={[styles.statIconContainer, { backgroundColor: color + "20" }]}
-      >
-        <MaterialIcons name={icon as any} size={20} color={color} />
-      </View>
-      <View style={styles.statContent}>
-        <Text style={styles.statLabel}>{label}</Text>
-        <Text style={[styles.statValue, { color }]}>{value}</Text>
-        {subValue && <Text style={styles.statSubValue}>{subValue}</Text>}
-      </View>
-    </LinearGradient>
-  </Animated.View>
-);
 
 // ==================== BANNER CARD COMPONENT ====================
 
@@ -127,8 +98,8 @@ const BannerCard = ({ banner, onPress, index }: BannerCardProps) => (
         <>
           <LinearGradient
             colors={[
-              banner.color || Colors.primary,
-              (banner.color || Colors.primary) + "80",
+              banner.color || CustomerColors.primary,
+              (banner.color || CustomerColors.primary) + "80",
             ]}
             style={StyleSheet.absoluteFill}
             start={{ x: 0, y: 0 }}
@@ -146,7 +117,7 @@ const BannerCard = ({ banner, onPress, index }: BannerCardProps) => (
                 <MaterialIcons
                   name="arrow-forward"
                   size={16}
-                  color={Colors.white}
+                  color={CustomerColors.white}
                 />
               </View>
             ) : null}
@@ -157,661 +128,16 @@ const BannerCard = ({ banner, onPress, index }: BannerCardProps) => (
   </Animated.View>
 );
 
-// ==================== PAYMENT SUMMARY CARD ====================
-
-interface PaymentSummaryCardProps {
-  dueSummary: {
-    total: number;
-    paid: number;
-    due: number;
-    partialCount: number;
-    pendingVerification: number;
-  };
-  onViewDues: () => void;
-}
-
-const PaymentSummaryCard = ({
-  dueSummary,
-  onViewDues,
-}: PaymentSummaryCardProps) => {
-  const paidPercentage =
-    dueSummary.total > 0 ? (dueSummary.paid / dueSummary.total) * 100 : 0;
-
-  return (
-    <Animated.View
-      entering={FadeInUp.springify().damping(35)}
-      style={styles.card}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardTitleContainer}>
-            <View
-              style={[
-                styles.cardIcon,
-                { backgroundColor: Colors.primary + "10" },
-              ]}
-            >
-              <MaterialIcons name="payments" size={20} color={Colors.primary} />
-            </View>
-            <Text style={styles.cardTitle}>Payment Khata</Text>
-          </View>
-          {dueSummary.pendingVerification > 0 && (
-            <View
-              style={[styles.badge, { backgroundColor: Colors.warning + "10" }]}
-            >
-              <Text style={[styles.badgeText, { color: Colors.warning }]}>
-                {formatCompactMoney(dueSummary.pendingVerification)} pending verify
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.dueMainContainer}>
-          <Text style={styles.dueLabel}>Pending Due</Text>
-          <Text style={styles.dueAmount}>{formatMoney(dueSummary.due)}</Text>
-
-          {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${Math.min(paidPercentage, 100)}%`,
-                    backgroundColor:
-                      paidPercentage < 30 ? Colors.error : Colors.warning,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {paidPercentage.toFixed(1)}% paid
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statBlock}>
-            <MaterialIcons
-              name="receipt"
-              size={14}
-              color={Colors.textSecondary}
-            />
-            <View style={styles.statBlockContent}>
-              <Text style={styles.statBlockLabel}>Total Bill</Text>
-              <Text style={styles.statBlockValue}>
-                {formatCompactMoney(dueSummary.total)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statBlock}>
-            <MaterialIcons
-              name="check-circle"
-              size={14}
-              color={Colors.success}
-            />
-            <View style={styles.statBlockContent}>
-              <Text style={styles.statBlockLabel}>Paid</Text>
-              <Text style={[styles.statBlockValue, { color: Colors.success }]}>
-                {formatCompactMoney(dueSummary.paid)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statBlock}>
-            <MaterialIcons
-              name="hourglass-empty"
-              size={14}
-              color={Colors.warning}
-            />
-            <View style={styles.statBlockContent}>
-              <Text style={styles.statBlockLabel}>Pending</Text>
-              <Text style={[styles.statBlockValue, { color: Colors.warning }]}>
-                {formatCompactMoney(dueSummary.pendingVerification)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <Pressable
-          onPress={onViewDues}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-            style={styles.buttonGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <Text style={styles.buttonText}>Open Dues & Payments</Text>
-            <MaterialIcons
-              name="arrow-forward"
-              size={18}
-              color={Colors.white}
-            />
-          </LinearGradient>
-        </Pressable>
-      </LinearGradient>
-    </Animated.View>
-  );
-};
-
-// ==================== LIFECYCLE CARD ====================
-
-interface LifecycleCardProps {
-  lifecycle: {
-    sown: number;
-    germinated: number;
-    discarded: number;
-    pending: number;
-  };
-  onTrackProducts: () => void;
-}
-
-const LifecycleCard = ({ lifecycle, onTrackProducts }: LifecycleCardProps) => {
-  const total =
-    lifecycle.sown +
-    lifecycle.germinated +
-    lifecycle.discarded +
-    lifecycle.pending;
-  const germinationRate =
-    lifecycle.sown > 0
-      ? ((lifecycle.germinated / lifecycle.sown) * 100).toFixed(1)
-      : "0";
-
-  return (
-    <Animated.View
-      entering={FadeInUp.delay(100).springify().damping(35)}
-      style={styles.card}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardTitleContainer}>
-            <View
-              style={[
-                styles.cardIcon,
-                { backgroundColor: Colors.success + "10" },
-              ]}
-            >
-              <MaterialIcons name="spa" size={20} color={Colors.success} />
-            </View>
-            <Text style={styles.cardTitle}>Seed Progress</Text>
-          </View>
-          <View
-            style={[styles.badge, { backgroundColor: Colors.success + "10" }]}
-          >
-            <Text style={[styles.badgeText, { color: Colors.success }]}>
-              {germinationRate}% rate
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.lifecycleGrid}>
-          <View style={styles.lifecycleItem}>
-            <View
-              style={[
-                styles.lifecycleIcon,
-                { backgroundColor: Colors.primary + "10" },
-              ]}
-            >
-              <MaterialIcons name="grass" size={16} color={Colors.primary} />
-            </View>
-            <Text style={styles.lifecycleValue}>
-              {formatCount(lifecycle.sown)}
-            </Text>
-            <Text style={styles.lifecycleLabel}>Seeds Given</Text>
-          </View>
-
-          <View style={styles.lifecycleItem}>
-            <View
-              style={[
-                styles.lifecycleIcon,
-                { backgroundColor: Colors.success + "10" },
-              ]}
-            >
-              <MaterialIcons name="spa" size={16} color={Colors.success} />
-            </View>
-            <Text style={styles.lifecycleValue}>
-              {formatCount(lifecycle.germinated)}
-            </Text>
-            <Text style={styles.lifecycleLabel}>Germinated</Text>
-          </View>
-
-          <View style={styles.lifecycleItem}>
-            <View
-              style={[
-                styles.lifecycleIcon,
-                { backgroundColor: Colors.error + "10" },
-              ]}
-            >
-              <MaterialIcons name="delete" size={16} color={Colors.error} />
-            </View>
-            <Text style={styles.lifecycleValue}>
-              {formatCount(lifecycle.discarded)}
-            </Text>
-            <Text style={styles.lifecycleLabel}>Loss</Text>
-          </View>
-
-          <View style={styles.lifecycleItem}>
-            <View
-              style={[
-                styles.lifecycleIcon,
-                { backgroundColor: Colors.warning + "10" },
-              ]}
-            >
-              <MaterialIcons name="pending" size={16} color={Colors.warning} />
-            </View>
-            <Text style={styles.lifecycleValue}>
-              {formatCount(lifecycle.pending)}
-            </Text>
-            <Text style={styles.lifecycleLabel}>In Nursery</Text>
-          </View>
-        </View>
-
-        <Pressable
-          onPress={onTrackProducts}
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <Text style={styles.secondaryButtonText}>View Seed Progress</Text>
-          <MaterialIcons
-            name="arrow-forward"
-            size={16}
-            color={Colors.primary}
-          />
-        </Pressable>
-      </LinearGradient>
-    </Animated.View>
-  );
-};
-
-// ==================== CONTACT & PAYMENT CARD ====================
-
-interface ContactCardProps {
-  profile: NurseryPublicProfile;
-  onPayWithUpi: () => void;
-  onCopyUpi: () => void;
-  onUploadProof: () => void;
-  onSaveQr: () => void;
-  onOpenWhatsApp: () => void;
-  onCallPhone: (phone?: string) => void;
-  onOpenEmail: (email?: string) => void;
-  onOpenExternal: (url?: string) => void;
-}
-
-const ContactCard = ({
-  profile,
-  onPayWithUpi,
-  onCopyUpi,
-  onUploadProof,
-  onSaveQr,
-  onOpenWhatsApp,
-  onCallPhone,
-  onOpenEmail,
-  onOpenExternal,
-}: ContactCardProps) => {
-  const paymentConfig = profile.paymentConfig || {};
-  const contactDetails = Array.isArray(profile.contactDetails)
-    ? profile.contactDetails
-    : [];
-
-  const primaryContact = contactDetails[0];
-  const primaryPhone = profile.primaryPhone || primaryContact?.phoneNumber;
-  const whatsappPhone = profile.whatsappPhone || primaryContact?.whatsappNumber;
-  const primaryEmail = primaryContact?.email;
-
-  const hasContactInfo =
-    profile.upiId ||
-    profile.qrImageUrl ||
-    primaryPhone ||
-    profile.secondaryPhone ||
-    whatsappPhone ||
-    primaryEmail ||
-    paymentConfig.beneficiaryName ||
-    paymentConfig.bankName ||
-    paymentConfig.accountNumber ||
-    paymentConfig.ifscCode ||
-    paymentConfig.paymentNotes ||
-    profile.website ||
-    profile.facebook ||
-    profile.instagram ||
-    profile.youtube ||
-    contactDetails.length > 0;
-
-  return (
-    <Animated.View
-      entering={FadeInUp.delay(200).springify().damping(35)}
-      style={styles.card}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardTitleContainer}>
-            <View
-              style={[styles.cardIcon, { backgroundColor: Colors.info + "10" }]}
-            >
-              <MaterialIcons name="payments" size={20} color={Colors.info} />
-            </View>
-            <Text style={styles.cardTitle}>Pay & Contact</Text>
-          </View>
-        </View>
-
-        {profile.qrImageUrl ? (
-          <View style={styles.qrContainer}>
-            <Image
-              source={{ uri: profile.qrImageUrl }}
-              style={styles.qrImage}
-              contentFit="contain"
-              transition={300}
-            />
-            <Text style={styles.qrHint}>Scan to pay</Text>
-          </View>
-        ) : null}
-
-        {profile.upiId && (
-          <View style={styles.upiContainer}>
-            <MaterialIcons name="qr-code" size={16} color={Colors.primary} />
-            <Text style={styles.upiText} numberOfLines={1}>
-              {profile.upiId}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.buttonGrid}>
-          <Pressable
-            onPress={onPayWithUpi}
-            style={({ pressed }) => [
-              styles.gridButton,
-              styles.primaryGridButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <MaterialIcons name="payments" size={18} color={Colors.white} />
-            <Text style={styles.gridButtonText}>Pay via UPI</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onCopyUpi}
-            style={({ pressed }) => [
-              styles.gridButton,
-              styles.outlineGridButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <MaterialIcons
-              name="content-copy"
-              size={18}
-              color={Colors.primary}
-            />
-            <Text style={styles.outlineGridButtonText}>Copy UPI</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.buttonGrid}>
-          <Pressable
-            onPress={onUploadProof}
-            style={({ pressed }) => [
-              styles.gridButton,
-              styles.outlineGridButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <MaterialIcons
-              name="upload-file"
-              size={18}
-              color={Colors.primary}
-            />
-            <Text style={styles.outlineGridButtonText}>Upload Proof</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={onSaveQr}
-            style={({ pressed }) => [
-              styles.gridButton,
-              styles.outlineGridButton,
-              pressed && styles.buttonPressed,
-            ]}
-          >
-            <MaterialIcons name="save-alt" size={18} color={Colors.primary} />
-            <Text style={styles.outlineGridButtonText}>Save QR</Text>
-          </Pressable>
-        </View>
-
-        {hasContactInfo && (
-          <View style={styles.contactInfo}>
-            {primaryPhone && (
-              <Pressable
-                onPress={() => onCallPhone(primaryPhone)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons
-                  name="phone"
-                  size={14}
-                  color={Colors.textSecondary}
-                />
-                <Text style={[styles.contactText, styles.linkText]}>
-                  Call: {primaryPhone}
-                </Text>
-              </Pressable>
-            )}
-            {profile.secondaryPhone && (
-              <Pressable
-                onPress={() => onCallPhone(profile.secondaryPhone)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons
-                  name="phone-android"
-                  size={14}
-                  color={Colors.textSecondary}
-                />
-                <Text style={[styles.contactText, styles.linkText]}>
-                  Alt: {profile.secondaryPhone}
-                </Text>
-              </Pressable>
-            )}
-            {whatsappPhone && (
-              <Pressable onPress={onOpenWhatsApp} style={styles.contactRow}>
-                <MaterialIcons name="chat" size={14} color={Colors.success} />
-                <Text style={[styles.contactText, styles.linkText]}>
-                  WhatsApp: {whatsappPhone}
-                </Text>
-              </Pressable>
-            )}
-            {primaryEmail && (
-              <Pressable
-                onPress={() => onOpenEmail(primaryEmail)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons
-                  name="email"
-                  size={14}
-                  color={Colors.textSecondary}
-                />
-                <Text style={[styles.contactText, styles.linkText]}>
-                  Email: {primaryEmail}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {(paymentConfig.beneficiaryName ||
-          paymentConfig.bankName ||
-          paymentConfig.accountNumber ||
-          paymentConfig.ifscCode) && (
-          <View style={styles.detailsCard}>
-            <Text style={styles.detailsTitle}>Bank & Payment Details</Text>
-            {paymentConfig.beneficiaryName && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Beneficiary</Text>
-                <Text style={styles.detailValue}>{paymentConfig.beneficiaryName}</Text>
-              </View>
-            )}
-            {paymentConfig.bankName && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Bank</Text>
-                <Text style={styles.detailValue}>{paymentConfig.bankName}</Text>
-              </View>
-            )}
-            {paymentConfig.accountNumber && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Account</Text>
-                <Text style={styles.detailValue}>{paymentConfig.accountNumber}</Text>
-              </View>
-            )}
-            {paymentConfig.ifscCode && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>IFSC</Text>
-                <Text style={styles.detailValue}>{paymentConfig.ifscCode}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {contactDetails.length > 0 && (
-          <View style={styles.detailsCard}>
-            <Text style={styles.detailsTitle}>Contact Directory</Text>
-            {contactDetails.map((contact) => (
-              <View key={contact.id || `${contact.label}-${contact.phoneNumber}`} style={styles.contactDetailCard}>
-                {contact.label ? (
-                  <Text style={styles.contactDetailTitle}>{contact.label}</Text>
-                ) : null}
-                {contact.phoneNumber ? (
-                  <Pressable
-                    onPress={() => onCallPhone(contact.phoneNumber)}
-                    style={styles.contactRow}
-                  >
-                    <MaterialIcons name="phone" size={14} color={Colors.textSecondary} />
-                    <Text style={[styles.contactText, styles.linkText]}>
-                      {contact.phoneNumber}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {contact.whatsappNumber ? (
-                  <Pressable
-                    onPress={() => onOpenExternal(`https://wa.me/${digitsOnly(contact.whatsappNumber)}`)}
-                    style={styles.contactRow}
-                  >
-                    <MaterialIcons name="chat" size={14} color={Colors.success} />
-                    <Text style={[styles.contactText, styles.linkText]}>
-                      WhatsApp: {contact.whatsappNumber}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {contact.email ? (
-                  <Pressable
-                    onPress={() => onOpenEmail(contact.email)}
-                    style={styles.contactRow}
-                  >
-                    <MaterialIcons name="email" size={14} color={Colors.textSecondary} />
-                    <Text style={[styles.contactText, styles.linkText]}>{contact.email}</Text>
-                  </Pressable>
-                ) : null}
-                {contact.address ? (
-                  <View style={styles.contactRow}>
-                    <MaterialIcons name="location-on" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.contactText}>{contact.address}</Text>
-                  </View>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {(profile.website || profile.facebook || profile.instagram || profile.youtube) && (
-          <View style={styles.detailsCard}>
-            <Text style={styles.detailsTitle}>Web & Social</Text>
-            {profile.website && (
-              <Pressable
-                onPress={() => onOpenExternal(profile.website)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons name="language" size={14} color={Colors.textSecondary} />
-                <Text style={[styles.contactText, styles.linkText]}>{profile.website}</Text>
-              </Pressable>
-            )}
-            {profile.facebook && (
-              <Pressable
-                onPress={() => onOpenExternal(profile.facebook)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons name="facebook" size={14} color={Colors.textSecondary} />
-                <Text style={[styles.contactText, styles.linkText]}>{profile.facebook}</Text>
-              </Pressable>
-            )}
-            {profile.instagram && (
-              <Pressable
-                onPress={() => onOpenExternal(profile.instagram)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons name="photo-camera" size={14} color={Colors.textSecondary} />
-                <Text style={[styles.contactText, styles.linkText]}>{profile.instagram}</Text>
-              </Pressable>
-            )}
-            {profile.youtube && (
-              <Pressable
-                onPress={() => onOpenExternal(profile.youtube)}
-                style={styles.contactRow}
-              >
-                <MaterialIcons name="smart-display" size={14} color={Colors.textSecondary} />
-                <Text style={[styles.contactText, styles.linkText]}>{profile.youtube}</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {(profile.notes || paymentConfig.paymentNotes) && (
-          <View style={styles.notesContainer}>
-            <MaterialIcons name="info" size={14} color={Colors.warning} />
-            <Text style={styles.notesText}>
-              {profile.notes || paymentConfig.paymentNotes}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.hintContainer}>
-          <MaterialIcons
-            name="info-outline"
-            size={12}
-            color={Colors.textTertiary}
-          />
-          <Text style={styles.hintText}>
-            After payment, upload proof for verification
-          </Text>
-        </View>
-      </LinearGradient>
-    </Animated.View>
-  );
-};
-
 // ==================== MAIN COMPONENT ====================
 
 export default function CustomerDashboard() {
+  const bannerScrollRef = useRef<ScrollView | null>(null);
+  const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("ALL");
+  const { width: viewportWidth } = useWindowDimensions();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
 
@@ -828,24 +154,104 @@ export default function CustomerDashboard() {
       }),
   });
 
-  const dueSummary =
-    data?.dueSummary ||
-    ({
-      total: 0,
-      paid: 0,
-      due: 0,
-      partialCount: 0,
-      pendingVerification: 0,
-    } as const);
+  const {
+    data: productFeedData,
+    isLoading: loadingFeed,
+    refetch: refetchFeed,
+    isRefetching: refetchingFeed,
+  } = useQuery<ProductFeedResponse>({
+    queryKey: ["customer-product-feed", user?.nurseryId],
+    queryFn: () => ProductFeedService.getCustomerFeed(),
+  });
 
-  const lifecycle = data?.lifecycle || {
-    sown: 0,
-    germinated: 0,
-    discarded: 0,
-    pending: 0,
+  const feedSections = Array.isArray(productFeedData?.sections)
+    ? productFeedData.sections
+    : [];
+  const feedItems = Array.isArray(productFeedData?.items)
+    ? productFeedData.items
+    : [];
+
+  const sectionItems = feedSections.flatMap((section) => section.items || []);
+  const combinedFeedItems = [...sectionItems, ...feedItems].filter(Boolean);
+  const dedupedFeedItems = combinedFeedItems.reduce((acc, item) => {
+    const id = String(item?.id || "");
+    if (id && acc.seen.has(id)) return acc;
+    if (id) acc.seen.add(id);
+    acc.items.push(item);
+    return acc;
+  }, {
+    items: [] as typeof combinedFeedItems,
+    seen: new Set<string>(),
+  }).items;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const matchesSearch = (item: any) => {
+    if (!normalizedSearch) return true;
+    const name = String(item?.name || "").toLowerCase();
+    const category = String(item?.category || "").toLowerCase();
+    const variety = String(item?.meta?.variety || "").toLowerCase();
+    return (
+      name.includes(normalizedSearch) ||
+      category.includes(normalizedSearch) ||
+      variety.includes(normalizedSearch)
+    );
   };
 
-  const profile = (data?.nurseryPublicProfile || {}) as NurseryPublicProfile;
+  const matchesCategory = (item: any) => {
+    if (activeCategory === "ALL") return true;
+    const normalizedCategory = normalizeCategoryKey(item?.category);
+    if (activeCategory === "PLANTS") {
+      return item?.type === "PLANT" || normalizedCategory === "PLANT" || normalizedCategory === "PLANTS";
+    }
+    if (activeCategory === "SEEDS") {
+      return item?.type === "SEED" || normalizedCategory === "SEED" || normalizedCategory === "SEEDS";
+    }
+    if (activeCategory === "FLOWERS") {
+      return normalizedCategory === "FLOWER" || normalizedCategory === "FLOWERS";
+    }
+    if (activeCategory === "VEGETABLES") {
+      return normalizedCategory === "VEGETABLE" || normalizedCategory === "VEGETABLES";
+    }
+    return true;
+  };
+
+  const filteredItems = dedupedFeedItems.filter(
+    (item) => matchesSearch(item) && matchesCategory(item),
+  );
+
+  const profile: CustomerDashboardOverview["nurseryPublicProfile"] =
+    data?.nurseryPublicProfile ||
+    ({
+      nurseryId: String(user?.nurseryId || "default_nursery"),
+      updatedAt: new Date().toISOString(),
+    } as CustomerDashboardOverview["nurseryPublicProfile"]);
+  const bannerCount = Array.isArray(data?.banners) ? data.banners.length : 0;
+  const nurseryName = String(profile?.name || "Nursery").trim() || "Nursery";
+  const nurserySubtitle = "Plants, seeds and nursery services";
+  const hasAnyFeedItems = dedupedFeedItems.length > 0;
+  const displayCount = filteredItems.length;
+  const filterOptions = [
+    { key: "ALL", label: "All" },
+    { key: "PLANTS", label: "Plants" },
+    { key: "SEEDS", label: "Seeds" },
+    { key: "FLOWERS", label: "Flowers" },
+    { key: "VEGETABLES", label: "Vegetables" },
+  ];
+  const feedListItems: Array<ProductFeedItem | { id: string; __skeleton: true }> = loadingFeed
+    ? Array.from({ length: 6 }).map((_, idx) => ({
+        id: `skeleton-${idx}`,
+        __skeleton: true as const,
+      }))
+    : filteredItems;
+  const cardWidth = Math.max(
+    156,
+    (viewportWidth - FEED_HORIZONTAL_PADDING - FEED_COLUMN_GAP) / 2,
+  );
+  const enquiryPhone =
+    profile?.whatsappPhone ||
+    profile?.phoneNumber ||
+    profile?.primaryPhone ||
+    profile?.contactDetails?.[0]?.whatsappNumber ||
+    profile?.contactDetails?.[0]?.phoneNumber;
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -874,219 +280,254 @@ export default function CustomerDashboard() {
     }
   };
 
-  const payWithUpi = () => {
-    const upiId = String(profile.upiId || "").trim();
-    if (!upiId) {
-      Alert.alert(
-        "UPI not available",
-        "Nursery has not configured a UPI ID yet.",
-      );
+  const handleProductEnquiry = async (item: ProductFeedItem) => {
+    const message = `Hello, I am interested in this product from ${nurseryName}:\n\nProduct: ${
+      item?.name || "Product"
+    }\nCategory: ${String(item?.category || item?.type || "General")}\nPrice: ${
+      typeof item?.price === "number"
+        ? `₹${Math.round(item.price).toLocaleString("en-IN")}`
+        : "Price on request"
+    }\n\nPlease share more details.`;
+    const whatsappUrl = getWhatsAppUrl(enquiryPhone, message);
+
+    if (!whatsappUrl) {
+      Alert.alert("Contact unavailable", "Nursery WhatsApp number is not available.");
       return;
     }
 
-    const uri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent("Nursery")}&tn=${encodeURIComponent("PNMS Payment")}`;
-    Linking.openURL(uri).catch(() => {
-      Alert.alert(
-        "UPI app not found",
-        "Please use the QR code or your UPI app manually.",
-      );
-    });
-  };
-
-  const openWhatsApp = () => {
-    const phone = digitsOnly(profile.whatsappPhone || profile.primaryPhone);
-    if (!phone) {
-      Alert.alert("WhatsApp not available", "No WhatsApp number configured.");
-      return;
-    }
-    const url = `https://wa.me/${phone}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert("Unable to open", "Could not open WhatsApp chat.");
-    });
-  };
-
-  const openPhoneDialer = (phone?: string) => {
-    const raw = String(phone || "").trim();
-    if (!raw) {
-      Alert.alert("Phone not available", "No phone number is configured.");
-      return;
-    }
-    Linking.openURL(`tel:${raw}`).catch(() => {
-      Alert.alert("Unable to call", "Could not open dialer.");
-    });
-  };
-
-  const openEmail = (email?: string) => {
-    const raw = String(email || "").trim();
-    if (!raw) {
-      Alert.alert("Email not available", "No email is configured.");
-      return;
-    }
-    Linking.openURL(`mailto:${raw}`).catch(() => {
-      Alert.alert("Unable to open", "Could not open email app.");
-    });
-  };
-
-  const openExternalLink = (url?: string) => {
-    const raw = String(url || "").trim();
-    if (!raw) return;
-    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-    Linking.openURL(normalized).catch(() => {
-      Alert.alert("Unable to open", "Could not open this link.");
-    });
-  };
-
-  const copyUpiId = async () => {
-    const upiId = String(profile.upiId || "").trim();
-    if (!upiId) {
-      Alert.alert(
-        "UPI not available",
-        "Nursery has not configured a UPI ID yet.",
-      );
-      return;
-    }
     try {
-      const Clipboard = require("expo-clipboard");
-      await Clipboard.setStringAsync(upiId);
-      Alert.alert("Copied", "UPI ID copied to clipboard.");
-    } catch {
-      Alert.alert(
-        "Copy unavailable",
-        "Clipboard support is unavailable on this build.",
-      );
-    }
-  };
-
-  const saveOrShareQr = async () => {
-    const qrUrl = String(profile.qrImageUrl || "").trim();
-    if (!qrUrl) {
-      Alert.alert(
-        "QR not available",
-        "Nursery has not uploaded a QR image yet.",
-      );
-      return;
-    }
-    try {
-      const FileSystem = require("expo-file-system");
-      const Sharing = require("expo-sharing");
-      const ext = qrUrl.toLowerCase().includes(".png") ? "png" : "jpg";
-      const fileUri = `${FileSystem.cacheDirectory}pnms_qr_${Date.now()}.${ext}`;
-      await FileSystem.downloadAsync(qrUrl, fileUri);
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          dialogTitle: "Save or share payment QR",
-          mimeType: ext === "png" ? "image/png" : "image/jpeg",
-          UTI: ext === "png" ? "public.png" : "public.jpeg",
-        });
-      } else if (Platform.OS === "web") {
-        window.open(qrUrl, "_blank");
-      } else {
-        Alert.alert("Share unavailable", "Unable to open save/share dialog.");
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+        return;
       }
+
+      const digits = normalizePhone(enquiryPhone);
+      const normalizedPhone = digits.startsWith("91") ? digits : `91${digits}`;
+      const fallbackUrl = `https://api.whatsapp.com/send?phone=${normalizedPhone}&text=${encodeURIComponent(message)}`;
+      await Linking.openURL(fallbackUrl);
     } catch {
-      Alert.alert("Unable to save", "Could not download QR image right now.");
+      Alert.alert("Unable to open enquiry", "Please make sure WhatsApp is available on your device.");
     }
   };
+
+  useEffect(() => {
+    if (bannerCount <= 1) {
+      setActiveBannerIndex(0);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setActiveBannerIndex((current) => {
+        const nextIndex = (current + 1) % bannerCount;
+        bannerScrollRef.current?.scrollTo({
+          x: nextIndex * (BANNER_CARD_WIDTH + Spacing.md),
+          animated: true,
+        });
+        return nextIndex;
+      });
+    }, 4500);
+
+    return () => clearInterval(timer);
+  }, [bannerCount]);
 
   return (
     <View style={styles.container}>
-      <FixedHeader
-        title="Customer Dashboard"
-        subtitle={`Welcome, ${user?.name || "Customer"}`}
+      <StitchHeader
+        variant="gradient"
+        backgroundColor={CustomerColors.background}
+        borderBottomColor={CustomerColors.border}
+        title={nurseryName}
+        subtitle={nurserySubtitle}
+        brandImageUrl={profile?.logoImageUrl}
+        brandImagePlacement="right"
         titleStyle={styles.headerTitle}
         userName={user?.name || "Customer"}
         userRoleLabel="Customer"
         onLogout={handleLogout}
-        actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={() => refetch()}
-          >
-            <MaterialIcons
-              name={isRefetching ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
-            />
-          </Pressable>
+        userActions={
+          <StitchHeaderActionButton
+            iconName={isRefetching || refetchingFeed ? "sync" : "refresh"}
+            onPress={() => {
+              refetch();
+              refetchFeed();
+            }}
+          />
         }
       />
 
-      <ScrollView
+      <FlatList
+        data={feedListItems}
+        extraData={cardWidth}
+        keyExtractor={(item, index) => String(item?.id || `feed-item-${index}`)}
+        numColumns={2}
+        columnWrapperStyle={styles.feedRow}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Banners Section */}
-        {Array.isArray(data?.banners) && data.banners.length > 0 ? (
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={BANNER_CARD_WIDTH + Spacing.md}
-            style={styles.bannerScroll}
-          >
-            {data.banners.map((banner: BannerItem, index) => (
-              <BannerCard
-                key={banner.id}
-                banner={banner}
-                onPress={handleBannerPress}
-                index={index}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: Spacing.md + CUSTOMER_BOTTOM_NAV_HEIGHT + insets.bottom },
+        ]}
+        ListHeaderComponent={
+          <View style={styles.listHeader}>
+            {/* Search Bar */}
+            <View style={styles.searchWrap}>
+              <MaterialIcons name="search" size={20} color={CustomerColors.textMuted} />
+              <TextInput
+                placeholder="Search plants, seeds, products"
+                placeholderTextColor={CustomerColors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={styles.searchInput}
               />
-            ))}
-          </ScrollView>
-        ) : (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            style={styles.emptyBanner}
-          >
-            <MaterialIcons
-              name="campaign"
-              size={32}
-              color={Colors.textTertiary}
-            />
-            <Text style={styles.emptyBannerText}>
-              No active offers right now
-            </Text>
-          </Animated.View>
-        )}
+              {searchQuery ? (
+                <Pressable onPress={() => setSearchQuery("")} style={styles.searchClear}>
+                  <MaterialIcons name="close" size={16} color={CustomerColors.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
 
-        {/* Payment Summary Card */}
-        <PaymentSummaryCard
-          dueSummary={dueSummary}
-          onViewDues={() => router.push("/(customer)/dues" as any)}
-        />
+            {/* Banners Section */}
+            {Array.isArray(data?.banners) && data.banners.length > 0 ? (
+              <>
+                <ScrollView
+                  ref={bannerScrollRef}
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  snapToInterval={BANNER_CARD_WIDTH + Spacing.md}
+                  style={styles.bannerScroll}
+                  onMomentumScrollEnd={(event) => {
+                    const offsetX = event.nativeEvent.contentOffset.x;
+                    const nextIndex = Math.round(
+                      offsetX / (BANNER_CARD_WIDTH + Spacing.md),
+                    );
+                    setActiveBannerIndex(nextIndex);
+                  }}
+                >
+                  {data.banners.map((banner: BannerItem, index) => (
+                    <BannerCard
+                      key={banner.id}
+                      banner={banner}
+                      onPress={handleBannerPress}
+                      index={index}
+                    />
+                  ))}
+                </ScrollView>
+                <View style={styles.bannerDots}>
+                  {data.banners.map((banner: BannerItem, index) => (
+                    <View
+                      key={`${banner.id}-dot`}
+                      style={[
+                        styles.bannerDot,
+                        index === activeBannerIndex && styles.bannerDotActive,
+                      ]}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <Animated.View
+                entering={FadeInDown.springify()}
+                style={styles.emptyBanner}
+              >
+                <CustomerEmptyState
+                  title="No active offers"
+                  message="New nursery updates and offers will show up here."
+                  icon={<MaterialIcons name="campaign" size={36} color={CustomerColors.textMuted} />}
+                />
+              </Animated.View>
+            )}
 
-        {/* Lifecycle Card */}
-        <LifecycleCard
-          lifecycle={lifecycle}
-          onTrackProducts={() => router.push("/(customer)/seeds" as any)}
-        />
+            {/* Product Feed Header */}
+            <Animated.View entering={FadeInDown.delay(120).springify().damping(35)}>
+              <CustomerSurfaceCard style={styles.marketplaceSectionCard}>
+                <SectionHeader
+                  title="Available from this nursery"
+                  subtitle="Plants, seeds, and inventory ready to order."
+                  trailing={
+                    <StatusChip
+                      label={`${displayCount} item${displayCount !== 1 ? "s" : ""}`}
+                      tone="info"
+                    />
+                  }
+                />
 
-        {/* Contact & Payment Card */}
-        <ContactCard
-          profile={profile}
-          onPayWithUpi={payWithUpi}
-          onCopyUpi={copyUpiId}
-          onUploadProof={() => router.push("/(customer)/dues" as any)}
-          onSaveQr={saveOrShareQr}
-          onOpenWhatsApp={openWhatsApp}
-          onCallPhone={openPhoneDialer}
-          onOpenEmail={openEmail}
-          onOpenExternal={openExternalLink}
-        />
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterBar}
+                >
+                  {filterOptions.map((filter) => (
+                    <CustomerFilterChip
+                      key={filter.key}
+                      label={filter.label}
+                      active={activeCategory === filter.key}
+                      onPress={() => setActiveCategory(filter.key)}
+                    />
+                  ))}
+                </ScrollView>
+              </CustomerSurfaceCard>
+            </Animated.View>
 
-        {/* Loading Indicator */}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <MaterialIcons name="sync" size={20} color={Colors.primary} />
-            <Text style={styles.loadingText}>Loading latest data...</Text>
+            {isLoading && (
+              <View style={styles.loadingContainer}>
+                <MaterialIcons name="sync" size={20} color={CustomerColors.primary} />
+                <Text style={styles.loadingText}>Loading latest data...</Text>
+              </View>
+            )}
           </View>
-        )}
-      </ScrollView>
+        }
+        renderItem={({ item }) => {
+          if ("__skeleton" in item) {
+            return (
+              <View style={[styles.feedSkeletonCard, { minWidth: cardWidth, maxWidth: cardWidth }]}>
+                <View style={styles.feedSkeletonMedia} />
+                <View style={styles.feedSkeletonLine} />
+                <View style={styles.feedSkeletonLineShort} />
+              </View>
+            );
+          }
+          const canNavigate = Boolean(item?.id);
+          return (
+            <ProductFeedCard
+              item={item}
+              style={[styles.feedCard, { minWidth: cardWidth, maxWidth: cardWidth }]}
+              onEnquire={() => handleProductEnquiry(item)}
+              onPress={
+                canNavigate
+                  ? () =>
+                      router.push({
+                        pathname: "/(customer)/product-feed/[id]",
+                        params: { id: item.id },
+                      } as any)
+                  : undefined
+              }
+            />
+          );
+        }}
+        ListEmptyComponent={
+          !loadingFeed
+            ? () => (
+                <CustomerEmptyState
+                  title={hasAnyFeedItems ? "No matches found" : "No products available"}
+                  message={
+                    hasAnyFeedItems
+                      ? "Try another search or filter."
+                      : "New items will appear here when they are ready."
+                  }
+                  icon={
+                    <MaterialIcons
+                      name={hasAnyFeedItems ? "search-off" : "inventory-2"}
+                      size={36}
+                      color={CustomerColors.textMuted}
+                    />
+                  }
+                />
+              )
+            : null
+        }
+      />
     </View>
   );
 }
@@ -1094,46 +535,162 @@ export default function CustomerDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: CustomerColors.background,
   },
   headerTitle: {
     fontSize: 24,
   },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  listContent: {
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.md,
+  },
+  listHeader: {
+    gap: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.32)",
+    borderColor: CustomerColors.border,
+    backgroundColor: CustomerColors.white,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: CustomerColors.text,
+  },
+  searchClear: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: CustomerColors.border,
   },
-  headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    transform: [{ scale: 0.95 }],
-  },
-  content: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: 100,
+  marketplaceSectionCard: {
     gap: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  filterBar: {
+    gap: Spacing.sm,
+    paddingRight: Spacing.sm,
+  },
+  feedRow: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+    alignItems: "stretch",
+  },
+  feedCard: {
+    flex: 1,
+    backgroundColor: CustomerColors.white
+  },
+  feedSkeletonCard: {
+    flex: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CustomerColors.border,
+    backgroundColor: CustomerColors.white,
+    padding: 14,
+    gap: 12,
+    minHeight: 260,
+  },
+  feedSkeletonMedia: {
+    height: 148,
+    borderRadius: 16,
+    backgroundColor: CustomerColors.border,
+  },
+  feedSkeletonLine: {
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: CustomerColors.border,
+  },
+  feedSkeletonLineShort: {
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: CustomerColors.border,
+    width: "70%",
+  },
+  paymentsCard: {
+    gap: Spacing.md,
+  },
+  paymentsPills: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  progressWrap: {
+    gap: 8,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: CustomerColors.border,
+    overflow: "hidden",
+  },
+  progressFillNew: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: CustomerColors.primary,
+  },
+  progressLabelNew: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
+    textAlign: "right",
+  },
+  lifecycleCardNew: {
+    gap: Spacing.md,
+  },
+  lifecyclePillsNew: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  lifecycleFooterNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  lifecycleMetaNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  lifecycleMetaTextNew: {
+    color: CustomerColors.textMuted,
+    fontWeight: "700",
   },
 
   // Banner Styles
   bannerScroll: {
     marginBottom: Spacing.sm,
   },
+  bannerDots: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: Spacing.md,
+  },
+  bannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: CustomerColors.border,
+  },
+  bannerDotActive: {
+    width: 22,
+    backgroundColor: CustomerColors.primary,
+  },
   bannerCard: {
     width: BANNER_CARD_WIDTH,
     marginRight: Spacing.md,
     borderRadius: 20,
     overflow: "hidden",
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    
   },
   bannerPressable: {
     height: BANNER_CARD_HEIGHT,
@@ -1160,7 +717,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.3)",
   },
   bannerTitle: {
-    color: Colors.white,
+    color: CustomerColors.white,
     fontWeight: "700",
     fontSize: 18,
     marginBottom: 2,
@@ -1177,7 +734,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   bannerCta: {
-    color: Colors.white,
+    color: CustomerColors.white,
     fontWeight: "600",
     fontSize: 13,
   },
@@ -1185,14 +742,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 32,
-    backgroundColor: Colors.white,
+    backgroundColor: CustomerColors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: CustomerColors.borderStrong,
     gap: 8,
   },
   emptyBannerText: {
-    color: Colors.textSecondary,
+    color: CustomerColors.textMuted,
     fontSize: 14,
   },
 
@@ -1201,9 +758,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
+    borderColor: CustomerColors.borderStrong,
+    backgroundColor: CustomerColors.surface,
+    shadowColor: CustomerColors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -1250,8 +807,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
+    borderColor: CustomerColors.borderStrong,
+    backgroundColor: CustomerColors.surface,
   },
   statCardGradient: {
     padding: Spacing.md,
@@ -1293,7 +850,7 @@ const styles = StyleSheet.create({
   dueAmount: {
     fontSize: 36,
     fontWeight: "700",
-    color: Colors.error,
+    color: CustomerColors.danger,
     marginBottom: Spacing.sm,
   },
   progressContainer: {
@@ -1362,7 +919,7 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   buttonText: {
-    color: Colors.white,
+    color: CustomerColors.white,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1372,13 +929,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: CustomerColors.primary,
     borderRadius: 12,
     backgroundColor: "transparent",
     gap: Spacing.sm,
   },
   secondaryButtonText: {
-    color: Colors.primary,
+    color: CustomerColors.primary,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1449,7 +1006,7 @@ const styles = StyleSheet.create({
   },
   upiText: {
     fontSize: 13,
-    color: Colors.primary,
+    color: CustomerColors.primary,
     fontWeight: "500",
   },
   buttonGrid: {
@@ -1467,22 +1024,22 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   primaryGridButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: CustomerColors.primary,
   },
   outlineGridButton: {
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: CustomerColors.primary,
     backgroundColor: "transparent",
   },
   gridButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.white,
+    color: CustomerColors.white,
   },
   outlineGridButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.primary,
+    color: CustomerColors.primary,
   },
   contactInfo: {
     marginTop: Spacing.sm,
@@ -1526,7 +1083,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: Spacing.sm,
     gap: 4,
-    backgroundColor: Colors.white,
+    backgroundColor: CustomerColors.surface,
   },
   contactDetailTitle: {
     fontSize: 12,
@@ -1543,14 +1100,14 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   linkText: {
-    color: Colors.primary,
+    color: CustomerColors.primary,
     textDecorationLine: "underline",
   },
   notesContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    backgroundColor: Colors.warning + "10",
+    backgroundColor: "rgba(245,158,11,0.10)",
     borderRadius: 8,
     padding: Spacing.sm,
     marginTop: Spacing.sm,
@@ -1558,7 +1115,7 @@ const styles = StyleSheet.create({
   notesText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.warning,
+    color: CustomerColors.warning,
     fontWeight: "500",
   },
   hintContainer: {

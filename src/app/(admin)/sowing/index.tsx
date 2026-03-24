@@ -1,10 +1,10 @@
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SowingReadScreen } from "../../../components/modules/SowingReadScreen";
-import { Colors } from "../../../theme";
+import { AdminTheme } from "../../../components/admin/theme";
 
 export default function AdminSowing() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.background }} edges={["left", "right"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: AdminTheme.colors.background }} edges={["left", "right"]}>
       <SowingReadScreen title="Sowing" />
     </SafeAreaView>
   );

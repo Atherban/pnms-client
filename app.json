@@ -24,6 +24,7 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/AppIcons/playstore.png"
       },
+      "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.mhlp.pnms",

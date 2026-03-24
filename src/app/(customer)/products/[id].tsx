@@ -1,26 +1,37 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
-import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../../components/common/FixedHeader";
-import { SalesService } from "../../../services/sales.service";
-import { useAuthStore } from "../../../stores/auth.store";
-import { Colors } from "../../../theme";
+import { CustomerActionButton } from "@/src/components/customer/CustomerActionButton";
+import {
+  CustomerCard,
+  CustomerEmptyState,
+  CustomerScreen,
+  SectionHeader,
+  StatPill,
+  StatusChip,
+} from "@/src/components/common/StitchScreen";
+import BannerCardImage from "@/src/components/ui/BannerCardImage";
+import { SalesService } from "@/src/services/sales.service";
+import { useAuthStore } from "@/src/stores/auth.store";
+import { Colors, CustomerColors, Spacing } from "@/src/theme";
+import { toImageUrl } from "@/src/utils/image";
 
-const BOTTOM_NAV_HEIGHT = 80;
+interface ProductSaleRow {
+  saleId: string;
+  soldAt: string;
+  quantity: number;
+  amount: number;
+  paidShare: number;
+  dueShare: number;
+}
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -40,7 +51,6 @@ const computeSaleFinancials = (sale: any, fallbackGrossTotal: number) => {
   const paidRaw = Math.max(0, toNumber(sale?.paidAmount) || toNumber(sale?.amountPaid));
   const dueRaw = Math.max(0, toNumber(sale?.dueAmount));
 
-  // Keep figures internally consistent even with partially-missing backend fields.
   let paid = clamp(paidRaw, 0, net);
   let due = dueRaw > 0 ? clamp(dueRaw, 0, net) : clamp(net - paid, 0, net);
   if (paid + due > net) {
@@ -52,32 +62,12 @@ const computeSaleFinancials = (sale: any, fallbackGrossTotal: number) => {
   return { gross, discount, net, paid, due };
 };
 
-const formatMoney = (amount: number) =>
-  `₹${Math.round(amount).toLocaleString("en-IN")}`;
+const formatMoney = (amount: number) => `₹${Math.round(amount).toLocaleString("en-IN")}`;
 
-const formatDate = (dateString?: string) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return "-";
-
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  if (date.toDateString() === today.toDateString()) {
-    return `Today, ${date.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })}`;
-  } else if (date.toDateString() === yesterday.toDateString()) {
-    return `Yesterday, ${date.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    })}`;
-  }
-
+const formatDate = (value?: string) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -85,140 +75,26 @@ const formatDate = (dateString?: string) => {
   });
 };
 
-interface ProductSaleRow {
-  saleId: string;
-  soldAt: string;
-  quantity: number;
-  amount: number; // discounted line amount
-  grossAmount: number;
-  discountShare: number;
-  paidShare: number;
-  dueShare: number;
-}
-
-// ==================== STATS CARD ====================
-
-interface StatCardProps {
-  label: string;
-  value: string;
-  icon: string;
-  color: string;
-  subValue?: string;
-}
-
-const StatCard = ({ label, value, icon, color, subValue }: StatCardProps) => (
-  <View style={[styles.statCard, { backgroundColor: `${color}08` }]}>
-    <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-      <MaterialIcons name={icon as any} size={18} color={color} />
-    </View>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
-    {subValue && <Text style={styles.statSubValue}>{subValue}</Text>}
-  </View>
-);
-
-// ==================== PURCHASE ROW CARD ====================
-
-interface PurchaseRowCardProps {
-  row: ProductSaleRow;
-  onPress: (saleId: string) => void;
-  onGenerateBill: (saleId: string) => void;
-}
-
-const PurchaseRowCard = ({
-  row,
-  onPress,
-  onGenerateBill,
-}: PurchaseRowCardProps) => {
-  const isFullyPaid = row.dueShare <= 0;
-
-  return (
-    <View style={styles.rowCard}>
-      {/* Header */}
-      <View style={styles.rowHeader}>
-        <View>
-          <Text style={styles.rowDate}>{formatDate(row.soldAt)}</Text>
-          <Text style={styles.rowQty}>{row.quantity} units</Text>
-        </View>
-        <View
-          style={[
-            styles.paidBadge,
-            { backgroundColor: isFullyPaid ? "#ECFDF5" : "#FFFBEB" },
-          ]}
-        >
-          <Text
-            style={[
-              styles.paidBadgeText,
-              { color: isFullyPaid ? Colors.success : Colors.warning },
-            ]}
-          >
-            {isFullyPaid ? "Paid" : "Partial"}
-          </Text>
-        </View>
-      </View>
-
-      {/* Amount Breakdown */}
-      <View style={styles.breakdownContainer}>
-        <View style={styles.breakdownItem}>
-          <Text style={styles.breakdownLabel}>Total</Text>
-          <Text style={styles.breakdownValue}>{formatMoney(row.amount)}</Text>
-        </View>
-
-        <View style={styles.breakdownDivider} />
-
-        <View style={styles.breakdownItem}>
-          <Text style={styles.breakdownLabel}>Paid</Text>
-          <Text style={[styles.breakdownValue, { color: Colors.success }]}>
-            {formatMoney(row.paidShare)}
-          </Text>
-        </View>
-
-        <View style={styles.breakdownDivider} />
-
-        <View style={styles.breakdownItem}>
-          <Text style={styles.breakdownLabel}>Due</Text>
-          <Text
-            style={[
-              styles.breakdownValue,
-              { color: row.dueShare > 0 ? Colors.error : Colors.success },
-            ]}
-          >
-            {formatMoney(row.dueShare)}
-          </Text>
-        </View>
-      </View>
-
-      {/* Actions */}
-      <View style={styles.rowActions}>
-        <TouchableOpacity
-          onPress={() => onPress(row.saleId)}
-          style={styles.paymentButton}
-          activeOpacity={0.7}
-        >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-            style={styles.paymentButtonGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <MaterialIcons name="payment" size={16} color={Colors.white} />
-            <Text style={styles.paymentButtonText}>View Payment</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => onGenerateBill(row.saleId)}
-          style={styles.billButton}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="receipt-long" size={15} color={Colors.primary} />
-          <Text style={styles.billButtonText}>Generate Bill</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+const resolveEntityImage = (entity: any): string | undefined => {
+  if (!entity || typeof entity !== "object") return undefined;
+  const direct = toImageUrl(
+    entity.imageUrl ??
+      entity.image ??
+      entity.fileUrl ??
+      entity.url ??
+      entity.path ??
+      entity.fileName,
   );
+  if (direct) return direct;
+  const images = Array.isArray(entity.images) ? entity.images : [];
+  for (const img of images) {
+    const uri = toImageUrl(
+      img?.imageUrl ?? img?.fileUrl ?? img?.url ?? img?.path ?? img?.fileName,
+    );
+    if (uri) return uri;
+  }
+  return undefined;
 };
-
-// ==================== MAIN COMPONENT ====================
 
 export default function CustomerProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -227,13 +103,7 @@ export default function CustomerProductDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: [
-      "customer-product-detail",
-      id,
-      user?.id,
-      user?.phoneNumber,
-      user?.nurseryId,
-    ],
+    queryKey: ["customer-product-detail", id, user?.id, user?.phoneNumber, user?.nurseryId],
     enabled: !!id && !!user,
     queryFn: async () => {
       if (!user) throw new Error("User not authenticated");
@@ -245,6 +115,7 @@ export default function CustomerProductDetailScreen() {
       }).catch(() => []);
 
       let productName = "Product";
+      let imageUri: string | undefined;
       let totalQty = 0;
       let totalAmount = 0;
       let totalPaid = 0;
@@ -252,50 +123,35 @@ export default function CustomerProductDetailScreen() {
       const rows: ProductSaleRow[] = [];
 
       for (const sale of Array.isArray(sales) ? sales : []) {
-        const items = Array.isArray((sale as any)?.items)
-          ? (sale as any).items
-          : [];
+        const items = Array.isArray((sale as any)?.items) ? (sale as any).items : [];
         const saleGrossFromItems = items.reduce((sum: number, row: any) => {
           const qty = toNumber(row?.quantity);
-          const price = toNumber(
-            row?.priceAtSale ?? row?.unitPrice ?? row?.price,
-          );
+          const price = toNumber(row?.priceAtSale ?? row?.unitPrice ?? row?.price);
           return sum + qty * price;
         }, 0);
         const saleFinancials = computeSaleFinancials(sale, saleGrossFromItems);
         const discountRatio =
-          saleFinancials.gross > 0
-            ? clamp(saleFinancials.discount / saleFinancials.gross, 0, 1)
-            : 0;
-        const paidRatio =
-          saleFinancials.net > 0
-            ? clamp(saleFinancials.paid / saleFinancials.net, 0, 1)
-            : 0;
-        const dueRatio =
-          saleFinancials.net > 0
-            ? clamp(saleFinancials.due / saleFinancials.net, 0, 1)
-            : 0;
+          saleFinancials.gross > 0 ? clamp(saleFinancials.discount / saleFinancials.gross, 0, 1) : 0;
+        const paidRatio = saleFinancials.net > 0 ? clamp(saleFinancials.paid / saleFinancials.net, 0, 1) : 0;
+        const dueRatio = saleFinancials.net > 0 ? clamp(saleFinancials.due / saleFinancials.net, 0, 1) : 0;
 
         for (const item of items) {
-          const itemId = String(
-            item?.inventory?._id || item?.inventoryId || item?._id || "",
-          );
+          const itemId = String(item?.inventory?._id || item?.inventoryId || item?._id || "");
           if (itemId !== id) continue;
 
-          productName =
-            item?.inventory?.plantType?.name ||
-            item?.plantType?.name ||
-            item?.name ||
-            productName;
-          const expectedSeeds = toNumber(
-            item?.inventory?.plantType?.expectedSeedQtyPerBatch,
-          );
+          productName = item?.inventory?.plantType?.name || item?.plantType?.name || item?.name || productName;
+          const expectedSeeds = toNumber(item?.inventory?.plantType?.expectedSeedQtyPerBatch);
           if (expectedSeeds > 0) expectedSeedQtyPerBatch = expectedSeeds;
+          if (!imageUri) {
+            imageUri =
+              resolveEntityImage(item?.inventory?.plantType) ||
+              resolveEntityImage(item?.plantType) ||
+              resolveEntityImage(item?.inventory) ||
+              resolveEntityImage(item);
+          }
 
           const qty = toNumber(item?.quantity);
-          const unitPrice = toNumber(
-            item?.priceAtSale ?? item?.unitPrice ?? item?.price,
-          );
+          const unitPrice = toNumber(item?.priceAtSale ?? item?.unitPrice ?? item?.price);
           const lineGross = Math.max(0, qty * unitPrice);
           const discountShare = Math.min(lineGross, lineGross * discountRatio);
           const lineNet = Math.max(0, lineGross - discountShare);
@@ -308,15 +164,9 @@ export default function CustomerProductDetailScreen() {
 
           rows.push({
             saleId: String((sale as any)?._id || ""),
-            soldAt: String(
-              (sale as any)?.createdAt ||
-                (sale as any)?.saleDate ||
-                new Date().toISOString(),
-            ),
+            soldAt: String((sale as any)?.createdAt || (sale as any)?.saleDate || new Date().toISOString()),
             quantity: qty,
             amount: lineNet,
-            grossAmount: lineGross,
-            discountShare,
             paidShare,
             dueShare,
           });
@@ -326,6 +176,7 @@ export default function CustomerProductDetailScreen() {
       return {
         id,
         productName,
+        imageUri,
         totalQty,
         totalAmount,
         totalPaid,
@@ -336,459 +187,335 @@ export default function CustomerProductDetailScreen() {
     },
   });
 
+  if (!id) {
+    return null;
+  }
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await refetch();
     setRefreshing(false);
   };
 
-  const handleBack = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
-  };
-
-  const handleViewPayment = (saleId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/(customer)/dues/${saleId}` as any);
-  };
-
-  const handleGenerateBill = (saleId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push(`/(customer)/sales/bill/${saleId}` as any);
-  };
-
-  if (!id) return null;
-
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
-          title="Product Details"
-          subtitle="Loading product information..."
-          showBackButton
-          onBackPress={handleBack}
-        />
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading product details...</Text>
-        </View>
-      </SafeAreaView>
+      <CustomerScreen title="Product Details" subtitle="Loading product information..." onBackPress={() => router.back()}>
+        <CustomerCard style={styles.centerCard}>
+          <Text style={styles.helperText}>Loading product details...</Text>
+        </CustomerCard>
+      </CustomerScreen>
     );
   }
 
   if (error || !data) {
     return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
-          title="Product Details"
-          subtitle="Error loading data"
-          showBackButton
-          onBackPress={handleBack}
+      <CustomerScreen title="Product Details" subtitle="Unable to load this product." onBackPress={() => router.back()}>
+        <CustomerEmptyState
+          title="Failed to load"
+          message="Please try again or return to the products list."
+          icon={<MaterialIcons name="error-outline" size={44} color={CustomerColors.danger} />}
+          action={<CustomerActionButton label="Try Again" onPress={handleRefresh} />}
         />
-        <View style={styles.centerContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
-          <Text style={styles.errorTitle}>Failed to Load</Text>
-          <Text style={styles.errorMessage}>
-            Unable to load this product. Please try again.
-          </Text>
-          <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-              style={styles.retryGradient}
-            >
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      </CustomerScreen>
     );
   }
 
-  const paymentProgress = (data.totalPaid / data.totalAmount) * 100;
+  const fullyPaid = data.totalDue <= 0;
 
   return (
-    <View style={styles.container}>
-      <FixedHeader
-        title="Product Details"
-        subtitle={data.productName}
-        showBackButton
-        onBackPress={handleBack}
-      />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
-          />
-        }
-      >
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Total Quantity"
-            value={`${data.totalQty} units`}
-            icon="inventory"
-            color={Colors.primary}
-          />
-          <StatCard
-            label="Total Amount"
-            value={formatMoney(data.totalAmount)}
-            icon="receipt"
-            color={Colors.primary}
-          />
-          <StatCard
-            label="Paid"
-            value={formatMoney(data.totalPaid)}
-            icon="check-circle"
-            color={Colors.success}
-            subValue={`${paymentProgress.toFixed(1)}%`}
-          />
-          <StatCard
-            label="Pending"
-            value={formatMoney(data.totalDue)}
-            icon="account-balance"
-            color={data.totalDue > 0 ? Colors.error : Colors.success}
+    <CustomerScreen
+      title="Product Details"
+      subtitle={data.productName}
+      onBackPress={() => router.back()}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          colors={[CustomerColors.primary]}
+          tintColor={CustomerColors.primary}
+        />
+      }
+      footer={
+        <View style={styles.footerActions}>
+          <CustomerActionButton
+            label="Back to Products"
+            variant="secondary"
+            onPress={() => router.back()}
           />
         </View>
+      }
+    >
+      <View style={styles.heroCard}>
+        <BannerCardImage
+          uri={data.imageUri}
+          iconName="local-florist"
+          minHeight={220}
+          containerStyle={styles.heroImage}
+        />
+        <View style={styles.heroBody}>
+          <SectionHeader
+            title={data.productName}
+            subtitle="Purchase summary across all linked sales."
+            trailing={<StatusChip label={fullyPaid ? "Fully Paid" : "Pending"} tone={fullyPaid ? "success" : "warning"} />}
+          />
+          <View style={styles.statsGrid}>
+            <StatPill label="Quantity" value={`${data.totalQty}`} />
+            <StatPill label="Paid" value={formatMoney(data.totalPaid)} />
+            <StatPill label="Due" value={formatMoney(data.totalDue)} />
+          </View>
+        </View>
+      </View>
 
-        {/* Expected Seeds Info */}
-        {data.expectedSeedQtyPerBatch ? (
-          <View style={styles.infoCard}>
-            <MaterialIcons name="info" size={16} color={Colors.primary} />
-            <Text style={styles.infoText}>
-              Expected seeds per batch:{" "}
-              <Text style={styles.infoHighlight}>
-                {data.expectedSeedQtyPerBatch}
-              </Text>
+      <CustomerCard>
+        <SectionHeader title="Product specifics" subtitle="Derived from your purchase and product records." />
+        <View style={styles.specGrid}>
+          <View style={styles.specTile}>
+            <Text style={styles.specLabel}>Total value</Text>
+            <Text style={styles.specValue}>{formatMoney(data.totalAmount)}</Text>
+          </View>
+          <View style={styles.specTile}>
+            <Text style={styles.specLabel}>Unit average</Text>
+            <Text style={styles.specValue}>
+              {data.totalQty > 0 ? formatMoney(data.totalAmount / data.totalQty) : formatMoney(0)}
             </Text>
           </View>
-        ) : null}
-
-        {/* Purchase History */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="history" size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Purchase History</Text>
+          {data.expectedSeedQtyPerBatch ? (
+            <View style={styles.specTile}>
+              <Text style={styles.specLabel}>Expected seeds / batch</Text>
+              <Text style={styles.specValue}>{data.expectedSeedQtyPerBatch}</Text>
             </View>
-            <Text style={styles.sectionCount}>{data.rows.length} entries</Text>
-          </View>
-
-          {data.rows.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <MaterialIcons name="history" size={32} color="#9CA3AF" />
-              <Text style={styles.emptyTitle}>No Purchase Records</Text>
-              <Text style={styles.emptyMessage}>
-                No purchases found for this product.
-              </Text>
-            </View>
-          ) : (
-            data.rows.map((row) => (
-              <PurchaseRowCard
-                key={`${row.saleId}_${row.soldAt}`}
-                row={row}
-                onPress={handleViewPayment}
-                onGenerateBill={handleGenerateBill}
-              />
-            ))
-          )}
+          ) : null}
         </View>
+      </CustomerCard>
 
-        {/* Back Link */}
-        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
-          <MaterialIcons name="arrow-back" size={16} color={Colors.primary} />
-          <Text style={styles.backLinkText}>Back to products</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+      <CustomerCard>
+        <SectionHeader
+          title="Purchase history"
+          subtitle="Open a sale from here to review payment details or generate the bill."
+          trailing={<StatusChip label={`${data.rows.length} entries`} tone="default" />}
+        />
+        {data.rows.length === 0 ? (
+          <CustomerEmptyState
+            title="No purchase history"
+            message="No purchase entries were found for this product."
+            icon={<MaterialIcons name="history" size={44} color={CustomerColors.textMuted} />}
+          />
+        ) : (
+          <View style={styles.timeline}>
+            {data.rows.map((row, index) => {
+              const fullySettled = row.dueShare <= 0;
+              const isLast = index === data.rows.length - 1;
+
+              return (
+                <View key={`${row.saleId}_${row.soldAt}`} style={styles.timelineRow}>
+                  <View style={styles.timelineRail}>
+                    <View style={[styles.timelineDot, fullySettled ? styles.timelineDotDone : styles.timelineDotPending]}>
+                      <MaterialIcons
+                        name={fullySettled ? "check" : "schedule"}
+                        size={12}
+                        color={fullySettled ? CustomerColors.white : CustomerColors.textMuted}
+                      />
+                    </View>
+                    {!isLast ? <View style={styles.timelineLine} /> : null}
+                  </View>
+                  <View style={styles.timelineCardWrap}>
+                    <CustomerCard style={styles.timelineCard}>
+                      <View style={styles.timelineHeader}>
+                        <View>
+                          <Text style={styles.timelineTitle}>{formatDate(row.soldAt)}</Text>
+                          <Text style={styles.timelineMeta}>{row.quantity} units</Text>
+                        </View>
+                        <StatusChip label={fullySettled ? "Paid" : "Partial"} tone={fullySettled ? "success" : "warning"} />
+                      </View>
+                      <View style={styles.timelineAmounts}>
+                        <View style={styles.timelineAmountBlock}>
+                          <Text style={styles.timelineAmountLabel}>Total</Text>
+                          <Text style={styles.timelineAmountValue}>{formatMoney(row.amount)}</Text>
+                        </View>
+                        <View style={styles.timelineAmountBlock}>
+                          <Text style={styles.timelineAmountLabel}>Paid</Text>
+                          <Text style={[styles.timelineAmountValue, styles.successText]}>{formatMoney(row.paidShare)}</Text>
+                        </View>
+                        <View style={styles.timelineAmountBlock}>
+                          <Text style={styles.timelineAmountLabel}>Due</Text>
+                          <Text style={[styles.timelineAmountValue, !fullySettled && styles.errorText]}>
+                            {formatMoney(row.dueShare)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.rowActions}>
+                        <CustomerActionButton
+                          label="View Payment"
+                          onPress={() => router.push(`/(customer)/dues/${row.saleId}` as any)}
+                          style={styles.flexAction}
+                        />
+                        <CustomerActionButton
+                          label="View Bill"
+                          variant="secondary"
+                          onPress={() => router.push(`/(customer)/sales/bill/${row.saleId}` as any)}
+                          style={styles.flexAction}
+                        />
+                      </View>
+                    </CustomerCard>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </CustomerCard>
+    </CustomerScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-
-  // Header
-  headerTitle: {
-    fontSize: 24,
-  },
-
-  // Center Container
-  centerContainer: {
-    flex: 1,
+  centerCard: {
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 12,
+    paddingVertical: Spacing.xl,
   },
-  loadingText: {
-    fontSize: 14,
-    color: "#6B7280",
+  helperText: {
+    color: CustomerColors.textMuted,
   },
-
-  // Content
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
-    gap: 20,
+  footerActions: {
+    gap: Spacing.sm,
   },
-
-  // Stats Grid
+  heroCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 18,
+    padding: 0,
+    overflow: "hidden",
+    borderWidth:1,
+    borderColor: CustomerColors.border,
+    shadowColor: CustomerColors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  heroImage: {
+    borderRadius: 0,
+    minHeight: 220,
+  },
+  heroBody: {
+    padding: Spacing.md,
+    gap: Spacing.md,
+  },
   statsGrid: {
     flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  specGrid: {
+    marginTop: Spacing.md,
+    flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: Spacing.sm,
   },
-  statCard: {
-    width: "48%",
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 12,
+  specTile: {
+    minWidth: "47%",
+    flexGrow: 1,
+    padding: Spacing.md,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,189,73,0.06)",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: CustomerColors.borderStrong,
+    gap: 4,
   },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+  specLabel: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
+  },
+  specValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: CustomerColors.text,
+  },
+  timeline: {
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  timelineRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  timelineRail: {
+    width: 22,
+    alignItems: "center",
+  },
+  timelineDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
   },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
+  timelineDotDone: {
+    backgroundColor: CustomerColors.success,
   },
-  statValue: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  statSubValue: {
-    fontSize: 10,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-
-  // Info Card
-  infoCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    padding: 12,
-  },
-  infoText: {
-    fontSize: 13,
-    color: "#374151",
-    flex: 1,
-  },
-  infoHighlight: {
-    fontWeight: "700",
-    color: Colors.primary,
-  },
-
-  // Section
-  section: {
-    gap: 12,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  sectionCount: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-
-  // Row Card
-  rowCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 14,
+  timelineDotPending: {
+    backgroundColor: CustomerColors.border,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
+    borderColor: CustomerColors.borderStrong,
   },
-  rowHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  rowDate: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 2,
-  },
-  rowQty: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  paidBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  paidBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  // Breakdown
-  breakdownContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 10,
-    padding: 10,
-  },
-  breakdownItem: {
+  timelineLine: {
+    width: 2,
     flex: 1,
-    alignItems: "center",
+    marginVertical: 6,
+    backgroundColor: CustomerColors.borderStrong,
+  },
+  timelineCardWrap: {
+    flex: 1,
+    paddingBottom: Spacing.md,
+  },
+  timelineCard: {
+    gap: Spacing.md,
+  },
+  timelineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  timelineTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: CustomerColors.text,
+  },
+  timelineMeta: {
+    marginTop: 4,
+    fontSize: 12,
+    color: CustomerColors.textMuted,
+  },
+  timelineAmounts: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  timelineAmountBlock: {
+    flex: 1,
+    padding: Spacing.sm,
+    borderRadius: 14,
+    backgroundColor: CustomerColors.surface,
     gap: 2,
+    borderWidth: 1,
+    borderColor: CustomerColors.border,
   },
-  breakdownLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
+  timelineAmountLabel: {
+    fontSize: 11,
+    color: CustomerColors.textMuted,
   },
-  breakdownValue: {
+  timelineAmountValue: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: CustomerColors.text,
   },
-  breakdownDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
+  successText: {
+    color: CustomerColors.success,
   },
-
-  // Row Actions
+  errorText: {
+    color: CustomerColors.danger,
+  },
   rowActions: {
-    gap: 8,
-  },
-
-  // Payment Button
-  paymentButton: {
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  paymentButtonGradient: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    gap: 6,
+    gap: Spacing.sm,
   },
-  paymentButtonText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  billButton: {
-    height: 38,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: `${Colors.primary}30`,
-    backgroundColor: Colors.white,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  billButtonText: {
-    color: Colors.primary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Empty State
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 32,
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  emptyMessage: {
-    fontSize: 12,
-    color: "#6B7280",
-    textAlign: "center",
-    paddingHorizontal: 24,
-  },
-
-  // Back Link
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 12,
-  },
-  backLinkText: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: "500",
-  },
-
-  // Error State
-  errorTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#DC2626",
-  },
-  errorMessage: {
-    fontSize: 13,
-    color: "#6B7280",
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  retryButton: {
-    borderRadius: 10,
-    overflow: "hidden",
-    marginTop: 8,
-  },
-  retryGradient: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  retryButtonText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: "600",
+  flexAction: {
+    flex: 1,
   },
 });

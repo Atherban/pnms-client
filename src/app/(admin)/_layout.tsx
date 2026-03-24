@@ -1,11 +1,13 @@
 import SharedBottomNav, { NavItem } from "@/src/components/navigation/SharedBottomNav";
-import { Colors } from "@/src/theme/colors";
+import { AdminTheme } from "@/src/components/admin/theme";
 import { Redirect, Slot } from "expo-router";
 import { Home, Leaf, Menu, Receipt, Users } from "lucide-react-native";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuthStore } from "../../stores/auth.store";
+import { StatusBar } from "expo-status-bar";
+import { Colors } from "../../theme";
 
 const ADMIN_NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", icon: Home, path: "/(admin)", color: "#6366F1" },
@@ -23,10 +25,11 @@ export default function AdminLayout() {
 
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: Colors.primary }}
+      style={{ flex: 1, backgroundColor: Colors.primaryDark }}
       edges={["top", "left", "right"]}
     >
-      <View style={{ flexDirection: "column", flex: 1, backgroundColor: Colors.background }}>
+      
+      <View style={{ flexDirection: "column", flex: 1, backgroundColor: AdminTheme.colors.background }}>
         <View style={{ flex: 1 }}>
           <Slot />
         </View>

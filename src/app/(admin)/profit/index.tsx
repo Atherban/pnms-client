@@ -1,8 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -15,14 +15,16 @@ import {
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { ProfitService } from "../../../services/profit.service";
-import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
 export default function AdminProfit() {
+  const router = useRouter();
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -115,7 +117,7 @@ export default function AdminProfit() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
         "Select Dates",
-        "Please select both start and end dates to generate profit report.",
+        "Please select both start and end dates to generate profit report."
       );
       return;
     }
@@ -131,7 +133,7 @@ export default function AdminProfit() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       Alert.alert(
         "Invalid Date Range",
-        "Date range cannot exceed 366 days. Please select a shorter period.",
+        "Date range cannot exceed 366 days. Please select a shorter period."
       );
       return;
     }
@@ -187,189 +189,119 @@ export default function AdminProfit() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.title}>Profit Report</Text>
-            <Text style={styles.subtitle}>Analyze financial performance</Text>
-          </View>
-        </View>
-      </LinearGradient>
+      <StitchHeader title="Profit Report" subtitle="Analyze financial performance" onBackPress={() => router.back()} />
 
-      {/* Scrollable Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Quick Date Ranges */}
+        {/* Date Range Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <MaterialIcons name="bolt" size={22} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Quick Date Ranges</Text>
+            <View style={styles.sectionIcon}>
+              <MaterialIcons name="calendar-today" size={20} color={AdminTheme.colors.primary} />
+            </View>
+            <Text style={styles.sectionTitle}>Date Range</Text>
           </View>
-          <Text style={styles.sectionDescription}>
-            Select a predefined time period
-          </Text>
 
-          <View style={styles.quickRangeGrid}>
-            {[
-              { label: "Today", days: 1 },
-              { label: "Last 7 Days", days: 6 },
-              { label: "Last 30 Days", days: 29 },
-              { label: "Last 90 Days", days: 89 },
-            ].map((range) => (
+          {/* Quick Date Ranges */}
+          <View style={styles.quickRangeContainer}>
+            <Text style={styles.subsectionTitle}>Quick Select</Text>
+            <View style={styles.quickRangeGrid}>
+              {[
+                { label: "Today", days: 0, icon: "today" },
+                { label: "Last 7 Days", days: 6, icon: "date-range" },
+                { label: "Last 30 Days", days: 29, icon: "calendar-month" },
+                { label: "Last 90 Days", days: 89, icon: "calendar-view-week" },
+              ].map((range) => (
+                <Pressable
+                  key={range.label}
+                  onPress={() => handleQuickRange(range.days)}
+                  style={({ pressed }) => [
+                    styles.quickChip,
+                    pressed && styles.quickChipPressed,
+                  ]}
+                >
+                  <MaterialIcons name={range.icon as any} size={14} color={AdminTheme.colors.primary} />
+                  <Text style={styles.quickChipText}>{range.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Custom Date Range */}
+          <View style={styles.customRangeContainer}>
+            <Text style={styles.subsectionTitle}>Custom Range</Text>
+            
+            <View style={styles.dateRow}>
               <Pressable
-                key={range.label}
-                onPress={() => handleQuickRange(range.days)}
+                onPress={() => setShowStartPicker(true)}
                 style={({ pressed }) => [
-                  styles.rangeCard,
-                  pressed && styles.rangeCardPressed,
+                  styles.dateCard,
+                  pressed && styles.dateCardPressed,
                 ]}
               >
-                <View style={styles.rangeCardContent}>
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={18}
-                    color={Colors.primary}
-                  />
-                  <Text style={styles.rangeLabel}>{range.label}</Text>
+                <View style={styles.dateCardHeader}>
+                  <MaterialIcons name="play-arrow" size={14} color={AdminTheme.colors.textMuted} />
+                  <Text style={styles.dateCardLabel}>Start Date</Text>
                 </View>
+                <Text style={[
+                  styles.dateCardValue,
+                  startDate && styles.dateCardValueActive
+                ]}>
+                  {formatDisplayDate(startDate)}
+                </Text>
               </Pressable>
-            ))}
-          </View>
-        </View>
 
-        {/* Custom Date Selection */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialIcons name="edit-calendar" size={22} color={Colors.text} />
-            <Text style={styles.sectionTitle}>Custom Date Range</Text>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Select specific start and end dates
-          </Text>
+              <MaterialIcons name="arrow-forward" size={20} color={AdminTheme.colors.textMuted} />
 
-          {/* Start Date */}
-          <View style={styles.datePickerContainer}>
-            <View style={styles.datePickerLabel}>
-              <MaterialIcons name="date-range" size={18} color={Colors.text} />
-              <Text style={styles.datePickerLabelText}>Start Date</Text>
-            </View>
-            <Pressable
-              onPress={() => setShowStartPicker(true)}
-              style={({ pressed }) => [
-                styles.datePickerButton,
-                pressed && styles.datePickerButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name="calendar-month"
-                size={20}
-                color={startDate ? Colors.success : Colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.datePickerText,
-                  startDate && styles.datePickerTextSelected,
+              <Pressable
+                onPress={() => setShowEndPicker(true)}
+                style={({ pressed }) => [
+                  styles.dateCard,
+                  pressed && styles.dateCardPressed,
                 ]}
               >
-                {formatDisplayDate(startDate)}
-              </Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={20}
-                color={Colors.textTertiary}
-              />
-            </Pressable>
-          </View>
-
-          {/* End Date */}
-          <View style={styles.datePickerContainer}>
-            <View style={styles.datePickerLabel}>
-              <MaterialIcons name="date-range" size={18} color={Colors.text} />
-              <Text style={styles.datePickerLabelText}>End Date</Text>
-            </View>
-            <Pressable
-              onPress={() => setShowEndPicker(true)}
-              style={({ pressed }) => [
-                styles.datePickerButton,
-                pressed && styles.datePickerButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name="calendar-month"
-                size={20}
-                color={endDate ? Colors.success : Colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.datePickerText,
-                  endDate && styles.datePickerTextSelected,
-                ]}
-              >
-                {formatDisplayDate(endDate)}
-              </Text>
-              <MaterialIcons
-                name="chevron-right"
-                size={20}
-                color={Colors.textTertiary}
-              />
-            </Pressable>
-          </View>
-
-          {/* Date Range Summary */}
-          {(startDate || endDate) && (
-            <View style={styles.dateRangeSummary}>
-              <LinearGradient
-                colors={[Colors.info + "20", Colors.info + "10"]}
-                style={styles.dateRangeGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <MaterialIcons name="info" size={18} color={Colors.info} />
-                <View style={styles.dateRangeTextContainer}>
-                  <Text style={styles.dateRangeTitle}>Selected Date Range</Text>
-                  <Text style={styles.dateRangeDates}>
-                    {formatDisplayDate(startDate)} →{" "}
-                    {formatDisplayDate(endDate)}
-                  </Text>
-                  {dateRangeDays > 0 && (
-                    <Text style={styles.dateRangeDays}>
-                      {dateRangeDays} day{dateRangeDays !== 1 ? "s" : ""}
-                    </Text>
-                  )}
+                <View style={styles.dateCardHeader}>
+                  <MaterialIcons name="stop" size={14} color={AdminTheme.colors.textMuted} />
+                  <Text style={styles.dateCardLabel}>End Date</Text>
                 </View>
-              </LinearGradient>
+                <Text style={[
+                  styles.dateCardValue,
+                  endDate && styles.dateCardValueActive
+                ]}>
+                  {formatDisplayDate(endDate)}
+                </Text>
+              </Pressable>
+            </View>
+
+            {(startDate || endDate) && (
+              <Pressable
+                onPress={handleClearDates}
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  pressed && styles.clearButtonPressed,
+                ]}
+              >
+                <MaterialIcons name="clear" size={16} color={AdminTheme.colors.textMuted} />
+                <Text style={styles.clearButtonText}>Clear Dates</Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Date Range Info */}
+          {startDate && endDate && !isDateRangeInvalid && (
+            <View style={styles.rangeInfo}>
+              <MaterialIcons name="info" size={14} color={AdminTheme.colors.info} />
+              <Text style={styles.rangeInfoText}>
+                {dateRangeDays} day{dateRangeDays !== 1 ? "s" : ""} selected
+              </Text>
             </View>
           )}
 
-          {/* Clear Dates Button */}
-          {(startDate || endDate) && (
-            <Pressable
-              onPress={handleClearDates}
-              style={({ pressed }) => [
-                styles.clearButton,
-                pressed && styles.clearButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name="clear"
-                size={18}
-                color={Colors.textSecondary}
-              />
-              <Text style={styles.clearButtonText}>Clear Dates</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* Generate Report Button */}
-        <View style={styles.section}>
+          {/* Generate Button */}
           <Pressable
             onPress={handleFetch}
             disabled={!startDate || !endDate || mutation.isPending || isDateRangeInvalid}
@@ -377,241 +309,148 @@ export default function AdminProfit() {
               styles.generateButton,
               (!startDate || !endDate || isDateRangeInvalid) && styles.generateButtonDisabled,
               pressed && styles.generateButtonPressed,
-              mutation.isPending && styles.generateButtonLoading,
             ]}
           >
-            <LinearGradient
-              colors={
-                !startDate || !endDate || isDateRangeInvalid
-                  ? [Colors.border, Colors.borderLight]
-                  : [Colors.success, "#34D399"]
-              }
-              style={styles.generateGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              {mutation.isPending ? (
-                <ActivityIndicator color={Colors.white} size="small" />
-              ) : (
-                <>
-                  <MaterialIcons
-                    name="analytics"
-                    size={22}
-                    color={Colors.white}
-                  />
-                  <Text style={styles.generateButtonText}>
-                    Generate Profit Report
-                  </Text>
-                </>
-              )}
-            </LinearGradient>
+            {mutation.isPending ? (
+              <ActivityIndicator color={AdminTheme.colors.surface} size="small" />
+            ) : (
+              <>
+                <MaterialIcons name="analytics" size={20} color={AdminTheme.colors.surface} />
+                <Text style={styles.generateButtonText}>Generate Report</Text>
+              </>
+            )}
           </Pressable>
-
-          {/* Validation Hint */}
-          {(!startDate || !endDate) && (
-            <Text style={styles.hintText}>
-              ⓘ Please select both start and end dates
-            </Text>
-          )}
-          {isDateRangeInvalid && (
-            <Text style={styles.hintText}>
-              ⓘ Invalid range. Keep start before end and within 366 days.
-            </Text>
-          )}
         </View>
 
         {/* Loading State */}
         {mutation.isPending && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            <Text style={styles.loadingText}>Generating report...</Text>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
+            <Text style={styles.loadingText}>Analyzing data...</Text>
           </View>
         )}
 
         {/* Error State */}
         {mutation.isError && (
-          <View style={styles.errorContainer}>
-            <MaterialIcons
-              name="error-outline"
-              size={48}
-              color={Colors.error}
-            />
+          <View style={styles.errorCard}>
+            <MaterialIcons name="error-outline" size={40} color={AdminTheme.colors.danger} />
             <Text style={styles.errorTitle}>Unable to Generate Report</Text>
-            <Text style={styles.errorMessage}>
-              Please check your connection and try again
-            </Text>
+            <Text style={styles.errorMessage}>Please check your connection and try again</Text>
           </View>
         )}
 
         {/* Results Section */}
         {mutation.data && (
           <View style={styles.resultsCard}>
+            {/* Header */}
             <View style={styles.resultsHeader}>
-              <MaterialIcons
-                name="assessment"
-                size={24}
-                color={Colors.primary}
-              />
-              <Text style={styles.resultsTitle}>Profit Report</Text>
-              <View style={styles.dateRangeBadge}>
-                <MaterialIcons
-                  name="calendar-today"
-                  size={12}
-                  color={Colors.white}
-                />
-                <Text style={styles.dateRangeBadgeText}>
+              <View style={styles.resultsTitleContainer}>
+                <MaterialIcons name="analytics" size={22} color={AdminTheme.colors.primary} />
+                <Text style={styles.resultsTitle}>Profit Analysis</Text>
+              </View>
+              <View style={styles.periodChip}>
+                <MaterialIcons name="date-range" size={12} color={AdminTheme.colors.surface} />
+                <Text style={styles.periodChipText}>
                   {formatDisplayDate(startDate)} - {formatDisplayDate(endDate)}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.resultsContent}>
+            {/* Key Metrics Grid */}
+            <View style={styles.metricsGrid}>
               {/* Net Sales */}
-              <View style={styles.metricCard}>
-                <LinearGradient
-                  colors={[Colors.success + "20", Colors.success + "10"]}
-                  style={styles.metricGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={styles.metricHeader}>
-                    <View style={styles.metricIcon}>
-                      <MaterialIcons
-                        name="trending-up"
-                        size={20}
-                        color={Colors.success}
-                      />
-                    </View>
-                    <Text style={styles.metricLabel}>Net Sales</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    ₹ {totalSales.toLocaleString("en-IN")}
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIcon, { backgroundColor: `${AdminTheme.colors.success}15` }]}>
+                  <MaterialIcons name="trending-up" size={20} color={AdminTheme.colors.success} />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={styles.metricLabel}>Net Sales</Text>
+                  <Text style={styles.metricValue}>₹ {totalSales.toLocaleString("en-IN")}</Text>
+                  <Text style={styles.metricDetail}>
+                    Gross: ₹ {totalGrossSales.toLocaleString("en-IN")}
                   </Text>
-                  <Text style={styles.metricSubtext}>
-                    Gross: ₹ {totalGrossSales.toLocaleString("en-IN")} • Discount: ₹ {totalDiscount.toLocaleString("en-IN")}
+                  <Text style={styles.metricDetail}>
+                    Discount: ₹ {totalDiscount.toLocaleString("en-IN")}
                   </Text>
-                </LinearGradient>
+                </View>
               </View>
 
               {/* Collections */}
-              <View style={styles.metricCard}>
-                <LinearGradient
-                  colors={[Colors.info + "20", Colors.info + "10"]}
-                  style={styles.metricGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={styles.metricHeader}>
-                    <View style={styles.metricIcon}>
-                      <MaterialIcons
-                        name="payments"
-                        size={20}
-                        color={Colors.info}
-                      />
-                    </View>
-                    <Text style={styles.metricLabel}>Collected</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    ₹ {totalCollected.toLocaleString("en-IN")}
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIcon, { backgroundColor: `${AdminTheme.colors.info}15` }]}>
+                  <MaterialIcons name="payments" size={20} color={AdminTheme.colors.info} />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={styles.metricLabel}>Collections</Text>
+                  <Text style={styles.metricValue}>₹ {totalCollected.toLocaleString("en-IN")}</Text>
+                  <Text style={styles.metricDetail}>
+                    Due: ₹ {totalDue.toLocaleString("en-IN")}
                   </Text>
-                  <Text style={styles.metricSubtext}>
-                    Pending due: ₹ {totalDue.toLocaleString("en-IN")}
-                  </Text>
-                </LinearGradient>
+                </View>
               </View>
 
               {/* Total Cost */}
-              <View style={styles.metricCard}>
-                <LinearGradient
-                  colors={[Colors.warning + "20", Colors.warning + "10"]}
-                  style={styles.metricGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={styles.metricHeader}>
-                    <View style={styles.metricIcon}>
-                      <MaterialIcons
-                        name="trending-down"
-                        size={20}
-                        color={Colors.warning}
-                      />
-                    </View>
-                    <Text style={styles.metricLabel}>Total Cost</Text>
-                  </View>
-                  <Text style={styles.metricValue}>
-                    ₹ {totalCost.toLocaleString("en-IN")}
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIcon, { backgroundColor: `${AdminTheme.colors.warning}15` }]}>
+                  <MaterialIcons name="trending-down" size={20} color={AdminTheme.colors.warning} />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={styles.metricLabel}>Total Cost</Text>
+                  <Text style={styles.metricValue}>₹ {totalCost.toLocaleString("en-IN")}</Text>
+                  <Text style={styles.metricDetail}>
+                    Expenses: ₹ {totalExpenses.toLocaleString("en-IN")}
                   </Text>
-                  <Text style={styles.metricSubtext}>
-                    Expenses: ₹ {totalExpenses.toLocaleString("en-IN")} • Labour: ₹ {totalLabourCost.toLocaleString("en-IN")}
+                  <Text style={styles.metricDetail}>
+                    Labour: ₹ {totalLabourCost.toLocaleString("en-IN")}
                   </Text>
-                </LinearGradient>
+                </View>
               </View>
 
               {/* Profit */}
-              <View style={styles.metricCard}>
-                <LinearGradient
-                  colors={[Colors.primary + "20", Colors.primary + "10"]}
-                  style={styles.metricGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  <View style={styles.metricHeader}>
-                    <View style={styles.metricIcon}>
-                      <MaterialIcons
-                        name="account-balance"
-                        size={20}
-                        color={Colors.primary}
-                      />
-                    </View>
-                    <Text style={styles.metricLabel}>Realized Profit</Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.metricValue,
-                      styles.profitValue,
-                      { color: profit >= 0 ? Colors.success : Colors.error },
-                    ]}
-                  >
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIcon, { backgroundColor: `${AdminTheme.colors.primary}15` }]}>
+                  <MaterialIcons name="account-balance" size={20} color={AdminTheme.colors.primary} />
+                </View>
+                <View style={styles.metricContent}>
+                  <Text style={styles.metricLabel}>Realized Profit</Text>
+                  <Text style={[
+                    styles.metricValue,
+                    { color: profit >= 0 ? AdminTheme.colors.success : AdminTheme.colors.danger }
+                  ]}>
                     ₹ {profit.toLocaleString("en-IN")}
                   </Text>
-                  <Text style={styles.metricSubtext}>
-                    {profit >= 0 ? "Collected profit earned" : "Collected loss"}
+                  <Text style={styles.metricDetail}>
+                    {profit >= 0 ? "Net profit earned" : "Net loss incurred"}
                   </Text>
-                </LinearGradient>
+                </View>
               </View>
             </View>
 
-            {/* Summary */}
-            <View style={styles.summaryContainer}>
+            {/* Summary Row */}
+            <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Profit Margin</Text>
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    { color: profit >= 0 ? Colors.success : Colors.error },
-                  ]}
-                >
+                <Text style={[
+                  styles.summaryValue,
+                  { color: profit >= 0 ? AdminTheme.colors.success : AdminTheme.colors.danger }
+                ]}>
                   {profitMargin}%
                 </Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Accrued Profit</Text>
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    { color: accruedProfit >= 0 ? Colors.success : Colors.error },
-                  ]}
-                >
+                <Text style={[
+                  styles.summaryValue,
+                  { color: accruedProfit >= 0 ? AdminTheme.colors.success : AdminTheme.colors.danger }
+                ]}>
                   ₹ {accruedProfit.toLocaleString("en-IN")}
                 </Text>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Period</Text>
-                <Text style={styles.summaryValue}>
-                  {dateRangeDays} day{dateRangeDays !== 1 ? "s" : ""}
-                </Text>
+                <Text style={styles.summaryValue}>{dateRangeDays} days</Text>
               </View>
             </View>
           </View>
@@ -625,7 +464,7 @@ export default function AdminProfit() {
         onConfirm={handleStartDateConfirm}
         onCancel={() => setShowStartPicker(false)}
         maximumDate={endDate || new Date()}
-        buttonTextColorIOS={Colors.primary}
+        buttonTextColorIOS={AdminTheme.colors.primary}
       />
 
       <DateTimePickerModal
@@ -635,7 +474,7 @@ export default function AdminProfit() {
         onCancel={() => setShowEndPicker(false)}
         minimumDate={startDate || undefined}
         maximumDate={new Date()}
-        buttonTextColorIOS={Colors.primary}
+        buttonTextColorIOS={AdminTheme.colors.primary}
       />
     </SafeAreaView>
   );
@@ -644,344 +483,321 @@ export default function AdminProfit() {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
+    backgroundColor: AdminTheme.colors.background,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.lg,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
   },
+
+  // Section
   section: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 20,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    borderColor: AdminTheme.colors.borderSoft,
+    ...AdminTheme.shadow,
   },
   sectionHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.lg,
+    paddingBottom: AdminTheme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: AdminTheme.colors.borderSoft,
+  },
+  sectionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: `${AdminTheme.colors.primary}10`,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
-  sectionDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.md,
-    lineHeight: 20,
+  subsectionTitle: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.textMuted,
+    marginBottom: AdminTheme.spacing.sm,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: AdminTheme.colors.borderSoft,
+    marginVertical: AdminTheme.spacing.lg,
+  },
+
+  // Quick Range
+  quickRangeContainer: {
+    marginBottom: AdminTheme.spacing.md,
   },
   quickRangeGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
-  rangeCard: {
-    flex: 1,
-    minWidth: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.lg - Spacing.sm) / 2,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+  quickChip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: AdminTheme.spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 30,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    padding: Spacing.md,
+    borderColor: AdminTheme.colors.borderSoft,
   },
-  rangeCardPressed: {
-    backgroundColor: Colors.surfaceDark,
+  quickChipPressed: {
+    backgroundColor: AdminTheme.colors.surfaceMuted,
     transform: [{ scale: 0.98 }],
   },
-  rangeCardContent: {
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  rangeLabel: {
+  quickChipText: {
     fontSize: 13,
-    color: Colors.text,
-    fontWeight: "600" as const,
-    textAlign: "center" as const,
+    fontWeight: "500" as const,
+    color: AdminTheme.colors.text,
   },
-  datePickerContainer: {
-    marginBottom: Spacing.md,
+
+  // Custom Range
+  customRangeContainer: {
+    marginBottom: AdminTheme.spacing.md,
   },
-  datePickerLabel: {
+  dateRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.md,
   },
-  datePickerLabelText: {
-    fontSize: 14,
-    fontWeight: "600" as const,
-    color: Colors.text,
-  },
-  datePickerButton: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.surface,
+  dateCard: {
+    flex: 1,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+    borderColor: AdminTheme.colors.borderSoft,
   },
-  datePickerButtonPressed: {
-    backgroundColor: Colors.surfaceDark,
+  dateCardPressed: {
+    backgroundColor: AdminTheme.colors.surfaceMuted,
   },
-  datePickerText: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
-  },
-  datePickerTextSelected: {
-    color: Colors.text,
-    fontWeight: "600" as const,
-  },
-  dateRangeSummary: {
-    marginTop: Spacing.lg,
-  },
-  dateRangeGradient: {
+  dateCardHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    padding: Spacing.md,
-    borderRadius: 12,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.xs,
+    marginBottom: AdminTheme.spacing.xs,
   },
-  dateRangeTextContainer: {
-    flex: 1,
-  },
-  dateRangeTitle: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    fontWeight: "600" as const,
-    marginBottom: 2,
-  },
-  dateRangeDates: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: "600" as const,
-    marginBottom: 2,
-  },
-  dateRangeDays: {
+  dateCardLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
+  },
+  dateCardValue: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.textMuted,
+  },
+  dateCardValueActive: {
+    color: AdminTheme.colors.text,
   },
   clearButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: Spacing.sm,
     alignSelf: "flex-start" as const,
+    gap: AdminTheme.spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    borderRadius: 20,
+    backgroundColor: AdminTheme.colors.surface,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   clearButtonPressed: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
   },
   clearButtonText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: "600" as const,
+    fontSize: 13,
+    color: AdminTheme.colors.textMuted,
+    fontWeight: "500" as const,
   },
+  rangeInfo: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    padding: AdminTheme.spacing.sm,
+    backgroundColor: `${AdminTheme.colors.info}10`,
+    borderRadius: 10,
+  },
+  rangeInfoText: {
+    fontSize: 12,
+    color: AdminTheme.colors.info,
+    fontWeight: "500" as const,
+  },
+
+  // Generate Button
   generateButton: {
-    borderRadius: 16,
-    overflow: "hidden" as const,
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: AdminTheme.colors.success,
+    borderRadius: 12,
+    paddingVertical: AdminTheme.spacing.md,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    ...AdminTheme.shadow,
   },
   generateButtonDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: AdminTheme.colors.border,
+    opacity: 0.6,
   },
   generateButtonPressed: {
     transform: [{ scale: 0.98 }],
   },
-  generateButtonLoading: {
-    opacity: 0.9,
-  },
-  generateGradient: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-  },
   generateButtonText: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.surface,
   },
-  hintText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: "center" as const,
-    marginTop: Spacing.md,
-    fontStyle: "italic" as const,
-  },
-  loadingContainer: {
-    backgroundColor: Colors.white,
+
+  // Loading State
+  loadingCard: {
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
     alignItems: "center" as const,
-    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
+    ...AdminTheme.shadow,
   },
   loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
+    marginTop: AdminTheme.spacing.md,
+    fontSize: 14,
+    color: AdminTheme.colors.textMuted,
   },
-  errorContainer: {
-    backgroundColor: Colors.white,
+
+  // Error State
+  errorCard: {
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
     alignItems: "center" as const,
-    marginBottom: Spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
+    ...AdminTheme.shadow,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.error,
-    marginTop: Spacing.md,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.danger,
+    marginTop: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.xs,
   },
   errorMessage: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
   },
+
+  // Results Card
   resultsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    borderColor: AdminTheme.colors.borderSoft,
+    ...AdminTheme.shadow,
   },
   resultsHeader: {
+    flexDirection: "column" as const,
+    gap:8,
+    justifyContent: "center" as const,
+    marginBottom: AdminTheme.spacing.lg,
+    paddingBottom: AdminTheme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: AdminTheme.colors.borderSoft,
+  },
+  resultsTitleContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.lg,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   resultsTitle: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.text,
-    flex: 1,
-  },
-  dateRangeBadge: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  dateRangeBadgeText: {
-    fontSize: 11,
-    color: Colors.white,
+    fontSize: 18,
     fontWeight: "600" as const,
+    color: AdminTheme.colors.text,
   },
-  resultsContent: {
-    gap: Spacing.md,
-  },
-  metricCard: {
-    borderRadius: 16,
-    overflow: "hidden" as const,
-  },
-  metricGradient: {
-    padding: Spacing.lg,
-  },
-  metricHeader: {
+  periodChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    marginBottom: Spacing.sm,
-    gap: Spacing.sm,
+    justifyContent:"center",
+    gap: 4,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  periodChipText: {
+    fontSize: 10,
+    fontWeight: "600" as const,
+    color: AdminTheme.colors.surface,
+  },
+
+  // Metrics Grid
+  metricsGrid: {
+    gap: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.lg,
+  },
+  metricItem: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: AdminTheme.spacing.md,
+    padding: AdminTheme.spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   metricIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.white + "80",
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
-  metricLabel: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: "600" as const,
+  metricContent: {
+    flex: 1,
   },
-  metricValue: {
-    fontSize: 32,
-    fontWeight: "700" as const,
-    color: Colors.text,
+  metricLabel: {
+    fontSize: 12,
+    color: AdminTheme.colors.textMuted,
     marginBottom: 2,
   },
-  profitValue: {
-    fontSize: 36,
+  metricValue: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.text,
+    marginBottom: 4,
   },
-  metricSubtext: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: "500" as const,
+  metricDetail: {
+    fontSize: 11,
+    color: AdminTheme.colors.textSoft,
   },
-  summaryContainer: {
+
+  // Summary Row
+  summaryRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: Spacing.md,
-    marginTop: Spacing.lg,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
+    borderRadius: 12,
+    padding: AdminTheme.spacing.md,
   },
   summaryItem: {
     flex: 1,
@@ -989,18 +805,18 @@ const styles = {
     gap: 4,
   },
   summaryLabel: {
-    fontSize: 12,
-    color: Colors.textTertiary,
+    fontSize: 11,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "500" as const,
   },
   summaryValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   summaryDivider: {
     width: 1,
     height: 30,
-    backgroundColor: Colors.border,
+    backgroundColor: AdminTheme.colors.border,
   },
-};
+} as const;

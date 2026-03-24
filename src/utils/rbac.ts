@@ -5,6 +5,8 @@ export const isSuperAdmin = (role?: Role | null) => role === "SUPER_ADMIN";
 export const canWritePlantType = (role?: Role | null) =>
   role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
 export const canWriteOperational = (role?: Role | null) => role === "STAFF";
+export const canManageOperationalSales = (role?: Role | null) =>
+  role === "STAFF" || role === "NURSERY_ADMIN";
 export const canViewProfit = (role?: Role | null) =>
   role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
 export const canManageUsers = (role?: Role | null) =>
@@ -13,7 +15,8 @@ export const canManageSeeds = (role?: Role | null) => role === "STAFF";
 export const canManageSowing = (role?: Role | null) => role === "STAFF";
 export const canManageGermination = (role?: Role | null) => role === "STAFF";
 export const canManagePurchasedInventory = (role?: Role | null) => role === "STAFF";
-export const canManageSales = (role?: Role | null) => role === "STAFF";
+export const canManageSales = (role?: Role | null) =>
+  role === "STAFF" || role === "NURSERY_ADMIN";
 export const canManageCustomers = (role?: Role | null) => role === "STAFF";
 export const canManageExpenses = (role?: Role | null) => role === "STAFF";
 export const canManageLabours = (role?: Role | null) => role === "STAFF";

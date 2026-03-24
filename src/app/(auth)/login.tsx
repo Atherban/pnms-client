@@ -19,6 +19,7 @@ import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
 import { getLastEmail, saveLastEmail } from "../../utils/login.storage";
 import { saveUser } from "../../utils/storage";
+import { AdminTheme } from "@/src/components/admin/theme";
 
 const normalizePhone = (value: string) => value.replace(/[^\d]/g, "");
 
@@ -92,16 +93,21 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top","bottom"]}>
+      <View style={styles.header}>
+
+          <View style={styles.logoContainer}>
+            <MaterialIcons name="spa" size={44} color={Colors.primary} />
+            <Text style={styles.logoText}>PNMS</Text>
+          </View>
+          <Text style={styles.quoteText}>
+Where every plant finds its home, and every task finds its place.</Text>
+      </View>
       <KeyboardAvoidingView
         style={styles.keyboard}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.card}>
-          <View style={styles.logoContainer}>
-            <MaterialIcons name="spa" size={44} color={Colors.primary} />
-            <Text style={styles.logoText}>PNMS</Text>
-          </View>
 
           <Text style={styles.title}>Sign in</Text>
           <Text style={styles.subtitle}>Use your email/phone and password</Text>
@@ -177,8 +183,10 @@ export default function Login() {
           ) : null}
         </View>
 
-        <Text style={styles.footerText}>Plant Nursery Management System • v1.0.0</Text>
       </KeyboardAvoidingView>
+        <View style={styles.footerContainer}>
+          <Text style={styles.footerText}>Plant Nursery Management System • v1.0.0</Text>
+        </View>
     </SafeAreaView>
   );
 }
@@ -186,7 +194,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.borderSoft,
   },
   keyboard: {
     flex: 1,
@@ -195,16 +203,28 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: Spacing.xl,
+    borderRadius: Spacing.md,
     padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
-  logoContainer: {
-    flexDirection: "row",
+  header:{
+     width:"100%",
+    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: Spacing.md,
+    position:"absolute",
+    top:40,
+    left:0,
+    right:0,
+    height:200,
+  },
+  logoContainer: {
+    width:"100%",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.sm,
   },
   logoText: {
@@ -212,17 +232,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.primary,
   },
+  quoteText:{
+    width:"75%",
+    color: Colors.textSecondary,
+    marginTop: 10,
+    textAlign: "center",
+  },
   title: {
     fontSize: 24,
     fontWeight: "700",
     color: Colors.text,
-    textAlign: "center",
+    textAlign: "left",
   },
   subtitle: {
     color: Colors.textSecondary,
     marginTop: 4,
     marginBottom: Spacing.lg,
-    textAlign: "center",
+    textAlign: "left",
   },
   inputContainer: {
     flexDirection: "row",
@@ -230,7 +256,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 14,
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: Colors.surfaceMuted,
     paddingHorizontal: Spacing.md,
     marginBottom: Spacing.sm,
     height: 52,
@@ -289,9 +315,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   footerText: {
-    textAlign: "center",
-    color: "rgba(255,255,255,0.78)",
+    
+    color: Colors.textMuted,
     marginTop: Spacing.lg,
     fontSize: 12,
+    textAlign:"center"
+   
   },
+  footerContainer:{
+    width:"100%",
+    height:60,
+    position: "absolute",
+    bottom: 30,
+    textAlign:"center",
+    alignItems:"center",
+    justifyContent:"center",
+    backgroundColor:"Red"
+  }
 });

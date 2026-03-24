@@ -2,7 +2,6 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
@@ -19,11 +18,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { SeedService } from "../../services/seed.service";
 import { UploadService } from "../../services/upload.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { formatErrorMessage } from "../../utils/error";
 import { toImageUrl } from "../../utils/image";
 import { canViewSourcingDetails } from "../../utils/rbac";
 import { formatQuantityUnit } from "../../utils/units";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -260,7 +260,7 @@ export function SeedDetailScreen({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
         <Text style={styles.loadingText}>Loading seed details...</Text>
       </SafeAreaView>
     );
@@ -269,15 +269,15 @@ export function SeedDetailScreen({
   if (error || !seed) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <View style={styles.headerWrap}>
-          <Pressable onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-          </Pressable>
-          <Text style={styles.headerTitle}>{title}</Text>
-          <View style={styles.headerSpacer} />
-        </View>
+        <StitchHeader
+          title={title}
+          subtitle="Unable to load seed details"
+          variant="gradient"
+          showBackButton
+          onBackPress={handleBack}
+        />
         <View style={styles.center}>
-          <MaterialIcons name="error-outline" size={52} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={52} color={AdminTheme.colors.danger} />
           <Text style={styles.errorText}>
             {(error as any)?.message || "Unable to load seed details."}
           </Text>
@@ -288,20 +288,18 @@ export function SeedDetailScreen({
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerWrap}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Pressable onPress={handleBack} style={styles.backButton}>
-          <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-        </Pressable>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Pressable onPress={() => refetch()} style={styles.backButton}>
-          <MaterialIcons name="refresh" size={20} color={Colors.white} />
-        </Pressable>
-      </LinearGradient>
+      <StitchHeader
+        title={title}
+        subtitle={seed?.plantTypeId?.name || "Seed overview"}
+        variant="gradient"
+        showBackButton
+        onBackPress={handleBack}
+        actions={
+          <Pressable onPress={() => refetch()} style={styles.backButton}>
+            <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
+          </Pressable>
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -313,7 +311,7 @@ export function SeedDetailScreen({
               <Image source={{ uri: displayImage }} style={styles.heroImage} />
             ) : (
               <View style={styles.heroFallback}>
-                <MaterialIcons name="grass" size={40} color={Colors.primary} />
+                <MaterialIcons name="grass" size={40} color={AdminTheme.colors.primary} />
               </View>
             )}
           </View>
@@ -328,10 +326,10 @@ export function SeedDetailScreen({
               ]}
             >
               {deleteMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.white} />
+                <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
               ) : (
                 <>
-                  <MaterialIcons name="delete" size={14} color={Colors.white} />
+                  <MaterialIcons name="delete" size={14} color={AdminTheme.colors.surface} />
                   <Text style={styles.removeHeroButtonText}>Remove</Text>
                 </>
               )}
@@ -362,7 +360,7 @@ export function SeedDetailScreen({
                       disabled={deleteMutation.isPending || uploadMutation.isPending}
                       style={styles.thumbnailDeleteButton}
                     >
-                      <MaterialIcons name="close" size={12} color={Colors.white} />
+                      <MaterialIcons name="close" size={12} color={AdminTheme.colors.surface} />
                     </Pressable>
                   )}
                 </View>
@@ -415,7 +413,7 @@ export function SeedDetailScreen({
             <Text
               style={[
                 styles.detailValue,
-                isExpired && { color: Colors.error, fontWeight: "600" as const },
+                isExpired && { color: AdminTheme.colors.danger, fontWeight: "600" as const },
               ]}
             >
               {formatDate(seed.expiryDate)}
@@ -455,7 +453,7 @@ export function SeedDetailScreen({
                 activeOpacity={0.8}
               >
                 {uploadMutation.isPending ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
+                  <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                 ) : (
                   <Text style={styles.primaryButtonText}>Upload</Text>
                 )}
@@ -468,31 +466,24 @@ export function SeedDetailScreen({
   );
 }
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: AdminTheme.colors.background },
   center: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
   },
-  loadingText: { marginTop: Spacing.sm, color: Colors.textSecondary },
-  errorText: { color: Colors.error, textAlign: "center" as const, marginTop: 8 },
-  headerWrap: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-  },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: "700" as const,
-  },
-  headerSpacer: { width: 40 },
+  loadingText: { marginTop: AdminTheme.spacing.sm, color: AdminTheme.colors.textMuted },
+  errorText: { color: AdminTheme.colors.danger, textAlign: "center" as const, marginTop: 8 },
   backButton: {
     width: 40,
     height: 40,
@@ -502,22 +493,23 @@ const styles = {
     backgroundColor: "rgba(255,255,255,0.2)",
   },
   scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
-    gap: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.lg,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
+    gap: AdminTheme.spacing.md,
   },
   card: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    padding: Spacing.md,
+    borderColor: AdminTheme.colors.borderSoft,
+    padding: AdminTheme.spacing.md,
   },
   heroImageWrap: {
     borderRadius: 12,
     overflow: "hidden" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     position: "relative" as const,
   },
   heroImage: {
@@ -530,23 +522,24 @@ const styles = {
     height: 210,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   thumbnailRow: {
     gap: 8,
     paddingTop: 10,
   },
   thumbnailCard: {
+    ...cardSurface,
     position: "relative" as const,
   },
   thumbnailWrap: {
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     overflow: "hidden" as const,
   },
   thumbnailWrapSelected: {
-    borderColor: Colors.primary,
+    borderColor: AdminTheme.colors.primary,
     borderWidth: 2,
   },
   thumbnail: { width: 62, height: 62 },
@@ -557,65 +550,68 @@ const styles = {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: 1,
-    borderColor: Colors.white,
+    borderColor: AdminTheme.colors.surface,
   },
   removeHeroButton: {
     position: "absolute" as const,
     right: 10,
     bottom: 10,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
     borderRadius: 16,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 6,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
   },
   removeHeroButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 12,
     fontWeight: "600" as const,
   },
   name: {
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontSize: 20,
     fontWeight: "700" as const,
     marginBottom: 2,
   },
-  meta: { color: Colors.textSecondary, marginBottom: 12 },
+  meta: { color: AdminTheme.colors.textMuted, marginBottom: 12 },
   statsRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
   },
   statItem: { flex: 1, alignItems: "center" as const },
-  statLabel: { fontSize: 12, color: Colors.textSecondary },
+  statLabel: { fontSize: 12, color: AdminTheme.colors.textMuted },
   statValue: {
     marginTop: 2,
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
-  statDivider: { width: 1, height: 34, backgroundColor: Colors.borderLight },
+  statDivider: { width: 1, height: 34, backgroundColor: AdminTheme.colors.borderSoft },
   detailRow: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     paddingVertical: 8,
   },
-  detailKey: { color: Colors.textSecondary, fontSize: 13 },
-  detailValue: { color: Colors.text, fontSize: 13, fontWeight: "500" as const },
+  detailKey: { color: AdminTheme.colors.textMuted, fontSize: 13 },
+  detailValue: { color: AdminTheme.colors.text, fontSize: 13, fontWeight: "500" as const },
   sectionTitle: {
-    color: Colors.text,
-    fontSize: 15,
+    marginTop: AdminTheme.spacing.lg,
+    marginBottom: AdminTheme.spacing.sm,
+    fontSize: 12,
     fontWeight: "700" as const,
-    marginBottom: 10,
+    color: AdminTheme.colors.textMuted,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.6,
   },
   pendingPreview: {
     width: "100%" as const,
@@ -628,13 +624,13 @@ const styles = {
     height: 120,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     marginBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
-  pendingPlaceholderText: { color: Colors.textSecondary, fontSize: 13 },
+  pendingPlaceholderText: { color: AdminTheme.colors.textMuted, fontSize: 13 },
   uploadActions: {
     flexDirection: "row" as const,
     gap: 10,
@@ -643,26 +639,26 @@ const styles = {
     flex: 1,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     height: 42,
   },
   secondaryButtonText: {
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontSize: 14,
     fontWeight: "600" as const,
   },
   primaryButton: {
     flex: 1,
     borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     height: 42,
   },
   primaryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600" as const,
   },

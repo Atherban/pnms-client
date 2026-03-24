@@ -1,6 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState, useMemo } from "react";
 import {
@@ -18,7 +17,9 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { CustomerSeedBatchService } from "@/src/services/customer-seed-batch.service";
 import { CustomerService } from "@/src/services/customer.service";
 import { PlantTypeService } from "@/src/services/plant-type.service";
-import { Colors, Spacing } from "@/src/theme";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
+import { moduleSearchContainer, moduleSearchInput } from "../common/moduleStyles";
 
 type Props = {
   title: string;
@@ -158,24 +159,18 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerContent}>
-          <Pressable onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
-          </Pressable>
-          <Text style={styles.headerTitle}>
-            {selectionMode
-              ? selectionMode === "customer"
-                ? "Select Customer"
-                : "Select Plant"
-              : title}
-          </Text>
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title={
+          selectionMode
+            ? selectionMode === "customer"
+              ? "Select Customer"
+              : "Select Plant"
+            : title
+        }
+        variant="gradient"
+        showBackButton
+        onBackPress={handleBack}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -190,18 +185,18 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
             <View style={styles.selectionContainer}>
               {/* Search Bar */}
               <View style={styles.searchContainer}>
-                <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
+                <MaterialIcons name="search" size={20} color={AdminTheme.colors.textMuted} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder={`Search ${selectionMode}s...`}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoFocus
                 />
                 {searchQuery.length > 0 && (
                   <Pressable onPress={() => setSearchQuery("")} style={styles.searchClear}>
-                    <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
+                    <MaterialIcons name="close" size={18} color={AdminTheme.colors.textMuted} />
                   </Pressable>
                 )}
               </View>
@@ -211,7 +206,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                 <>
                   {isLoadingCustomers ? (
                     <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="large" color={Colors.primary} />
+                      <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
                       <Text style={styles.loadingText}>Loading customers...</Text>
                     </View>
                   ) : (
@@ -224,7 +219,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                         >
                           <View style={styles.resultItemLeft}>
                             <View style={styles.resultIcon}>
-                              <MaterialIcons name="person" size={20} color={Colors.primary} />
+                              <MaterialIcons name="person" size={20} color={AdminTheme.colors.primary} />
                             </View>
                             <View>
                               <Text style={styles.resultName}>{customer.name}</Text>
@@ -233,12 +228,12 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                               )}
                             </View>
                           </View>
-                          <MaterialIcons name="chevron-right" size={20} color={Colors.textSecondary} />
+                          <MaterialIcons name="chevron-right" size={20} color={AdminTheme.colors.textMuted} />
                         </Pressable>
                       ))}
                       {filteredCustomers.length === 0 && (
                         <View style={styles.emptyResults}>
-                          <MaterialIcons name="search-off" size={40} color={Colors.textTertiary} />
+                          <MaterialIcons name="search-off" size={40} color={AdminTheme.colors.textSoft} />
                           <Text style={styles.emptyResultsText}>No customers found</Text>
                         </View>
                       )}
@@ -251,7 +246,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                 <>
                   {isLoadingPlants ? (
                     <View style={styles.loadingContainer}>
-                      <ActivityIndicator size="large" color={Colors.primary} />
+                      <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
                       <Text style={styles.loadingText}>Loading plants...</Text>
                     </View>
                   ) : (
@@ -266,7 +261,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                           >
                             <View style={styles.resultItemLeft}>
                               <View style={styles.resultIcon}>
-                                <MaterialIcons name="spa" size={20} color={Colors.success} />
+                                <MaterialIcons name="spa" size={20} color={AdminTheme.colors.success} />
                               </View>
                               <View>
                                 <Text style={styles.resultName}>{plant.name}</Text>
@@ -275,13 +270,13 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                                 )}
                               </View>
                             </View>
-                            <MaterialIcons name="chevron-right" size={20} color={Colors.textSecondary} />
+                            <MaterialIcons name="chevron-right" size={20} color={AdminTheme.colors.textMuted} />
                           </Pressable>
                         );
                       })}
                       {filteredPlants.length === 0 && (
                         <View style={styles.emptyResults}>
-                          <MaterialIcons name="search-off" size={40} color={Colors.textTertiary} />
+                          <MaterialIcons name="search-off" size={40} color={AdminTheme.colors.textSoft} />
                           <Text style={styles.emptyResultsText}>No plants found</Text>
                         </View>
                       )}
@@ -302,8 +297,8 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                     style={styles.selectedItem}
                   >
                     <View style={styles.selectedItemLeft}>
-                      <View style={[styles.selectedIcon, { backgroundColor: Colors.primary + "10" }]}>
-                        <MaterialIcons name="person" size={20} color={Colors.primary} />
+                      <View style={[styles.selectedIcon, { backgroundColor: AdminTheme.colors.primary + "10" }]}>
+                        <MaterialIcons name="person" size={20} color={AdminTheme.colors.primary} />
                       </View>
                       <View>
                         <Text style={styles.selectedName}>{selectedCustomer.name}</Text>
@@ -312,14 +307,14 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                         )}
                       </View>
                     </View>
-                    <MaterialIcons name="edit" size={18} color={Colors.textSecondary} />
+                    <MaterialIcons name="edit" size={18} color={AdminTheme.colors.textMuted} />
                   </Pressable>
                 ) : (
                   <Pressable
                     onPress={() => setSelectionMode("customer")}
                     style={styles.selectButton}
                   >
-                    <MaterialIcons name="person-add" size={20} color={Colors.primary} />
+                    <MaterialIcons name="person-add" size={20} color={AdminTheme.colors.primary} />
                     <Text style={styles.selectButtonText}>Select Customer</Text>
                   </Pressable>
                 )}
@@ -334,8 +329,8 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                     style={styles.selectedItem}
                   >
                     <View style={styles.selectedItemLeft}>
-                      <View style={[styles.selectedIcon, { backgroundColor: Colors.success + "10" }]}>
-                        <MaterialIcons name="spa" size={20} color={Colors.success} />
+                      <View style={[styles.selectedIcon, { backgroundColor: AdminTheme.colors.success + "10" }]}>
+                        <MaterialIcons name="spa" size={20} color={AdminTheme.colors.success} />
                       </View>
                       <View>
                         <Text style={styles.selectedName}>{selectedPlant.name}</Text>
@@ -344,14 +339,14 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                         )}
                       </View>
                     </View>
-                    <MaterialIcons name="edit" size={18} color={Colors.textSecondary} />
+                    <MaterialIcons name="edit" size={18} color={AdminTheme.colors.textMuted} />
                   </Pressable>
                 ) : (
                   <Pressable
                     onPress={() => setSelectionMode("plant")}
                     style={styles.selectButton}
                   >
-                    <MaterialIcons name="spa" size={20} color={Colors.success} />
+                    <MaterialIcons name="spa" size={20} color={AdminTheme.colors.success} />
                     <Text style={styles.selectButtonText}>Select Plant Type</Text>
                   </Pressable>
                 )}
@@ -361,13 +356,13 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
               <View style={styles.formSection}>
                 <Text style={styles.inputLabel}>Seed Quantity *</Text>
                 <View style={styles.inputContainer}>
-                  <MaterialIcons name="inventory" size={20} color={Colors.textSecondary} />
+                  <MaterialIcons name="inventory" size={20} color={AdminTheme.colors.textMuted} />
                   <TextInput
                     value={seedQuantity}
                     onChangeText={(value) => setSeedQuantity(value.replace(/[^\d]/g, ""))}
                     keyboardType="numeric"
                     placeholder="e.g. 1000"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={AdminTheme.colors.textSoft}
                     style={styles.input}
                   />
                 </View>
@@ -376,13 +371,13 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
               <View style={styles.formSection}>
                 <Text style={styles.inputLabel}>Service Charge Estimate (₹)</Text>
                 <View style={styles.inputContainer}>
-                  <MaterialIcons name="currency-rupee" size={20} color={Colors.textSecondary} />
+                  <MaterialIcons name="currency-rupee" size={20} color={AdminTheme.colors.textMuted} />
                   <TextInput
                     value={serviceChargeEstimate}
                     onChangeText={(value) => setServiceChargeEstimate(value.replace(/[^\d.]/g, ""))}
                     keyboardType="numeric"
                     placeholder="e.g. 1200"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={AdminTheme.colors.textSoft}
                     style={styles.input}
                   />
                 </View>
@@ -391,13 +386,13 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
               <View style={styles.formSection}>
                 <Text style={styles.inputLabel}>Discount Amount (₹)</Text>
                 <View style={styles.inputContainer}>
-                  <MaterialIcons name="discount" size={20} color={Colors.textSecondary} />
+                  <MaterialIcons name="discount" size={20} color={AdminTheme.colors.textMuted} />
                   <TextInput
                     value={discountAmount}
                     onChangeText={(value) => setDiscountAmount(value.replace(/[^\d.]/g, ""))}
                     keyboardType="numeric"
                     placeholder="e.g. 200"
-                    placeholderTextColor={Colors.textTertiary}
+                    placeholderTextColor={AdminTheme.colors.textSoft}
                     style={styles.input}
                   />
                 </View>
@@ -409,7 +404,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                   onPress={() => setShowExpectedDatePicker(true)}
                   style={styles.inputContainer}
                 >
-                  <MaterialIcons name="calendar-today" size={20} color={Colors.textSecondary} />
+                  <MaterialIcons name="calendar-today" size={20} color={AdminTheme.colors.textMuted} />
                   <Text
                     style={
                       expectedReadyDate
@@ -427,7 +422,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                       }}
                       style={styles.dateClearButton}
                     >
-                      <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
+                      <MaterialIcons name="close" size={18} color={AdminTheme.colors.textMuted} />
                     </Pressable>
                   ) : null}
                 </Pressable>
@@ -458,7 +453,7 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                   {Number(discountAmount) > 0 && (
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Discount</Text>
-                      <Text style={[styles.summaryValue, { color: Colors.success }]}>
+                      <Text style={[styles.summaryValue, { color: AdminTheme.colors.success }]}>
                         -₹{Number(discountAmount).toLocaleString("en-IN")}
                       </Text>
                     </View>
@@ -479,10 +474,10 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
                 style={[styles.submitButton, (!isValid || isPending) && styles.submitButtonDisabled]}
               >
                 {isPending ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
+                  <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                 ) : (
                   <>
-                    <MaterialIcons name="add-circle" size={20} color={Colors.white} />
+                    <MaterialIcons name="add-circle" size={20} color={AdminTheme.colors.surface} />
                     <Text style={styles.submitButtonText}>Create Seed Batch</Text>
                   </>
                 )}
@@ -508,171 +503,129 @@ export default function CustomerSeedBatchCreateScreen({ title }: Props) {
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   keyboardView: {
     flex: 1,
   },
 
-  // Header
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 20,
-    fontWeight: "700" as const,
-    flex: 1,
-  },
-
   // Scroll Content
   scrollContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     paddingBottom: 100,
   },
 
   // Selection View
   selectionContainer: {
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
-  searchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    height: 50,
-    gap: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.text,
-    padding: 0,
-  },
+  searchContainer: moduleSearchContainer,
+  searchInput: moduleSearchInput,
   searchClear: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   resultsList: {
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   resultItem: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   resultItemLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
     flex: 1,
   },
   resultIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   resultName: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   resultDetail: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   loadingContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl,
+    gap: AdminTheme.spacing.md,
   },
   loadingText: {
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontSize: 14,
   },
   emptyResults: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl * 2,
+    gap: AdminTheme.spacing.md,
   },
   emptyResultsText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
 
   // Form View
   formContainer: {
-    gap: Spacing.lg,
+    gap: AdminTheme.spacing.lg,
   },
   section: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   sectionLabel: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     marginLeft: 4,
     marginBottom: 2,
   },
   selectButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderStyle: "dashed" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   selectButtonText: {
     fontSize: 14,
     fontWeight: "500" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   selectedItem: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   selectedItemLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
     flex: 1,
   },
   selectedIcon: {
@@ -685,48 +638,48 @@ const styles = {
   selectedName: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   selectedDetail: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   formSection: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "500" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     marginLeft: 4,
   },
   inputContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     height: 50,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   input: {
     flex: 1,
     fontSize: 15,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     padding: 0,
   },
   dateInputValue: {
     flex: 1,
     fontSize: 15,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   dateInputPlaceholder: {
     flex: 1,
     fontSize: 15,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
   },
   dateClearButton: {
     padding: 2,
@@ -734,33 +687,33 @@ const styles = {
 
   // Summary
   summaryContainer: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
+    padding: AdminTheme.spacing.md,
+    marginTop: AdminTheme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.sm,
   },
   summaryRow: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.xs,
+    paddingVertical: AdminTheme.spacing.xs,
   },
   summaryLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   summaryValue: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
 
   // Submit Button
@@ -768,19 +721,19 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     borderRadius: 12,
-    paddingVertical: Spacing.md,
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.md,
+    marginTop: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   submitButtonDisabled: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   submitButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600" as const,
   },

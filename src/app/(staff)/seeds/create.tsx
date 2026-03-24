@@ -18,6 +18,7 @@ import {
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import EntityThumbnail from "../../../components/ui/EntityThumbnail";
+import StitchHeader from "../../../components/common/StitchHeader";
 import { PlantTypeService } from "../../../services/plant-type.service";
 import { SeedService } from "../../../services/seed.service";
 import { Colors } from "../../../theme";
@@ -545,35 +546,13 @@ export default function StaffSeedCreate() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Fixed Blue Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={handleBack}
-              style={styles.backButton}
-              activeOpacity={0.7}
-              testID="back-button"
-            >
-              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-            </TouchableOpacity>
-
-            <View style={styles.headerTitleContainer}>
-              <Text style={styles.headerTitle}>Create Seed</Text>
-              <Text style={styles.headerSubtitle}>
-                Add a new seed to inventory
-              </Text>
-            </View>
-
-            <View style={styles.headerRight} />
-          </View>
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title="Create Seed"
+        subtitle="Add a new seed to inventory"
+        variant="solid"
+        showBackButton
+        onBackPress={handleBack}
+      />
 
       {/* Form Content - ScrollView with all content including footer */}
       <ScrollView

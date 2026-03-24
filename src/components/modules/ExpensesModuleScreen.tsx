@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import {
@@ -19,14 +19,20 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ModuleScreenFrame from "../common/ModuleScreenFrame";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../navigation/SharedBottomNav";
 import { ExpenseService } from "../../services/expense.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import type { Expense } from "../../types/expense.types";
 import { formatErrorMessage } from "../../utils/error";
+import { AdminTheme } from "../admin/theme";
+import ModuleEmptyState from "../common/ModuleEmptyState";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import StitchSectionHeader from "../common/StitchSectionHeader";
+import StitchCard from "../common/StitchCard";
+import { ModuleStatItem } from "../common/ModuleStatGrid";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BOTTOM_NAV_HEIGHT = 80;
 const EXPENSE_TYPE_OPTIONS = [
   "SEED",
   "FERTILIZER",
@@ -49,6 +55,7 @@ export function ExpensesModuleScreen({
   title,
   canWrite,
 }: ExpensesModuleScreenProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.user?.role);
   const showStaffDetails = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
@@ -256,7 +263,7 @@ export function ExpensesModuleScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading expenses...</Text>
         </View>
       </SafeAreaView>
@@ -267,7 +274,7 @@ export function ExpensesModuleScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.errorCard}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
           <Text style={styles.errorMessage}>{formatErrorMessage(error)}</Text>
           <Pressable
@@ -280,7 +287,7 @@ export function ExpensesModuleScreen({
               pressed && styles.retryButtonPressed,
             ]}
           >
-            <MaterialIcons name="refresh" size={20} color={Colors.white} />
+            <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
         </View>
@@ -289,86 +296,28 @@ export function ExpensesModuleScreen({
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header with Gradient */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <MaterialIcons name="receipt" size={24} color={Colors.white} />
-            <Text style={styles.headerTitle}>{title}</Text>
-          </View>
-          {canWrite && (
-            <Pressable
-              onPress={toggleForm}
-              style={({ pressed }) => [
-                styles.addButton,
-                pressed && styles.addButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name={showForm ? "close" : "add"}
-                size={20}
-                color={Colors.primary}
-              />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Summary Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total Expenses</Text>
-            <Text style={styles.statValue}>
-              {formatCurrency(totalExpenses)}
-            </Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Count</Text>
-            <Text style={styles.statValue}>{filtered.length}</Text>
-          </View>
-          {showStaffDetails && (
-            <>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Staff</Text>
-                <Text style={styles.statValue}>{contributorCount}</Text>
-              </View>
-            </>
-          )}
-        </View>
-      </LinearGradient>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder={
-            showStaffDetails
-              ? "Search by type, reason, product, staff..."
-              : "Search by type, reason, product..."
-          }
-          placeholderTextColor={Colors.textTertiary}
-          style={styles.searchInput}
-        />
-        {search.length > 0 && (
-          <Pressable onPress={() => setSearch("")} style={styles.clearButton}>
+    <ModuleScreenFrame
+      title={title}
+      subtitle={`${filtered.length} expense${filtered.length === 1 ? "" : "s"}`}
+      onBackPress={() => router.back()}
+      actions={
+        canWrite ? (
+          <Pressable
+            onPress={toggleForm}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+            ]}
+          >
             <MaterialIcons
-              name="close"
+              name={showForm ? "close" : "add"}
               size={20}
-              color={Colors.textSecondary}
+              color={AdminTheme.colors.surfaceMuted}
             />
           </Pressable>
-        )}
-      </View>
-
+        ) : null
+      }
+    >
       {/* Form Bottom Sheet */}
       {canWrite && (
         <Modal
@@ -398,7 +347,7 @@ export function ExpensesModuleScreen({
               <MaterialIcons
                 name={editing ? "edit" : "add-chart"}
                 size={20}
-                color={Colors.primary}
+                color={AdminTheme.colors.primary}
               />
               <Text style={styles.formTitle}>
                 {editing ? "Edit Expense" : "Add New Expense"}
@@ -409,7 +358,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="refresh"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
             )}
@@ -427,7 +376,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="category"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Expense Type *</Text>
               </View>
@@ -457,7 +406,7 @@ export function ExpensesModuleScreen({
                       : "keyboard-arrow-down"
                   }
                   size={20}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
               {showTypeDropdown && (
@@ -481,7 +430,7 @@ export function ExpensesModuleScreen({
                           name={getExpenseIcon(option)}
                           size={16}
                           color={
-                            type === option ? Colors.primary : Colors.textSecondary
+                            type === option ? AdminTheme.colors.primary : AdminTheme.colors.textMuted
                           }
                         />
                         <Text
@@ -497,7 +446,7 @@ export function ExpensesModuleScreen({
                         <MaterialIcons
                           name="check-circle"
                           size={16}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                       )}
                     </Pressable>
@@ -513,7 +462,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="currency-rupee"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Amount *</Text>
               </View>
@@ -521,7 +470,7 @@ export function ExpensesModuleScreen({
                 value={amount}
                 onChangeText={(text) => setAmount(text.replace(/[^0-9.]/g, ""))}
                 placeholder="0.00"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 keyboardType="decimal-pad"
                 style={[
                   styles.input,
@@ -536,21 +485,21 @@ export function ExpensesModuleScreen({
               )}
               {isAmountValid() && (
                 <View style={styles.amountPreview}>
-                  <LinearGradient
-                    colors={[Colors.success + "20", Colors.success + "10"]}
-                    style={styles.amountPreviewGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+                  <View
+                    style={[
+                      styles.amountPreviewGradient,
+                      { backgroundColor: AdminTheme.colors.success + "12" },
+                    ]}
                   >
                     <MaterialIcons
                       name="check-circle"
                       size={16}
-                      color={Colors.success}
+                      color={AdminTheme.colors.success}
                     />
                     <Text style={styles.amountPreviewText}>
                       Amount: {formatCurrency(Number(amount))}
                     </Text>
-                  </LinearGradient>
+                  </View>
                 </View>
               )}
             </View>
@@ -561,7 +510,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="description"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Description</Text>
               </View>
@@ -569,7 +518,7 @@ export function ExpensesModuleScreen({
                 value={description}
                 onChangeText={setDescription}
                 placeholder="Enter description (optional)"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 multiline
                 numberOfLines={2}
                 style={[styles.input, styles.textArea]}
@@ -582,7 +531,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="flag"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Purpose</Text>
               </View>
@@ -590,7 +539,7 @@ export function ExpensesModuleScreen({
                 value={purpose}
                 onChangeText={setPurpose}
                 placeholder="Why this expense was made"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 style={styles.input}
               />
             </View>
@@ -601,7 +550,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="inventory-2"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Product Details</Text>
               </View>
@@ -609,7 +558,7 @@ export function ExpensesModuleScreen({
                 value={productDetails}
                 onChangeText={setProductDetails}
                 placeholder="Item details, brand, quantity etc."
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 style={styles.input}
               />
             </View>
@@ -620,7 +569,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="calendar-month"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Date</Text>
               </View>
@@ -632,7 +581,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="calendar-today"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
             </View>
@@ -653,7 +602,7 @@ export function ExpensesModuleScreen({
                 <MaterialIcons
                   name="close"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.cancelFormButtonText}>Cancel</Text>
               </Pressable>
@@ -672,19 +621,20 @@ export function ExpensesModuleScreen({
                   pressed && styles.saveFormButtonPressed,
                 ]}
               >
-                <LinearGradient
-                  colors={
-                    !type || !isAmountValid() || saveMutation.isPending
-                      ? [Colors.border, Colors.borderLight]
-                      : [Colors.success, "#34D399"]
-                  }
-                  style={styles.saveFormGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                <View
+                  style={[
+                    styles.saveFormGradient,
+                    {
+                      backgroundColor:
+                        !type || !isAmountValid() || saveMutation.isPending
+                          ? AdminTheme.colors.border
+                          : AdminTheme.colors.success,
+                    },
+                  ]}
                 >
                   {saveMutation.isPending ? (
                     <>
-                      <ActivityIndicator size="small" color={Colors.white} />
+                      <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                       <Text style={styles.saveFormButtonText}>Saving...</Text>
                     </>
                   ) : (
@@ -692,14 +642,14 @@ export function ExpensesModuleScreen({
                       <MaterialIcons
                         name="check-circle"
                         size={18}
-                        color={Colors.white}
+                        color={AdminTheme.colors.surface}
                       />
                       <Text style={styles.saveFormButtonText}>
                         {editing ? "Update" : "Save"}
                       </Text>
                     </>
                   )}
-                </LinearGradient>
+                </View>
               </Pressable>
             </View>
           </ScrollView>
@@ -725,34 +675,74 @@ export function ExpensesModuleScreen({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        ListHeaderComponent={
+          <>
+            <ModuleScreenIntro
+              stats={[
+                {
+                  label: "Total Expenses",
+                  value: formatCurrency(totalExpenses),
+                  icon: "receipt-long",
+                  tone: "danger",
+                },
+                {
+                  label: "Expense Count",
+                  value: filtered.length,
+                  icon: "format-list-numbered",
+                  tone: "info",
+                },
+                ...(showStaffDetails
+                  ? [
+                      {
+                        label: "Contributors",
+                        value: contributorCount,
+                        icon: "groups",
+                        tone: "success",
+                      } satisfies ModuleStatItem,
+                    ]
+                  : []),
+              ]}
+              search={{
+                value: search,
+                onChangeText: setSearch,
+                onClear: () => setSearch(""),
+                placeholder: showStaffDetails
+                  ? "Search by type, reason, product, staff..."
+                  : "Search by type, reason, product...",
+              }}
+            />
+            <StitchSectionHeader title="Expenses" subtitle="Latest expense entries" />
+          </>
+        }
         ListFooterComponent={<View style={styles.bottomSpacer} />}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons
-              name="receipt-long"
-              size={64}
-              color={Colors.textTertiary}
-            />
-            <Text style={styles.emptyTitle}>
-              {search ? "No Results Found" : "No Expenses Yet"}
-            </Text>
-            <Text style={styles.emptyText}>
-              {search
+          <ModuleEmptyState
+            style={styles.emptyContainer}
+            icon={
+              <MaterialIcons
+                name="receipt-long"
+                size={64}
+                color={AdminTheme.colors.textSoft}
+              />
+            }
+            title={search ? "No Results Found" : "No Expenses Yet"}
+            message={
+              search
                 ? "No expenses match your search criteria."
                 : canWrite
                   ? "Tap the + button to add your first expense."
-                  : "No expenses available."}
-            </Text>
-          </View>
+                  : "No expenses available."
+            }
+          />
         }
         renderItem={({ item }) => (
-          <View style={styles.expenseCard}>
+          <StitchCard style={styles.expenseCard}>
             <View style={styles.expenseCardHeader}>
               <View style={styles.expenseIconContainer}>
                 <MaterialIcons
                   name={getExpenseIcon(item.type)}
                   size={24}
-                  color={Colors.primary}
+                  color={AdminTheme.colors.primary}
                 />
               </View>
               <View style={styles.expenseInfo}>
@@ -787,7 +777,7 @@ export function ExpensesModuleScreen({
                       <MaterialIcons
                         name="person"
                         size={12}
-                        color={Colors.textSecondary}
+                        color={AdminTheme.colors.textMuted}
                       />
                       <Text style={styles.expenseMetaText} numberOfLines={1}>
                         Spent by: {getPurchaserName(item)}
@@ -800,7 +790,7 @@ export function ExpensesModuleScreen({
                     <MaterialIcons
                       name="calendar-today"
                       size={12}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.expenseDateText}>
                       {String(item.date).slice(0, 10)}
@@ -820,7 +810,7 @@ export function ExpensesModuleScreen({
                     pressed && styles.actionButtonPressed,
                   ]}
                 >
-                  <MaterialIcons name="edit" size={16} color={Colors.primary} />
+                  <MaterialIcons name="edit" size={16} color={AdminTheme.colors.primary} />
                   <Text style={styles.editButtonText}>Edit</Text>
                 </Pressable>
                 {canDeleteExpenses && (
@@ -835,17 +825,17 @@ export function ExpensesModuleScreen({
                     <MaterialIcons
                       name="delete-outline"
                       size={16}
-                      color={Colors.error}
+                      color={AdminTheme.colors.danger}
                     />
                     <Text style={styles.deleteButtonText}>Delete</Text>
                   </Pressable>
                 )}
               </View>
             )}
-          </View>
+          </StitchCard>
         )}
       />
-    </SafeAreaView>
+    </ModuleScreenFrame>
   );
 }
 
@@ -885,117 +875,46 @@ const getExpenseIcon = (type: string) => {
 
 /* -------------------- Styles -------------------- */
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   center: {
     flex: 1,
     justifyContent: "center" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.background,
-  },
-  // Header Styles
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.lg,
-  },
-  headerLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
+    backgroundColor: AdminTheme.colors.background,
   },
   addButton: {
-    width: 44,
+   width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.white,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent:"center",
+    alignItems:"center"
   },
   addButtonPressed: {
     transform: [{ scale: 0.95 }],
-    backgroundColor: Colors.surface,
-  },
-  // Stats Styles
-  statsContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 16,
-    padding: Spacing.md,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center" as const,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.8)",
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "700" as const,
-    color: Colors.white,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-  },
-  // Search Styles
-  searchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    minHeight: 50,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  clearButton: {
-    padding: Spacing.xs,
+    backgroundColor: AdminTheme.colors.surface,
   },
   // Loading & Error States
   loadingCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.xl,
     borderRadius: 20,
     alignItems: "center" as const,
-    gap: Spacing.lg,
-    shadowColor: Colors.shadow,
+    gap: AdminTheme.spacing.lg,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -1003,50 +922,51 @@ const styles = {
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.xl,
     borderRadius: 20,
     alignItems: "center" as const,
-    gap: Spacing.md,
-    shadowColor: Colors.shadow,
+    gap: AdminTheme.spacing.md,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
-    maxWidth: SCREEN_WIDTH - Spacing.xl * 2,
+    maxWidth: SCREEN_WIDTH - AdminTheme.spacing.xl * 2,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
-    marginTop: Spacing.sm,
+    color: AdminTheme.colors.danger,
+    marginTop: AdminTheme.spacing.sm,
   },
   errorMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   retryButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
     borderRadius: 12,
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.sm,
   },
   retryButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.98 }],
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "600" as const,
   },
@@ -1061,7 +981,7 @@ const styles = {
     justifyContent: "flex-end" as const,
   },
   sheetContainer: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "88%" as const,
@@ -1071,10 +991,10 @@ const styles = {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: AdminTheme.colors.border,
     alignSelf: "center" as const,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
+    marginTop: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.xs,
   },
   formScroll: {
     flexGrow: 0,
@@ -1083,51 +1003,51 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   formTitleContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   formTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   resetButton: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   formContainer: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
   },
   inputWrapper: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   inputLabel: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.xs,
   },
   inputLabelText: {
     fontSize: 13,
     fontWeight: "500" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.text,
-    backgroundColor: Colors.white,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.surface,
     minHeight: 50,
   },
   dropdownTrigger: {
@@ -1137,48 +1057,48 @@ const styles = {
   },
   dropdownTriggerText: {
     fontSize: 16,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   dropdownPlaceholderText: {
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "400" as const,
   },
   dropdownMenu: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     overflow: "hidden" as const,
   },
   dropdownOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm + 2,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   dropdownOptionLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   dropdownOptionSelected: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   dropdownOptionPressed: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   dropdownOptionText: {
     fontSize: 14,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   dropdownOptionTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "700" as const,
   },
   dateInput: {
@@ -1191,70 +1111,70 @@ const styles = {
   },
   dateInputText: {
     fontSize: 16,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: AdminTheme.colors.danger,
   },
   inputSuccess: {
-    borderColor: Colors.success,
+    borderColor: AdminTheme.colors.success,
   },
   fieldError: {
     fontSize: 12,
-    color: Colors.error,
-    paddingHorizontal: Spacing.xs,
+    color: AdminTheme.colors.danger,
+    paddingHorizontal: AdminTheme.spacing.xs,
   },
   textArea: {
     minHeight: 80,
     textAlignVertical: "top" as const,
   },
   amountPreview: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
   },
   amountPreviewGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    padding: Spacing.sm,
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   amountPreviewText: {
     fontSize: 13,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
     fontWeight: "600" as const,
   },
   formActions: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
-    marginTop: Spacing.sm,
+    gap: AdminTheme.spacing.md,
+    marginTop: AdminTheme.spacing.sm,
   },
   cancelFormButton: {
     flex: 1,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingVertical: AdminTheme.spacing.md,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    gap: Spacing.sm,
+    borderColor: AdminTheme.colors.borderSoft,
+    gap: AdminTheme.spacing.sm,
   },
   cancelFormButtonPressed: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.surfaceDark,
     transform: [{ scale: 0.98 }],
   },
   cancelFormButtonText: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   saveFormButton: {
     flex: 2,
     borderRadius: 12,
     overflow: "hidden" as const,
-    shadowColor: Colors.success,
+    shadowColor: AdminTheme.colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1271,51 +1191,52 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   saveFormButtonText: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   // List Styles
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.xs,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
     flexGrow: 1,
   },
   bottomSpacer: {
-    height: Spacing.sm,
+    height: AdminTheme.spacing.sm,
   },
   emptyContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl * 2,
+    gap: AdminTheme.spacing.md,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginTop: Spacing.md,
+    color: AdminTheme.colors.text,
+    marginTop: AdminTheme.spacing.md,
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   // Expense Card Styles
   expenseCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.sm,
+    padding: AdminTheme.spacing.lg,
+    marginBottom: AdminTheme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -1323,13 +1244,13 @@ const styles = {
   },
   expenseCardHeader: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   expenseIconContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
@@ -1345,21 +1266,21 @@ const styles = {
   expenseType: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     flex: 1,
   },
   expenseAmount: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   expenseDescription: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   expensePurpose: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   expenseMetaRow: {
@@ -1369,11 +1290,11 @@ const styles = {
   },
   expenseMetaText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   expenseMetaMuted: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
   },
   expenseDate: {
     flexDirection: "row" as const,
@@ -1382,44 +1303,44 @@ const styles = {
   },
   expenseDateText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   expenseActions: {
     flexDirection: "row" as const,
     justifyContent: "flex-end" as const,
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    paddingTop: AdminTheme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: AdminTheme.colors.borderSoft,
   },
   actionButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     minHeight: 40,
     borderRadius: 8,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   actionButtonPressed: {
     transform: [{ scale: 0.95 }],
     opacity: 0.8,
   },
   editButton: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   editButtonText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   deleteButton: {
-    backgroundColor: Colors.error + "10",
+    backgroundColor: AdminTheme.colors.danger + "10",
   },
   deleteButtonText: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
 };

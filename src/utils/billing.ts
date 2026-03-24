@@ -1,5 +1,6 @@
 import type { NurseryPublicProfile } from "../types/public-profile.types";
 import type { Sale } from "../types/sales.type";
+import { toImageUrl } from "./image";
 
 export interface BillLineItem {
   id: string;
@@ -22,6 +23,8 @@ export interface BillPaymentRow {
 export interface BillNurseryInfo {
   name: string;
   code?: string;
+  logoImageUrl?: string;
+  logoBase64?: string;
   phoneNumber?: string;
   whatsappNumber?: string;
   email?: string;
@@ -57,6 +60,8 @@ export interface BillData {
   totalAmount: number;
 }
 
+
+
 const getSaleTimestamp = (sale: Partial<Sale>): Date => {
   const source = sale.saleDate || sale.createdAt || new Date().toISOString();
   const parsed = new Date(source);
@@ -79,6 +84,58 @@ const toCurrency = (amount: number) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+
+const logoDataUriCache = new Map<string, string>();
+
+const inferImageMimeType = (value?: string): string => {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized.startsWith("data:image/png")) return "image/png";
+  if (normalized.startsWith("data:image/webp")) return "image/webp";
+  if (normalized.startsWith("data:image/gif")) return "image/gif";
+  if (normalized.startsWith("data:image/svg+xml")) return "image/svg+xml";
+  if (normalized.startsWith("data:image/jpeg") || normalized.startsWith("data:image/jpg")) {
+    return "image/jpeg";
+  }
+
+  const withoutQuery = normalized.split("?")[0].split("#")[0];
+  if (withoutQuery.endsWith(".png")) return "image/png";
+  if (withoutQuery.endsWith(".webp")) return "image/webp";
+  if (withoutQuery.endsWith(".gif")) return "image/gif";
+  if (withoutQuery.endsWith(".svg")) return "image/svg+xml";
+  return "image/jpeg";
+};
+
+export const convertImageUrlToDataUri = async (
+  imageUrl?: string | null,
+): Promise<string | undefined> => {
+  const resolvedUrl = toImageUrl(imageUrl);
+  if (!resolvedUrl) return undefined;
+  if (resolvedUrl.startsWith("data:image/")) return resolvedUrl;
+
+  const cached = logoDataUriCache.get(resolvedUrl);
+  if (cached) return cached;
+
+  try {
+    const fsPackage = "expo-file-system/legacy";
+    const FileSystem = await import(fsPackage);
+    const fileExtension = inferImageMimeType(resolvedUrl).split("/")[1] || "img";
+    const tempFileUri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}bill-logo-${Date.now()}.${fileExtension}`;
+
+    await FileSystem.downloadAsync(resolvedUrl, tempFileUri);
+    const base64 = await FileSystem.readAsStringAsync(tempFileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    FileSystem.deleteAsync(tempFileUri, { idempotent: true }).catch(() => undefined);
+
+    if (!base64) return undefined;
+    const dataUri = `data:${inferImageMimeType(resolvedUrl)};base64,${base64}`;
+    logoDataUriCache.set(resolvedUrl, dataUri);
+    return dataUri;
+  } catch {
+    return undefined;
+  }
+};
 
 export const buildBillNumber = (sale: Partial<Sale>): string => {
   const ts = getSaleTimestamp(sale);
@@ -118,6 +175,10 @@ const resolveNurseryInfo = (
 ): BillNurseryInfo => {
   const saleNursery =
     sale?.nurseryId && typeof sale.nurseryId === "object" ? sale.nurseryId : null;
+  const saleBranding =
+    ((saleNursery?.settings as any)?.branding as Record<string, any> | undefined) ||
+    ((saleNursery as any)?.branding as Record<string, any> | undefined) ||
+    {};
   const contact = nurseryProfile?.contactDetails?.[0];
   const settingsContact = saleNursery?.settings?.contactDetails?.[0];
   const social = saleNursery?.settings?.socialLinks;
@@ -125,11 +186,21 @@ const resolveNurseryInfo = (
 
   return {
     name:
+      nurseryProfile?.name ||
       saleNursery?.name ||
       contact?.label ||
       nurseryProfile?.contactDetails?.[0]?.label ||
       "Nursery",
     code: saleNursery?.code,
+    logoImageUrl:
+      toImageUrl(nurseryProfile?.logoImageUrl) ||
+      toImageUrl(
+        saleBranding?.logoImageUrl ||
+          saleBranding?.logoImage ||
+          saleBranding?.logoUrl ||
+          (saleNursery as any)?.logoImageUrl ||
+          (saleNursery as any)?.logoUrl,
+      ),
     phoneNumber:
       contact?.phoneNumber ||
       settingsContact?.phoneNumber ||
@@ -175,8 +246,15 @@ export const buildBillDataFromSale = (
             ? item.inventoryId
             : item.inventory?._id || `line-${index + 1}`;
         const plant = item.inventory?.plantType;
-        const name = plant?.name || `Item ${index + 1}`;
-        const category = (plant as any)?.category || "General";
+        const name =
+          item.plantTypeName ||
+          item.inventoryLabel ||
+          plant?.name ||
+          `Item ${index + 1}`;
+        const category =
+          item.plantCategory ||
+          (plant as any)?.category ||
+          "General";
         const quantity = Math.max(0, toFixedNumber(item.quantity));
         const unitPrice = Math.max(
           0,
@@ -291,6 +369,22 @@ export const buildBillDataFromSale = (
   };
 };
 
+export const buildBillDataFromSaleAsync = async (
+  sale: Partial<Sale>,
+  options?: { nurseryProfile?: NurseryPublicProfile | null },
+): Promise<BillData> => {
+  const bill = buildBillDataFromSale(sale, options);
+  const logoBase64 = await convertImageUrlToDataUri(bill.nursery.logoImageUrl);
+
+  return {
+    ...bill,
+    nursery: {
+      ...bill.nursery,
+      logoBase64,
+    },
+  };
+};
+
 export const formatBillShareText = (bill: BillData): string => {
   const itemLines = bill.items
     .map(
@@ -367,6 +461,7 @@ export const formatBillHtml = (bill: BillData): string => {
       </tr>`,
     )
     .join("");
+    
 
   return `
   <html>
@@ -375,6 +470,9 @@ export const formatBillHtml = (bill: BillData): string => {
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; margin: 0; padding: 24px; }
         .top { display: flex; justify-content: space-between; border-bottom: 2px solid #1f2937; padding-bottom: 12px; margin-bottom: 16px; }
+        .brand { display: flex; align-items: flex-start; gap: 14px; }
+        .brand-logo { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; background: #f3f4f6; }
+        .brand-logo-placeholder { width: 72px; height: 72px; border-radius: 12px; background: #f3f4f6; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.8px; }
         .company { font-size: 24px; font-weight: 800; letter-spacing: 0.4px; }
         .company-sub { font-size: 12px; color: #4b5563; margin-top: 4px; }
         .invoice-title { font-size: 22px; font-weight: 700; text-align: right; }
@@ -396,13 +494,20 @@ export const formatBillHtml = (bill: BillData): string => {
     </head>
     <body>
       <div class="top">
-        <div>
-          <div class="company">${bill.nursery.name}</div>
-          ${bill.nursery.code ? `<div class="company-sub">Code: ${bill.nursery.code}</div>` : ""}
-          ${bill.nursery.address ? `<div class="company-sub">${bill.nursery.address}</div>` : ""}
-          ${bill.nursery.phoneNumber ? `<div class="company-sub">Phone: ${bill.nursery.phoneNumber}</div>` : ""}
-          ${bill.nursery.email ? `<div class="company-sub">Email: ${bill.nursery.email}</div>` : ""}
-          ${bill.nursery.website ? `<div class="company-sub">Website: ${bill.nursery.website}</div>` : ""}
+        <div class="brand">
+          ${
+            bill.nursery.logoBase64 || bill.nursery.logoImageUrl
+              ? `<img src="${bill.nursery.logoBase64 || bill.nursery.logoImageUrl}" class="brand-logo" alt="${bill.nursery.name} logo" />`
+              : `<div class="brand-logo-placeholder">Logo</div>`
+          }
+          <div>
+            <div class="company">${bill.nursery.name}</div>
+            ${bill.nursery.code ? `<div class="company-sub">Code: ${bill.nursery.code}</div>` : ""}
+            ${bill.nursery.address ? `<div class="company-sub">${bill.nursery.address}</div>` : ""}
+            ${bill.nursery.phoneNumber ? `<div class="company-sub">Phone: ${bill.nursery.phoneNumber}</div>` : ""}
+            ${bill.nursery.email ? `<div class="company-sub">Email: ${bill.nursery.email}</div>` : ""}
+            ${bill.nursery.website ? `<div class="company-sub">Website: ${bill.nursery.website}</div>` : ""}
+          </div>
         </div>
         <div>
           <div class="invoice-title">TAX INVOICE</div>

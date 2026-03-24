@@ -11,7 +11,9 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  Keyboard,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,16 +26,18 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
+import StitchHeader from "../../../components/common/StitchHeader";
+import StitchCard from "../../../components/common/StitchCard";
 import EntityThumbnail from "../../../components/ui/EntityThumbnail";
 import { CustomerService } from "../../../services/customer.service";
 import { InventoryService } from "../../../services/inventory.service";
 import { SalesService } from "../../../services/sales.service";
-import { Colors } from "../../../theme";
+import { Colors, Spacing } from "../../../theme";
 import { formatErrorMessage } from "../../../utils/error";
 import { resolveEntityImage } from "../../../utils/image";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% of screen height for better visibility
+const MODAL_HEIGHT = Math.min(Math.max(SCREEN_HEIGHT * 0.72, 460), SCREEN_HEIGHT * 0.9);
 const CART_FOOTER_BOTTOM_GAP = 90;
 
 // ==================== CONSTANTS & TYPES ====================
@@ -728,6 +732,8 @@ export default function StaffSalesCreate() {
   const [utrNumber, setUtrNumber] = useState("");
   const [transactionRef, setTransactionRef] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartDrawerVisible, setIsCartDrawerVisible] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [isQuantityModalVisible, setIsQuantityModalVisible] = useState(false);
   const [isCustomerPickerVisible, setIsCustomerPickerVisible] = useState(false);
@@ -880,17 +886,35 @@ export default function StaffSalesCreate() {
       setSelectedCustomer(autoLinkedCustomerId);
     }
   }, [autoLinkedCustomerId]);
-  const cartFooterHeight = useMemo(() => {
-    const baseHeight = 254;
-    const perItemHeight = 40;
-    return Math.min(400, baseHeight + cart.length * perItemHeight);
-  }, [cart.length]);
-
   useEffect(() => {
     if (selectedPayment === "CASH") {
       setUtrNumber("");
     }
   }, [selectedPayment]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showSubscription = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      setIsCartDrawerVisible(false);
+    });
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (cart.length === 0 && isCartDrawerVisible) {
+      setIsCartDrawerVisible(false);
+    }
+  }, [cart.length, isCartDrawerVisible]);
 
   // Mutation
   const mutation = useMutation({
@@ -1139,29 +1163,17 @@ export default function StaffSalesCreate() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-          </TouchableOpacity>
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>New Sale</Text>
-            <Text style={styles.headerSubtitle}>
-              {cartSummary.totalItems > 0
-                ? `${cartSummary.totalItems} items in cart`
-                : "Select items"}
-            </Text>
-          </View>
-          <View style={styles.headerRight} />
-        </View>
-      </LinearGradient>
+      <StitchHeader
+        title="New Sale"
+        subtitle={
+          cartSummary.totalItems > 0
+            ? `${cartSummary.totalItems} items in cart`
+            : "Select items"
+        }
+        variant="gradient"
+        showBackButton
+        onBackPress={() => router.back()}
+      />
 
       {/* Main Content */}
       <FlatList
@@ -1173,7 +1185,7 @@ export default function StaffSalesCreate() {
           cart.length > 0
             ? {
                 paddingBottom:
-                  cartFooterHeight +
+                  144 +
                   cartFooterBottomOffset +
                   cartFooterInnerPadding +
                   24,
@@ -1185,8 +1197,21 @@ export default function StaffSalesCreate() {
         ]}
         ListHeaderComponent={
           <>
+            <StitchCard style={styles.saleHeroCard}>
+              <View style={styles.saleHeroContent}>
+                <Text style={styles.saleHeroTitle}>Build the sale with one consistent checkout flow</Text>
+                <Text style={styles.saleHeroSubtitle}>
+                  Choose payment, attach a customer when needed, and add inventory items into the cart.
+                </Text>
+              </View>
+              <View style={styles.saleHeroBadge}>
+                <MaterialIcons name="shopping-bag" size={18} color={Colors.primary} />
+                <Text style={styles.saleHeroBadgeText}>{cartSummary.totalItems} qty</Text>
+              </View>
+            </StitchCard>
+
             {/* Payment Section */}
-            <View style={styles.section}>
+            <StitchCard style={styles.section}>
               <Text style={styles.sectionTitle}>Payment Method</Text>
               <View style={styles.paymentGrid}>
                 {PAYMENT_MODES.map((mode) => (
@@ -1228,6 +1253,7 @@ export default function StaffSalesCreate() {
                 ))}
               </View>
               <View style={styles.paymentMetaCard}>
+                <Text style={styles.saleMetaText}>Discount Amount </Text>
                 <TextInput
                   style={styles.paymentMetaInput}
                   placeholder="Discount amount"
@@ -1235,7 +1261,8 @@ export default function StaffSalesCreate() {
                   keyboardType="numeric"
                   value={discountAmount}
                   onChangeText={setDiscountAmount}
-                />
+                  />
+                  <Text style={styles.saleMetaText}>Amount Paid </Text>
                 <TextInput
                   style={styles.paymentMetaInput}
                   placeholder="Amount paid now"
@@ -1288,7 +1315,7 @@ export default function StaffSalesCreate() {
                   </Text>
                 </View>
               </View>
-            </View>
+            </StitchCard>
 
             {/* Customer Section */}
             <View style={styles.section}>
@@ -1379,7 +1406,7 @@ export default function StaffSalesCreate() {
             </View>
 
             {/* Search */}
-            <View style={styles.section}>
+            <StitchCard style={styles.section}>
               <Text style={styles.sectionTitle}>Add Items</Text>
               <View style={styles.searchContainer}>
                 <MaterialIcons name="search" size={20} color="#9CA3AF" />
@@ -1396,7 +1423,7 @@ export default function StaffSalesCreate() {
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
+            </StitchCard>
           </>
         }
         ListEmptyComponent={
@@ -1415,14 +1442,14 @@ export default function StaffSalesCreate() {
       />
 
       {/* Cart Summary Footer */}
-      {cart.length > 0 && (
+      {cart.length > 0 && !isKeyboardVisible && (
         <View
           style={[
             styles.cartFooter,
             {
-              bottom: cartFooterBottomOffset,
-              paddingBottom: cartFooterInnerPadding,
-              maxHeight: cartFooterHeight,
+              position: "absolute",
+              bottom: cartFooterBottomOffset-28,
+              paddingBottom: cartFooterInnerPadding+8,
             },
           ]}
         >
@@ -1447,46 +1474,39 @@ export default function StaffSalesCreate() {
             </View>
           </View>
 
-          <View style={styles.cartItemsSection}>
-            <View style={styles.cartItemsHeader}>
-              <Text style={styles.cartItemsTitle}>Selected Items</Text>
-              <Text style={styles.cartItemsCount}>
-                {cartSummary.totalItems} qty total
+          <View style={styles.cartFooterTopRow}>
+            <View style={styles.cartFooterSummary}>
+              <Text style={styles.cartSummaryLabel}>Items / Net / Due</Text>
+              <Text style={styles.cartFooterSummaryValue}>
+                {cartSummary.totalItems} • {formatCurrency(netAmount)} / {formatCurrency(duePreview)}
               </Text>
             </View>
-            <ScrollView
-              style={styles.cartItemsList}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
+            <TouchableOpacity
+              onPress={() => setIsCartDrawerVisible(true)}
+              style={styles.viewCartButton}
+              activeOpacity={0.8}
             >
-              {cart.map((cartItem) => (
-                <CartItemComponent
-                  key={cartItem.inventory._id}
-                  item={cartItem}
-                  onUpdateQty={handleUpdateQuantity}
-                  onRemove={handleRemoveFromCart}
-                  maxQty={Number(cartItem.inventory?.quantity || 0)}
-                />
-              ))}
-            </ScrollView>
+              <MaterialIcons name="shopping-cart" size={16} color={Colors.primary} />
+              <Text style={styles.viewCartButtonText}>View Cart</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.cartSummary}>
-            <View>
+            <View style={styles.cartSummaryBlock}>
               <Text style={styles.cartSummaryLabel}>Total Items</Text>
               <Text style={styles.cartSummaryValue}>
                 {cartSummary.totalItems}
               </Text>
             </View>
             <View style={styles.cartSummaryDivider} />
-            <View>
+            <View style={styles.cartSummaryBlock}>
               <Text style={styles.cartSummaryLabel}>Subtotal</Text>
               <Text style={styles.cartSummaryAmount}>
                 {formatCurrency(cartSummary.subtotal)}
               </Text>
             </View>
             <View style={styles.cartSummaryDivider} />
-            <View>
+            <View style={styles.cartSummaryBlock}>
               <Text style={styles.cartSummaryLabel}>Net / Due</Text>
               <Text style={styles.cartSummaryAmount}>
                 {formatCurrency(netAmount)} / {formatCurrency(duePreview)}
@@ -1511,6 +1531,93 @@ export default function StaffSalesCreate() {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal
+        visible={isCartDrawerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCartDrawerVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalBackdrop}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => setIsCartDrawerVisible(false)}
+            />
+          </View>
+
+          <View style={styles.cartDrawerSheet}>
+            <View style={styles.dragHandleContainer}>
+              <View style={styles.dragHandle} />
+            </View>
+
+            <View style={styles.cartDrawerHeader}>
+              <View>
+                <Text style={styles.bottomSheetTitle}>Cart Summary</Text>
+                <Text style={styles.cartDrawerSubtitle}>
+                  {cartSummary.totalItems} qty across {cart.length} item{cart.length !== 1 ? "s" : ""}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsCartDrawerVisible(false)}
+                style={styles.bottomSheetCloseButton}
+              >
+                <MaterialIcons name="close" size={20} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.cartItemsSection}>
+              <View style={styles.cartItemsHeader}>
+                <Text style={styles.cartItemsTitle}>Selected Items</Text>
+                <Text style={styles.cartItemsCount}>
+                  {cartSummary.totalItems} qty total
+                </Text>
+              </View>
+              <ScrollView
+                style={styles.cartDrawerList}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+              >
+                {cart.map((cartItem) => (
+                  <CartItemComponent
+                    key={cartItem.inventory._id}
+                    item={cartItem}
+                    onUpdateQty={handleUpdateQuantity}
+                    onRemove={handleRemoveFromCart}
+                    maxQty={Number(cartItem.inventory?.quantity || 0)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.cartDrawerSummary}>
+              <View style={styles.cartSummary}>
+                <View style={styles.cartSummaryBlock}>
+                  <Text style={styles.cartSummaryLabel}>Subtotal</Text>
+                  <Text style={styles.cartSummaryAmount}>
+                    {formatCurrency(cartSummary.subtotal)}
+                  </Text>
+                </View>
+                <View style={styles.cartSummaryDivider} />
+                <View style={styles.cartSummaryBlock}>
+                  <Text style={styles.cartSummaryLabel}>Net</Text>
+                  <Text style={styles.cartSummaryAmount}>
+                    {formatCurrency(netAmount)}
+                  </Text>
+                </View>
+                <View style={styles.cartSummaryDivider} />
+                <View style={styles.cartSummaryBlock}>
+                  <Text style={styles.cartSummaryLabel}>Due</Text>
+                  <Text style={styles.cartSummaryAmount}>
+                    {formatCurrency(duePreview)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Customer Picker Modal */}
       <Modal
@@ -1756,54 +1863,47 @@ const styles = StyleSheet.create({
     backgroundColor: "#F9FAFB",
   },
 
-  // Header
-  headerGradient: {
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: Colors.white,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: "rgba(255, 255, 255, 0.9)",
-    marginTop: 2,
-  },
-  headerRight: {
-    width: 40,
-  },
-
   // List Content
   listContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 12,
     paddingBottom: 24,
+  },
+  saleHeroCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 20,
+  },
+  saleHeroContent: {
+    flex: 1,
+  },
+  saleHeroTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  saleHeroSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#6B7280",
+  },
+  saleHeroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: `${Colors.primary}12`,
+  },
+  saleHeroBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.primary,
   },
 
   // Sections
@@ -1851,7 +1951,7 @@ const styles = StyleSheet.create({
   },
   paymentMetaCard: {
     marginTop: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: "#F8FAFC",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1883,7 +1983,7 @@ const styles = StyleSheet.create({
 
   // Customer
   customerSelectionCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: "#F8FAFC",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1956,7 +2056,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: "#F8FAFC",
     borderRadius: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
@@ -2245,9 +2345,10 @@ const styles = StyleSheet.create({
 
   // Cart Footer
   cartFooter: {
-    position: "absolute",
+    
     left: 0,
     right: 0,
+    
     backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
@@ -2258,6 +2359,40 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 8,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  cartFooterTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 12,
+  },
+  cartFooterSummary: {
+    flex: 1,
+    gap: 4,
+  },
+  cartFooterSummaryValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  viewCartButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}25`,
+    backgroundColor: `${Colors.primary}10`,
+  },
+  viewCartButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: Colors.primary,
   },
   saleMetaRow: {
     flexDirection: "row",
@@ -2284,6 +2419,7 @@ const styles = StyleSheet.create({
   },
   cartItemsHeader: {
     flexDirection: "row",
+    paddingHorizontal:Spacing.md,
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
@@ -2301,11 +2437,19 @@ const styles = StyleSheet.create({
   cartItemsList: {
     maxHeight: 150,
   },
+  cartDrawerList: {
+    maxHeight: SCREEN_HEIGHT * 0.38,
+  },
   cartSummary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 14,
+  },
+  cartSummaryBlock: {
+    flex: 1,
+    alignItems:"center",
+    justifyContent:"center"
   },
   cartSummaryLabel: {
     fontSize: 12,
@@ -2356,6 +2500,8 @@ const styles = StyleSheet.create({
   },
   bottomSheet: {
     height: MODAL_HEIGHT,
+    maxHeight: SCREEN_HEIGHT * 0.9,
+    minHeight: 460,
     backgroundColor: Colors.white,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -2365,6 +2511,38 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 16,
     elevation: 16,
+  },
+  cartDrawerSheet: {
+    maxHeight: SCREEN_HEIGHT * 0.72,
+    minHeight: 320,
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: "hidden",
+    shadowColor: "#00000098",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 16,
+    paddingBottom: 16,
+  },
+  cartDrawerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  cartDrawerSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#6B7280",
+  },
+  cartDrawerSummary: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
   },
   dragHandleContainer: {
     width: "100%",

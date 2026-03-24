@@ -164,6 +164,8 @@ const getItemPlantNames = (sale: any): string[] => {
   const names: string[] = sale.items
     .map((item: any) => {
       const name =
+        item?.plantTypeName ??
+        item?.inventoryLabel ??
         item?.inventory?.plantType?.name ??
         item?.inventoryId?.plantType?.name ??
         item?.plantType?.name ??
@@ -202,6 +204,13 @@ const inferSaleImage = (sale: any): string | undefined => {
   if (Array.isArray(sale?.items)) {
     for (const item of sale.items) {
       const candidates = [
+        item?.plantImage ? { imageUrl: item.plantImage } : null,
+        item?.plantTypeName
+          ? {
+              name: item.plantTypeName,
+              imageUrl: item.plantImage,
+            }
+          : null,
         item?.inventory?.plantType,
         item?.inventoryId?.plantType,
         item?.plantType,

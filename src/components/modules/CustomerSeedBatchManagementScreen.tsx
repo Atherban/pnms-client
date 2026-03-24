@@ -1,6 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   Alert,
@@ -12,7 +11,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { CustomerSeedBatchService } from "@/src/services/customer-seed-batch.service";
-import { Colors, Spacing } from "@/src/theme";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
+import { moduleBadge } from "../common/moduleStyles";
 
 type Props = {
   title: string;
@@ -33,7 +34,7 @@ const getStatusColor = (status: BatchStatus) => {
     case "COLLECTED":
       return { bg: "#E5E7EB", text: "#374151" };
     default:
-      return { bg: Colors.surface, text: Colors.textSecondary };
+      return { bg: AdminTheme.colors.surface, text: AdminTheme.colors.textMuted };
   }
 };
 
@@ -135,28 +136,20 @@ export default function CustomerSeedBatchManagementScreen({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-      >
-        <View style={styles.headerContent}>
-          <Pressable onPress={handleBack} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={22} color={Colors.white} />
-          </Pressable>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle}>{title}</Text>
-            <Text style={styles.headerSubtitle}>{roleLabel}</Text>
-          </View>
-        </View>
-
-        {createPath && (
-          <Pressable onPress={handleCreate} style={styles.createButton}>
-            <MaterialIcons name="add" size={18} color={Colors.white} />
-            <Text style={styles.createButtonText}>Create Batch</Text>
-          </Pressable>
-        )}
-      </LinearGradient>
+      <StitchHeader
+        title={title}
+        subtitle={roleLabel}
+        variant="gradient"
+        showBackButton
+        onBackPress={handleBack}
+        actions={
+          createPath ? (
+            <Pressable onPress={handleCreate} style={styles.createButton}>
+              <MaterialIcons name="add" size={18} color={AdminTheme.colors.surface} />
+            </Pressable>
+          ) : null
+        }
+      />
 
       {/* Content */}
       <ScrollView
@@ -165,28 +158,28 @@ export default function CustomerSeedBatchManagementScreen({
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
       >
         {isLoading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
             <Text style={styles.loadingText}>Loading batches...</Text>
           </View>
         )}
 
         {!isLoading && batches.length === 0 && (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="inbox" size={48} color={Colors.textTertiary} />
+            <MaterialIcons name="inbox" size={48} color={AdminTheme.colors.textSoft} />
             <Text style={styles.emptyTitle}>No Batches Found</Text>
             <Text style={styles.emptyMessage}>
               Customer seed batches will appear here once created.
             </Text>
             {createPath && (
               <Pressable onPress={handleCreate} style={styles.emptyButton}>
-                <MaterialIcons name="add" size={16} color={Colors.white} />
+                <MaterialIcons name="add" size={16} color={AdminTheme.colors.surface} />
                 <Text style={styles.emptyButtonText}>Create First Batch</Text>
               </Pressable>
             )}
@@ -220,7 +213,7 @@ export default function CustomerSeedBatchManagementScreen({
               {/* Plant & Customer Info */}
               <Text style={styles.plantName}>{plantName}</Text>
               <View style={styles.customerRow}>
-                <MaterialIcons name="person" size={14} color={Colors.textSecondary} />
+                <MaterialIcons name="person" size={14} color={AdminTheme.colors.textMuted} />
                 <Text style={styles.customerName}>{customerName}</Text>
               </View>
 
@@ -246,18 +239,18 @@ export default function CustomerSeedBatchManagementScreen({
                   ]}
                 >
                   {markReadyMutation.isPending ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
+                    <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                   ) : (
                     <>
                       <MaterialIcons
                         name="check-circle"
                         size={16}
-                        color={canMarkReady ? Colors.white : Colors.textTertiary}
+                        color={canMarkReady ? AdminTheme.colors.surface : AdminTheme.colors.textSoft}
                       />
                       <Text
                         style={[
                           styles.actionButtonText,
-                          canMarkReady ? { color: Colors.white } : { color: Colors.textTertiary },
+                          canMarkReady ? { color: AdminTheme.colors.surface } : { color: AdminTheme.colors.textSoft },
                         ]}
                       >
                         Mark Ready
@@ -275,18 +268,18 @@ export default function CustomerSeedBatchManagementScreen({
                   ]}
                 >
                   {collectMutation.isPending ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
+                    <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                   ) : (
                     <>
                       <MaterialIcons
                         name="inventory"
                         size={16}
-                        color={canCollect ? Colors.white : Colors.textTertiary}
+                        color={canCollect ? AdminTheme.colors.surface : AdminTheme.colors.textSoft}
                       />
                       <Text
                         style={[
                           styles.actionButtonText,
-                          canCollect ? { color: Colors.white } : { color: Colors.textTertiary },
+                          canCollect ? { color: AdminTheme.colors.surface } : { color: AdminTheme.colors.textSoft },
                         ]}
                       >
                         Collect
@@ -303,134 +296,110 @@ export default function CustomerSeedBatchManagementScreen({
   );
 }
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
 
-  // Header
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    color: Colors.white,
-    fontSize: 22,
-    fontWeight: "700" as const,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 13,
-    fontWeight: "500" as const,
-  },
   createButton: {
-    marginTop: Spacing.md,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 20,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    alignSelf: "flex-start" as const,
-    gap: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent:"center",
+    alignItems:"center"
   },
   createButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontWeight: "600" as const,
     fontSize: 14,
   },
 
   // Scroll Content
   scrollContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     paddingBottom: 100,
+    gap: AdminTheme.spacing.md,
   },
 
   // Loading & Empty States
   loadingContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl,
+    gap: AdminTheme.spacing.md,
   },
   loadingText: {
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontSize: 15,
     fontWeight: "500" as const,
   },
   emptyContainer: {
+    ...cardSurface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl * 2,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginTop: Spacing.sm,
+    color: AdminTheme.colors.text,
+    marginTop: AdminTheme.spacing.sm,
   },
   emptyMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
     lineHeight: 20,
   },
   emptyButton: {
-    marginTop: Spacing.sm,
-    backgroundColor: Colors.primary,
+    marginTop: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.primary,
     borderRadius: 20,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.sm,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontWeight: "600" as const,
     fontSize: 14,
   },
 
   // Batch Card
   batchCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 16,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
+    padding: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   statusBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     alignSelf: "flex-start" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 20,
     gap: 4,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   statusText: {
     fontSize: 11,
@@ -439,74 +408,75 @@ const styles = {
   plantName: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.textPrimary,
-    marginBottom: Spacing.xs,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.xs,
   },
   customerRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   customerName: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   dueRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   dueAmount: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.textPrimary,
+    color: AdminTheme.colors.text,
   },
   dueBadge: {
-    backgroundColor: Colors.warning + "15",
-    paddingHorizontal: Spacing.sm,
+    ...moduleBadge,
+    backgroundColor: AdminTheme.colors.warning + "15",
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 2,
     borderRadius: 12,
-    marginLeft: Spacing.xs,
+    marginLeft: AdminTheme.spacing.xs,
   },
   dueBadgeText: {
     fontSize: 10,
     fontWeight: "600" as const,
-    color: Colors.warning,
+    color: AdminTheme.colors.warning,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.border,
+    marginVertical: AdminTheme.spacing.md,
   },
 
   // Action Buttons
   actionRow: {
     flexDirection: "row" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   actionButton: {
     flex: 1,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
     borderRadius: 10,
     gap: 6,
   },
   markReadyButton: {
-    backgroundColor: Colors.warning,
+    backgroundColor: AdminTheme.colors.warning,
   },
   collectButton: {
-    backgroundColor: Colors.success,
+    backgroundColor: AdminTheme.colors.success,
   },
   actionButtonDisabled: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
   },
   actionButtonText: {
     fontSize: 13,

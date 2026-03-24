@@ -3,7 +3,6 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -15,15 +14,18 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PlantTypeService } from "../../services/plant-type.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
 import { canViewSensitivePricing } from "../../utils/rbac";
+import { AdminTheme } from "../admin/theme";
+import StitchHeader from "../common/StitchHeader";
+import ModuleStatGrid, { ModuleStatItem } from "../common/ModuleStatGrid";
+import { moduleBadge, moduleSearchContainer, moduleSearchInput } from "../common/moduleStyles";
+import StitchInput from "../common/StitchInput";
 
 const BOTTOM_NAV_HEIGHT = 80;
 
@@ -192,13 +194,13 @@ const FilterSection = ({
   <View style={styles.filterSectionContainer}>
     <Pressable onPress={onToggle} style={styles.filterSectionHeader}>
       <View style={styles.filterSectionTitleContainer}>
-        <MaterialIcons name={icon as any} size={20} color={Colors.primary} />
+        <MaterialIcons name={icon as any} size={20} color={AdminTheme.colors.primary} />
         <Text style={styles.filterSectionTitle}>{title}</Text>
       </View>
       <MaterialIcons
         name={isExpanded ? "expand-less" : "expand-more"}
         size={20}
-        color={Colors.textSecondary}
+        color={AdminTheme.colors.textMuted}
       />
     </Pressable>
     {isExpanded && <View style={styles.filterSectionContent}>{children}</View>}
@@ -268,19 +270,19 @@ const FilterModal = ({
     >
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-            style={styles.modalHeader}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
+          <View
+            style={[
+              styles.modalHeader,
+              { backgroundColor: AdminTheme.colors.primary },
+            ]}
           >
             <View style={styles.modalHeaderContent}>
               <Text style={styles.modalHeaderTitle}>Filters</Text>
               <Pressable onPress={onClose} style={styles.modalCloseButton}>
-                <MaterialIcons name="close" size={24} color={Colors.white} />
+                <MaterialIcons name="close" size={24} color={AdminTheme.colors.surface} />
               </Pressable>
             </View>
-          </LinearGradient>
+          </View>
 
           <ScrollView
             style={styles.modalBody}
@@ -419,7 +421,7 @@ const FilterModal = ({
                         styles.filterOption,
                         localFilters.category === category && [
                           styles.filterOptionSelected,
-                          { borderColor: Colors.primary },
+                          { borderColor: AdminTheme.colors.primary },
                         ],
                       ]}
                       onPress={() =>
@@ -433,13 +435,13 @@ const FilterModal = ({
                       <View
                         style={[
                           styles.filterOptionIcon,
-                          { backgroundColor: `${Colors.primary}10` },
+                          { backgroundColor: `${AdminTheme.colors.primary}10` },
                         ]}
                       >
                         <MaterialIcons
                           name="category"
                           size={20}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                       </View>
                       <View style={styles.filterOptionInfo}>
@@ -452,7 +454,7 @@ const FilterModal = ({
                         <MaterialIcons
                           name="check-circle"
                           size={20}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                       )}
                     </Pressable>
@@ -479,14 +481,14 @@ const FilterModal = ({
                 pressed && styles.modalApplyButtonPressed,
               ]}
             >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.modalApplyGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
+                style={[
+                  styles.modalApplyGradient,
+                  { backgroundColor: AdminTheme.colors.primary },
+                ]}
               >
                 <Text style={styles.modalApplyButtonText}>Apply Filters</Text>
-              </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </View>
@@ -517,14 +519,14 @@ const SortDropdown = ({ selectedSort, onSortChange }: SortDropdownProps) => {
         }}
         style={styles.sortButton}
       >
-        <MaterialIcons name="sort" size={20} color={Colors.textSecondary} />
+        <MaterialIcons name="sort" size={20} color={AdminTheme.colors.textMuted} />
         <Text style={styles.sortButtonText} numberOfLines={1}>
           {selectedOption.label}
         </Text>
         <MaterialIcons
           name={isOpen ? "arrow-drop-up" : "arrow-drop-down"}
           size={20}
-          color={Colors.textSecondary}
+          color={AdminTheme.colors.textMuted}
         />
       </Pressable>
 
@@ -536,7 +538,7 @@ const SortDropdown = ({ selectedSort, onSortChange }: SortDropdownProps) => {
               <MaterialIcons
                 name="close"
                 size={20}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
             </Pressable>
           </View>
@@ -559,8 +561,8 @@ const SortDropdown = ({ selectedSort, onSortChange }: SortDropdownProps) => {
                   size={18}
                   color={
                     selectedSort === option.id
-                      ? Colors.primary
-                      : Colors.textSecondary
+                      ? AdminTheme.colors.primary
+                      : AdminTheme.colors.textMuted
                   }
                 />
                 <Text
@@ -573,7 +575,7 @@ const SortDropdown = ({ selectedSort, onSortChange }: SortDropdownProps) => {
                 </Text>
               </View>
               {selectedSort === option.id && (
-                <MaterialIcons name="check" size={18} color={Colors.primary} />
+                <MaterialIcons name="check" size={18} color={AdminTheme.colors.primary} />
               )}
             </Pressable>
           ))}
@@ -594,150 +596,34 @@ interface StatsRowProps {
   };
 }
 
-const StatsRow = ({ stats }: StatsRowProps) => (
-  <View style={styles.statsRow}>
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="eco" size={16} color={Colors.white} />
-      <Text style={styles.statCompactValue}>{stats.totalTypes}</Text>
-      <Text style={styles.statCompactLabel}>Types</Text>
-    </View>
+const StatsRow = ({ stats }: StatsRowProps) => {
+  const items: ModuleStatItem[] = [
+    { label: "Plant Types", value: stats.totalTypes, icon: "eco", tone: "success" },
+    {
+      label: "Categories",
+      value: stats.totalCategories,
+      icon: "category",
+      tone: "info",
+    },
+    {
+      label: "Average Lifecycle",
+      value: stats.avgLifecycle,
+      icon: "timer",
+      tone: "warning",
+      helper: "Days",
+    },
+    {
+      label: "Average Price",
+      value: stats.avgPrice,
+      icon: "currency-rupee",
+      tone: "primary",
+    },
+  ];
 
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="category" size={16} color={Colors.white} />
-      <Text style={styles.statCompactValue}>{stats.totalCategories}</Text>
-      <Text style={styles.statCompactLabel}>Categories</Text>
-    </View>
-
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="timer" size={16} color={Colors.white} />
-      <Text style={styles.statCompactValue}>{stats.avgLifecycle}</Text>
-      <Text style={styles.statCompactLabel}>Avg Days</Text>
-    </View>
-
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="attach-money" size={16} color={Colors.white} />
-      <Text style={styles.statCompactValue}>{stats.avgPrice}</Text>
-      <Text style={styles.statCompactLabel}>Avg Price</Text>
-    </View>
-  </View>
-);
+  return <ModuleStatGrid items={items} />;
+};
 
 // ==================== HEADER COMPONENT ====================
-
-interface HeaderProps {
-  title: string;
-  subtitle: string;
-  searchQuery: string;
-  onSearchChange: (text: string) => void;
-  onSearchClear: () => void;
-  onFilterPress: () => void;
-  activeFilterCount: number;
-  stats?: StatsRowProps["stats"];
-  showStats?: boolean;
-  canWrite?: boolean;
-  onCreate?: () => void;
-}
-
-const Header = ({
-  title,
-  subtitle,
-  searchQuery,
-  onSearchChange,
-  onSearchClear,
-  onFilterPress,
-  activeFilterCount,
-  stats,
-  showStats,
-  canWrite,
-  onCreate,
-}: HeaderProps) => (
-  <LinearGradient
-    colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-    style={styles.headerGradient}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 0 }}
-  >
-    <View style={styles.headerTopRow}>
-      <View style={styles.headerContent}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.headerSubtitle}>{subtitle}</Text>
-      </View>
-      {canWrite && onCreate && (
-        <Pressable
-          onPress={onCreate}
-          style={({ pressed }) => [
-            styles.headerCreateButton,
-            pressed && styles.headerCreateButtonPressed,
-          ]}
-        >
-          <MaterialIcons name="add" size={20} color={Colors.primary} />
-          <Text style={styles.headerCreateButtonText}>Add</Text>
-        </Pressable>
-      )}
-    </View>
-
-    {/* Search Bar in Header */}
-    <View style={styles.headerSearchContainer}>
-      <View style={styles.headerSearchInputContainer}>
-        <MaterialIcons name="search" size={18} color="rgba(255,255,255,0.8)" />
-        <TextInput
-          style={styles.headerSearchInput}
-          placeholder="Search plant types..."
-          placeholderTextColor="rgba(255,255,255,0.6)"
-          value={searchQuery}
-          onChangeText={onSearchChange}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <Pressable
-            onPress={onSearchClear}
-            style={styles.headerSearchClearButton}
-          >
-            <MaterialIcons
-              name="close"
-              size={16}
-              color="rgba(255,255,255,0.8)"
-            />
-          </Pressable>
-        )}
-      </View>
-      <Pressable
-        onPress={onFilterPress}
-        style={({ pressed }) => [
-          styles.headerFilterButton,
-          activeFilterCount > 0 && styles.headerFilterButtonActive,
-          pressed && styles.headerFilterButtonPressed,
-        ]}
-      >
-        <MaterialIcons
-          name="tune"
-          size={20}
-          color={activeFilterCount > 0 ? Colors.primary : Colors.white}
-        />
-        {activeFilterCount > 0 && (
-          <View style={styles.headerFilterBadge}>
-            <Text style={styles.headerFilterBadgeText}>
-              {activeFilterCount}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-    </View>
-
-    {/* Stats in Header */}
-    {showStats && stats && (
-      <View style={styles.headerStatsContainer}>
-        <StatsRow stats={stats} />
-      </View>
-    )}
-  </LinearGradient>
-);
 
 // ==================== PLANT TYPE CARD COMPONENT ====================
 
@@ -775,12 +661,7 @@ const PlantTypeCard = ({
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
+      <View style={styles.cardGradient}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={styles.cardImage} contentFit="cover" />
         ) : (
@@ -833,7 +714,7 @@ const PlantTypeCard = ({
               <MaterialIcons
                 name="timeline"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.metaText}>
                 {growthStages.count > 0
@@ -845,7 +726,7 @@ const PlantTypeCard = ({
               <MaterialIcons
                 name="inventory-2"
                 size={14}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
               <Text style={styles.metaText}>
                 {minStockLevel > 0 ? `Min stock ${minStockLevel}` : "Min stock —"}
@@ -872,13 +753,13 @@ const PlantTypeCard = ({
 
           <View style={styles.cardFooterSecondary}>
             <View style={styles.infoPill}>
-              <MaterialIcons name="timer" size={14} color={Colors.primary} />
+              <MaterialIcons name="timer" size={14} color={AdminTheme.colors.primary} />
               <Text style={styles.infoPillText}>
                 {lifecycleDays > 0 ? `${lifecycleDays} days` : "Lifecycle —"}
               </Text>
             </View>
             <View style={styles.infoPill}>
-              <MaterialIcons name="timeline" size={14} color={Colors.primary} />
+              <MaterialIcons name="timeline" size={14} color={AdminTheme.colors.primary} />
               <Text style={styles.infoPillText}>{growthStages.rangeLabel}</Text>
             </View>
           </View>
@@ -900,7 +781,7 @@ const PlantTypeCard = ({
                   pressed && styles.cardActionButtonPressed,
                 ]}
               >
-                <MaterialIcons name="edit" size={16} color={Colors.primary} />
+                <MaterialIcons name="edit" size={16} color={AdminTheme.colors.primary} />
                 <Text style={styles.cardActionButtonText}>Edit</Text>
               </Pressable>
               <Pressable
@@ -910,7 +791,7 @@ const PlantTypeCard = ({
                   pressed && styles.cardActionButtonPressed,
                 ]}
               >
-                <MaterialIcons name="image" size={16} color={Colors.primary} />
+                <MaterialIcons name="image" size={16} color={AdminTheme.colors.primary} />
                 <Text style={styles.cardActionButtonText}>Image</Text>
               </Pressable>
               <Pressable
@@ -923,7 +804,7 @@ const PlantTypeCard = ({
                   isDeletePending && styles.cardActionButtonDisabled,
                 ]}
               >
-                <MaterialIcons name="delete" size={16} color={Colors.error} />
+                <MaterialIcons name="delete" size={16} color={AdminTheme.colors.danger} />
                 <Text style={styles.cardActionButtonDangerText}>
                   {isDeletePending ? "Deleting..." : "Delete"}
                 </Text>
@@ -931,7 +812,7 @@ const PlantTypeCard = ({
             </View>
           )}
         </View>
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 };
@@ -949,7 +830,7 @@ const EmptyState = ({ hasFilters, onClearFilters }: EmptyStateProps) => (
       <MaterialIcons
         name={hasFilters ? "search-off" : "eco"}
         size={64}
-        color={Colors.textTertiary}
+        color={AdminTheme.colors.textSoft}
       />
     </View>
     <Text style={styles.emptyTitle}>
@@ -968,15 +849,15 @@ const EmptyState = ({ hasFilters, onClearFilters }: EmptyStateProps) => (
           pressed && styles.emptyButtonPressed,
         ]}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="clear-all" size={20} color={Colors.white} />
+          <MaterialIcons name="clear-all" size={20} color={AdminTheme.colors.surface} />
           <Text style={styles.emptyButtonText}>Clear Filters</Text>
-        </LinearGradient>
+        </View>
       </Pressable>
     )}
   </View>
@@ -986,7 +867,7 @@ const EmptyState = ({ hasFilters, onClearFilters }: EmptyStateProps) => (
 
 const LoadingState = () => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color={Colors.primary} />
+    <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
     <Text style={styles.loadingText}>Loading plant types...</Text>
   </View>
 );
@@ -1001,7 +882,7 @@ interface ErrorStateProps {
 const ErrorState = ({ error, onRetry }: ErrorStateProps) => (
   <View style={styles.errorContainer}>
     <View style={styles.errorIconContainer}>
-      <MaterialIcons name="error-outline" size={64} color={Colors.error} />
+      <MaterialIcons name="error-outline" size={64} color={AdminTheme.colors.danger} />
     </View>
     <Text style={styles.errorTitle}>Failed to Load Plant Types</Text>
     <Text style={styles.errorMessage}>
@@ -1014,15 +895,15 @@ const ErrorState = ({ error, onRetry }: ErrorStateProps) => (
         pressed && styles.retryButtonPressed,
       ]}
     >
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.retryGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+      <View
+        style={[
+          styles.retryGradient,
+          { backgroundColor: AdminTheme.colors.primary },
+        ]}
       >
-        <MaterialIcons name="refresh" size={20} color={Colors.white} />
+        <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
         <Text style={styles.retryButtonText}>Try Again</Text>
-      </LinearGradient>
+      </View>
     </Pressable>
   </View>
 );
@@ -1368,6 +1249,7 @@ export function PlantTypesViewScreen({
     (item: any) => String(item._id ?? item.id ?? item.name),
     [],
   );
+  const isRootModuleScreen = routeGroup === "staff" || routeGroup === "admin";
 
   if (isLoading) {
     return (
@@ -1387,90 +1269,29 @@ export function PlantTypesViewScreen({
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <Header
+      <StitchHeader
         title={title}
         subtitle={`${filteredPlantTypes.length} ${
           filteredPlantTypes.length === 1 ? "type" : "types"
         }`}
-        searchQuery={filters.search}
-        onSearchChange={handleSearchChange}
-        onSearchClear={handleSearchClear}
-        onFilterPress={() => setIsFilterModalVisible(true)}
-        activeFilterCount={activeFilterCount}
-        stats={stats}
-        showStats={plantTypes.length > 0}
-        canWrite={canWrite}
-        onCreate={handleCreatePress}
+        variant="gradient"
+        showBackButton={!isRootModuleScreen}
+        onBackPress={!isRootModuleScreen ? () => router.back() : undefined}
+        actions={
+          canWrite ? (
+            <Pressable
+              onPress={handleCreatePress}
+              style={({ pressed }) => [
+                styles.headerCreateButton,
+                pressed && styles.headerCreateButtonPressed,
+              ]}
+            >
+              <MaterialIcons name="add" size={20} color={AdminTheme.colors.surfaceMuted} />
+             
+            </Pressable>
+          ) : null
+        }
       />
-
-      {/* Sort Bar */}
-      {plantTypes.length > 0 && (
-        <View style={styles.sortBar}>
-          <SortDropdown
-            selectedSort={filters.sort}
-            onSortChange={handleSortChange}
-          />
-          <View style={styles.activeFiltersPreview}>
-            {filters.lifecycle && (
-              <View style={styles.activeFilterPreview}>
-                <Text style={styles.activeFilterPreviewText}>
-                  {LIFECYCLE_CATEGORIES[filters.lifecycle].label}
-                </Text>
-                <Pressable
-                  onPress={() =>
-                    setFilters((prev) => ({ ...prev, lifecycle: null }))
-                  }
-                  style={styles.activeFilterPreviewRemove}
-                >
-                  <MaterialIcons
-                    name="close"
-                    size={14}
-                    color={Colors.textSecondary}
-                  />
-                </Pressable>
-              </View>
-            )}
-            {filters.price && (
-              <View style={styles.activeFilterPreview}>
-                <Text style={styles.activeFilterPreviewText}>
-                  {PRICE_RANGES[filters.price].label}
-                </Text>
-                <Pressable
-                  onPress={() =>
-                    setFilters((prev) => ({ ...prev, price: null }))
-                  }
-                  style={styles.activeFilterPreviewRemove}
-                >
-                  <MaterialIcons
-                    name="close"
-                    size={14}
-                    color={Colors.textSecondary}
-                  />
-                </Pressable>
-              </View>
-            )}
-            {filters.category && (
-              <View style={styles.activeFilterPreview}>
-                <Text style={styles.activeFilterPreviewText} numberOfLines={1}>
-                  {filters.category}
-                </Text>
-                <Pressable
-                  onPress={() =>
-                    setFilters((prev) => ({ ...prev, category: null }))
-                  }
-                  style={styles.activeFilterPreviewRemove}
-                >
-                  <MaterialIcons
-                    name="close"
-                    size={14}
-                    color={Colors.textSecondary}
-                  />
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-      )}
 
       {/* Plant Types List */}
       <FlatList
@@ -1478,12 +1299,72 @@ export function PlantTypesViewScreen({
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.searchContainer}>
+              <StitchInput
+                containerStyle={styles.searchInputWrapper}
+                placeholder="Search plant types"
+                value={filters.search}
+                onChangeText={handleSearchChange}
+                icon={
+                  <MaterialIcons
+                    name="search"
+                    size={18}
+                    color={AdminTheme.colors.textMuted}
+                  />
+                }
+                right={
+                  filters.search.length > 0 ? (
+                    <Pressable
+                      onPress={handleSearchClear}
+                      style={styles.headerSearchClearButton}
+                    >
+                      <MaterialIcons
+                        name="close"
+                        size={16}
+                        color={AdminTheme.colors.textMuted}
+                      />
+                    </Pressable>
+                  ) : null
+                }
+              />
+              <Pressable
+                onPress={() => setIsFilterModalVisible(true)}
+                style={({ pressed }) => [
+                  styles.headerFilterButton,
+                  activeFilterCount > 0 && styles.headerFilterButtonActive,
+                  pressed && styles.headerFilterButtonPressed,
+                ]}
+              >
+                <MaterialIcons
+                  name="tune"
+                  size={20}
+                  color={activeFilterCount > 0 ? AdminTheme.colors.primary : AdminTheme.colors.textMuted}
+                />
+                {activeFilterCount > 0 && (
+                  <View style={styles.headerFilterBadge}>
+                    <Text style={styles.headerFilterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+            </View>
+
+            {plantTypes.length > 0 && stats ? (
+              <View style={styles.headerStatsContainer}>
+                <StatsRow stats={stats} />
+              </View>
+            ) : null}
+
+           
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
         ListEmptyComponent={
@@ -1515,108 +1396,72 @@ export function PlantTypesViewScreen({
 
 // ==================== STYLES ====================
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerTopRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
-  },
-  headerContent: {
-    flex: 1,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerCreateButton: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.75)",
+   width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent:"center",
+    alignItems:"center"
   },
   headerCreateButtonPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
   },
   headerCreateButtonText: {
-    fontSize: 13,
-    fontWeight: "700" as const,
-    color: Colors.primary,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
-  },
-  headerSearchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  headerSearchInputContainer: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  headerSearchInput: {
-    flex: 1,
     fontSize: 15,
-    color: Colors.white,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    marginLeft: Spacing.xs,
+    fontWeight: "700" as const,
+    color: AdminTheme.colors.surface,
+  },
+  searchContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
+  },
+  searchInput: moduleSearchInput,
+  searchInputWrapper: {
+    flex: 1,
   },
   headerSearchClearButton: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   headerFilterButton: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderColor: AdminTheme.colors.borderSoft,
     position: "relative" as const,
   },
   headerFilterButtonActive: {
-    backgroundColor: Colors.white,
+    borderColor: AdminTheme.colors.primary,
   },
   headerFilterButtonPressed: {
     transform: [{ scale: 0.95 }],
   },
   headerFilterBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
     top: -4,
     right: -4,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -1624,52 +1469,23 @@ const styles = {
     justifyContent: "center" as const,
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Colors.white,
+    borderColor: AdminTheme.colors.surface,
   },
   headerFilterBadgeText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 10,
     fontWeight: "700" as const,
   },
   headerStatsContainer: {
-    marginTop: Spacing.sm,
-  },
-  statsRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-around" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 16,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  statCompactItem: {
-    alignItems: "center" as const,
-    flex: 1,
-  },
-  statCompactValue: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginTop: 2,
-  },
-  statCompactLabel: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500" as const,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: Spacing.sm,
+    marginTop: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.md,
   },
   sortBar: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    borderBottomColor: AdminTheme.colors.borderSoft,
+    paddingVertical: AdminTheme.spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.lg,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
@@ -1681,18 +1497,18 @@ const styles = {
   sortButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xs,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     height: 40,
     gap: 4,
   },
   sortButtonText: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
     maxWidth: 120,
   },
@@ -1700,11 +1516,11 @@ const styles = {
     position: "absolute" as const,
     top: 44,
     left: 0,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -1716,121 +1532,92 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   sortDropdownTitle: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   sortOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   sortOptionContent: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   sortOptionSelected: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   sortOptionText: {
     fontSize: 14,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   sortOptionTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   activeFiltersPreview: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
     flex: 1,
-    marginLeft: Spacing.sm,
+    marginLeft: AdminTheme.spacing.sm,
   },
   activeFilterPreview: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary + "10",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingHorizontal: AdminTheme.spacing.sm,
+    paddingVertical: 6,
     borderRadius: 16,
     gap: 2,
     maxWidth: 120,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   activeFilterPreviewText: {
     fontSize: 11,
-    color: Colors.primary,
-    fontWeight: "500" as const,
+    color: AdminTheme.colors.text,
+    fontWeight: "600" as const,
   },
   activeFilterPreviewRemove: {
     padding: 2,
-  },
-  searchContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.sm,
-  },
-  searchInputContainer: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.text,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    marginLeft: Spacing.xs,
-  },
-  searchClearButton: {
-    padding: Spacing.xs,
   },
   filterButton: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     position: "relative" as const,
   },
   filterButtonActive: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.surface,
+    borderColor: AdminTheme.colors.primary,
   },
   filterButtonPressed: {
     transform: [{ scale: 0.95 }],
   },
   filterBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
     top: -4,
     right: -4,
-    backgroundColor: Colors.error,
+    backgroundColor: AdminTheme.colors.danger,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -1838,20 +1625,20 @@ const styles = {
     justifyContent: "center" as const,
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: Colors.white,
+    borderColor: AdminTheme.colors.surface,
   },
   filterBadgeText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 10,
     fontWeight: "700" as const,
   },
   filterChip: {
     height: 40,
     minWidth: 100,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     overflow: "hidden" as const,
   },
   filterChipContent: {
@@ -1859,12 +1646,12 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.xs,
   },
   filterChipSelected: {
     borderWidth: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   filterChipPressed: {
     transform: [{ scale: 0.96 }],
@@ -1872,11 +1659,12 @@ const styles = {
   },
   filterChipText: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
     includeFontPadding: false,
   },
   filterChipBadge: {
+    ...moduleBadge,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
@@ -1895,15 +1683,15 @@ const styles = {
     justifyContent: "flex-end" as const,
   },
   modalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     height: "80%",
     overflow: "hidden" as const,
   },
   modalHeader: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.lg,
   },
   modalHeaderContent: {
     flexDirection: "row" as const,
@@ -1913,7 +1701,7 @@ const styles = {
   modalHeaderTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   modalCloseButton: {
     width: 40,
@@ -1925,56 +1713,56 @@ const styles = {
   },
   modalBody: {
     flex: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
   },
   filterSectionContainer: {
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     overflow: "hidden" as const,
   },
   filterSectionHeader: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
   },
   filterSectionTitleContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   filterSectionContent: {
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: AdminTheme.colors.borderSoft,
   },
   filterGrid: {
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   filterOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 12,
-    backgroundColor: Colors.white,
-    gap: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    gap: AdminTheme.spacing.md,
   },
   filterOptionSelected: {
     borderWidth: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   filterOptionIcon: {
     width: 44,
@@ -1989,42 +1777,42 @@ const styles = {
   filterOptionLabel: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     marginBottom: 2,
   },
   filterOptionCount: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   modalFooter: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
-    backgroundColor: Colors.white,
-    gap: Spacing.md,
+    borderTopColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
+    gap: AdminTheme.spacing.md,
   },
   modalClearButton: {
     flex: 1,
     height: 48,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modalClearButtonPressed: {
     transform: [{ scale: 0.98 }],
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modalClearButtonText: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   modalApplyButton: {
     flex: 1,
@@ -2043,58 +1831,58 @@ const styles = {
   modalApplyButtonText: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.md,
+    paddingBottom: BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
   },
   loadingContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   errorIconContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: Colors.error + "10",
+    backgroundColor: AdminTheme.colors.danger + "10",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.danger,
+    marginBottom: AdminTheme.spacing.sm,
   },
   errorMessage: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 22,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   retryButton: {
     borderRadius: 16,
     overflow: "hidden" as const,
-    shadowColor: Colors.primary,
+    shadowColor: AdminTheme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2107,48 +1895,48 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.sm,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "700" as const,
   },
   emptyContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+    paddingVertical: AdminTheme.spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyIconContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.sm,
   },
   emptyMessage: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 22,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyButton: {
     borderRadius: 16,
     overflow: "hidden" as const,
-    shadowColor: Colors.primary,
+    shadowColor: AdminTheme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -2161,23 +1949,24 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.sm,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "700" as const,
   },
   card: {
+    ...cardSurface,
     borderRadius: 20,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -2185,28 +1974,28 @@ const styles = {
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
-    borderColor: Colors.primary,
+    borderColor: AdminTheme.colors.primary,
   },
   cardGradient: {
     padding: 0,
   },
   cardImage: {
     width: "100%" as const,
-    height: 140,
+    height: 160,
   },
   cardImagePlaceholder: {
     width: "100%" as const,
-    height: 140,
+    height: 160,
     backgroundColor: "#F9FAFB",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   cardContent: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
+    padding: AdminTheme.spacing.xl,
+    gap: AdminTheme.spacing.sm,
   },
   cardHeader: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   cardInfo: {
     gap: 4,
@@ -2215,23 +2004,24 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    marginBottom: Spacing.xs,
+    marginBottom: AdminTheme.spacing.xs,
   },
   name: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     flex: 1,
-    marginRight: Spacing.sm,
+    marginRight: AdminTheme.spacing.sm,
   },
   subtitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   lifecycleBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
@@ -2242,9 +2032,9 @@ const styles = {
   },
   metaSection: {
     gap: 6,
-    paddingTop: Spacing.xs,
+    paddingTop: AdminTheme.spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: AdminTheme.colors.borderSoft,
   },
   metaRow: {
     flexDirection: "row" as const,
@@ -2253,12 +2043,12 @@ const styles = {
   },
   metaText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     flex: 1,
   },
   cardFooter: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
     alignItems: "center" as const,
   },
   metricBlock: {
@@ -2266,57 +2056,58 @@ const styles = {
   },
   metricLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     marginBottom: 2,
   },
   metricValue: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   metricValueSuccess: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
   },
   cardFooterSecondary: {
-    marginTop: Spacing.sm,
+    marginTop: AdminTheme.spacing.sm,
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   infoPill: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 4,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.surface,
+    borderColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
   },
   infoPillText: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   descriptionContainer: {
-    marginTop: Spacing.sm,
-    padding: Spacing.sm,
-    backgroundColor: Colors.surface,
+    marginTop: AdminTheme.spacing.sm,
+    padding: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 8,
   },
   descriptionText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     lineHeight: 18,
   },
   cardActionsRow: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   cardActionButton: {
     flex: 1,
@@ -2325,10 +2116,10 @@ const styles = {
     justifyContent: "center" as const,
     gap: 4,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     borderRadius: 10,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surface,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
   },
   cardActionButtonPressed: {
     opacity: 0.85,
@@ -2336,16 +2127,16 @@ const styles = {
   cardActionButtonText: {
     fontSize: 12,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   cardActionButtonDanger: {
-    borderColor: Colors.error + "40",
-    backgroundColor: Colors.error + "08",
+    borderColor: AdminTheme.colors.danger + "40",
+    backgroundColor: AdminTheme.colors.danger + "08",
   },
   cardActionButtonDangerText: {
     fontSize: 12,
     fontWeight: "600" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   cardActionButtonDisabled: {
     opacity: 0.6,

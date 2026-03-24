@@ -5,7 +5,7 @@ export default function AdminSalesIndexRoute() {
     <SalesListScreen
       title="Sales"
       routeGroup="admin"
-      canCreate={false}
+      canCreate
     />
   );
 }

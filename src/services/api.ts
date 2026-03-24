@@ -10,6 +10,8 @@ export const api = axios.create({
   timeout: 15000,
 });
 
+console.log("API BASE URL:", process.env.EXPO_PUBLIC_API_BASE_URL);
+
 const hasApiPrefix = () =>
   /\/api\/?$/.test((ENV.API_BASE_URL || "").replace(/\/+$/, ""));
 

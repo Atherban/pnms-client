@@ -1,229 +1,138 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import { NurseryContactCard } from "../../components/customer/NurseryContactCard";
+import { CustomerActionButton } from "../../components/customer/CustomerActionButton";
+import { StitchHeaderActionButton } from "../../components/common/StitchHeader";
+import {
+  CustomerCard,
+  CustomerEmptyState,
+  CustomerScreen,
+  SectionHeader,
+  StatPill,
+  StatusChip,
+} from "../../components/common/StitchScreen";
 import { AuthService } from "../../services/auth.service";
 import { CustomerService } from "../../services/customer.service";
+import { NurseryPublicProfileService } from "../../services/nursery-public-profile.service";
 import { PaymentService } from "../../services/payment.service";
 import { SalesService } from "../../services/sales.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors } from "../../theme";
+import { CustomerColors, Spacing } from "../../theme";
+import type { NurseryPublicProfile } from "../../types/public-profile.types";
 import { saveUser } from "../../utils/storage";
 
-const BOTTOM_NAV_HEIGHT = 80;
 const INDIAN_PHONE_PATTERN = /^(?:\+91|91)?[6-9]\d{9}$/;
+const digitsOnly = (value?: string) => (value || "").replace(/[^\d]/g, "");
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-const formatMoney = (amount: number) =>
-  `₹${Math.round(amount).toLocaleString("en-IN")}`;
-const formatCount = (value: number) =>
-  Math.round(value).toLocaleString("en-IN");
+const formatMoney = (amount: number) => `₹${Math.round(amount).toLocaleString("en-IN")}`;
+const formatCount = (value: number) => Math.round(value).toLocaleString("en-IN");
 
-// ==================== STATS CARD ====================
-
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  icon: string;
-  color: string;
-}
-
-const StatCard = ({ label, value, icon, color }: StatCardProps) => (
-  <View style={[styles.statCard, { backgroundColor: `${color}08` }]}>
-    <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-      <MaterialIcons name={icon as any} size={18} color={color} />
-    </View>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text style={[styles.statValue, { color }]}>{value}</Text>
-  </View>
-);
-
-// ==================== PROFILE CARD ====================
-
-interface ProfileCardProps {
-  initials: string;
-  name: string;
-  email?: string;
-  role: string;
-}
-
-const ProfileCard = ({ initials, name, email, role }: ProfileCardProps) => (
-  <LinearGradient
-    colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-    style={styles.profileCard}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 1 }}
-  >
-    <View style={styles.profileCardContent}>
-      <View style={styles.profileHeader}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={styles.avatarGlow} />
-        </View>
-        <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{name}</Text>
-          {email && <Text style={styles.profileEmail}>{email}</Text>}
-          <View style={styles.roleBadge}>
-            <MaterialIcons name="person" size={12} color={Colors.white} />
-            <Text style={styles.roleText}>{role}</Text>
-          </View>
-        </View>
-      </View>
-    </View>
-  </LinearGradient>
-);
-
-// ==================== FORM FIELD ====================
-
-interface FormFieldProps {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  icon?: string;
-  secureTextEntry?: boolean;
-  multiline?: boolean;
-  keyboardType?: "default" | "email-address" | "phone-pad";
-}
-
-const FormField = ({
+function Field({
   label,
   value,
   onChangeText,
   placeholder,
-  icon,
-  secureTextEntry,
-  multiline,
   keyboardType = "default",
-}: FormFieldProps) => {
-  const isPasswordField = Boolean(secureTextEntry);
-  const [isSecure, setIsSecure] = useState(isPasswordField);
-
-  useEffect(() => {
-    setIsSecure(isPasswordField);
-  }, [isPasswordField]);
-
+  multiline = false,
+  secureTextEntry = false,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+  keyboardType?: "default" | "email-address" | "phone-pad";
+  multiline?: boolean;
+  secureTextEntry?: boolean;
+}) {
   return (
-    <View style={styles.formField}>
-      <View style={styles.formFieldHeader}>
-        {icon && (
-          <MaterialIcons
-            name={icon as any}
-            size={14}
-            color={Colors.textSecondary}
-          />
-        )}
-        <Text style={styles.formFieldLabel}>{label}</Text>
-      </View>
-      <View style={styles.formInputWrapper}>
-        <TextInput
-          style={[
-            styles.formInput,
-            isPasswordField && styles.formInputWithAction,
-            multiline && styles.formInputMultiline,
-          ]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={Colors.textTertiary}
-          secureTextEntry={isSecure}
-          multiline={multiline}
-          keyboardType={keyboardType}
-        />
-        {isPasswordField ? (
-          <Pressable
-            style={styles.formInputAction}
-            onPress={() => setIsSecure((prev) => !prev)}
-            hitSlop={8}
-          >
-            <MaterialIcons
-              name={isSecure ? "visibility" : "visibility-off"}
-              size={20}
-              color={Colors.textSecondary}
-            />
-          </Pressable>
-        ) : null}
-      </View>
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={CustomerColors.textMuted}
+        keyboardType={keyboardType}
+        secureTextEntry={secureTextEntry}
+        multiline={multiline}
+        style={[styles.fieldInput, multiline && styles.fieldInputMultiline]}
+      />
     </View>
   );
-};
-
-// ==================== ACTION BUTTON ====================
-
-interface ActionButtonProps {
-  icon: string;
-  label: string;
-  onPress: () => void;
-  color?: string;
 }
 
-const ActionButton = ({
+function ActionRow({
   icon,
-  label,
+  title,
+  subtitle,
   onPress,
-  color = Colors.primary,
-}: ActionButtonProps) => (
-  <Pressable
-    style={({ pressed }) => [
-      styles.actionButton,
-      pressed && styles.actionButtonPressed,
-    ]}
-    onPress={onPress}
-  >
-    <View style={[styles.actionIcon, { backgroundColor: `${color}10` }]}>
-      <MaterialIcons name={icon as any} size={20} color={color} />
-    </View>
-    <Text style={styles.actionLabel}>{label}</Text>
-    <MaterialIcons
-      name="chevron-right"
-      size={20}
-      color={Colors.textSecondary}
-    />
-  </Pressable>
-);
-
-// ==================== MAIN COMPONENT ====================
+}: {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}>
+      <View style={styles.actionIcon}>
+        <MaterialIcons name={icon} size={20} color={CustomerColors.primary} />
+      </View>
+      <View style={styles.actionTextWrap}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.actionSubtitle}>{subtitle}</Text> : null}
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={CustomerColors.textMuted} />
+    </Pressable>
+  );
+}
 
 export default function CustomerProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const updateAuthUser = useAuthStore((s) => s.updateUser);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const [refreshing, setRefreshing] = useState(false);
 
   const [name, setName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [address, setAddress] = useState("");
 
+  const [showPasswordFields, setShowPasswordFields] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPasswordFields, setShowPasswordFields] = useState(false);
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["customer-profile", user?.id],
     queryFn: CustomerService.getMyProfile,
   });
+
+  const { data: nurseryProfile } = useQuery({
+    queryKey: ["customer-nursery-public-profile", user?.nurseryId],
+    enabled: !!user?.nurseryId,
+    queryFn: () => NurseryPublicProfileService.get(user?.nurseryId),
+  });
+
   const { data: statsData, refetch: refetchStats } = useQuery({
     queryKey: ["customer-profile-stats", user?.id, user?.phoneNumber, user?.nurseryId],
     queryFn: async () => {
@@ -293,13 +202,107 @@ export default function CustomerProfileScreen() {
     setRefreshing(false);
   };
 
+  const payWithUpi = () => {
+    const upiId = String(nurseryProfile?.upiId || "").trim();
+    if (!upiId) {
+      Alert.alert("UPI not available", "Nursery has not configured a UPI ID yet.");
+      return;
+    }
+    const uri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent("Nursery")}&tn=${encodeURIComponent("PNMS Payment")}`;
+    Linking.openURL(uri).catch(() => {
+      Alert.alert("UPI app not found", "Please use the QR code or your UPI app manually.");
+    });
+  };
+
+  const copyUpiId = async () => {
+    const upiId = String(nurseryProfile?.upiId || "").trim();
+    if (!upiId) {
+      Alert.alert("UPI not available", "Nursery has not configured a UPI ID yet.");
+      return;
+    }
+    try {
+      const Clipboard = await import("expo-clipboard");
+      await Clipboard.setStringAsync(upiId);
+      Alert.alert("Copied", "UPI ID copied to clipboard.");
+    } catch {
+      Alert.alert("Copy unavailable", "Clipboard support is unavailable on this build.");
+    }
+  };
+
+  const saveOrShareQr = async () => {
+    const qrUrl = String(nurseryProfile?.qrImageUrl || "").trim();
+    if (!qrUrl) {
+      Alert.alert("QR not available", "Nursery has not uploaded a QR image yet.");
+      return;
+    }
+    try {
+      const FileSystem = await import("expo-file-system");
+      const Sharing = await import("expo-sharing");
+      const ext = qrUrl.toLowerCase().includes(".png") ? "png" : "jpg";
+      const fileUri = `${FileSystem.cacheDirectory}pnms_qr_${Date.now()}.${ext}`;
+      await FileSystem.downloadAsync(qrUrl, fileUri);
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          dialogTitle: "Save or share payment QR",
+          mimeType: ext === "png" ? "image/png" : "image/jpeg",
+          UTI: ext === "png" ? "public.png" : "public.jpeg",
+        });
+      } else if (Platform.OS === "web") {
+        window.open(qrUrl, "_blank");
+      } else {
+        Alert.alert("Share unavailable", "Unable to open save/share dialog.");
+      }
+    } catch {
+      Alert.alert("Unable to save", "Could not download QR image right now.");
+    }
+  };
+
+  const openWhatsApp = () => {
+    const phone = digitsOnly(nurseryProfile?.whatsappPhone || nurseryProfile?.primaryPhone);
+    if (!phone) {
+      Alert.alert("WhatsApp not available", "No WhatsApp number configured.");
+      return;
+    }
+    Linking.openURL(`https://wa.me/91${phone}`).catch(() => {
+      Alert.alert("Unable to open", "Could not open WhatsApp chat.");
+    });
+  };
+
+  const openPhoneDialer = (phone?: string) => {
+    const raw = String(phone || "").trim();
+    if (!raw) {
+      Alert.alert("Phone not available", "No phone number is configured.");
+      return;
+    }
+    Linking.openURL(`tel:${raw}`).catch(() => {
+      Alert.alert("Unable to call", "Could not open dialer.");
+    });
+  };
+
+  const openEmail = (email?: string) => {
+    const raw = String(email || "").trim();
+    if (!raw) {
+      Alert.alert("Email not available", "No email is configured.");
+      return;
+    }
+    Linking.openURL(`mailto:${raw}`).catch(() => {
+      Alert.alert("Unable to open", "Could not open email app.");
+    });
+  };
+
+  const openExternalLink = (url?: string) => {
+    const raw = String(url || "").trim();
+    if (!raw) return;
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    Linking.openURL(normalized).catch(() => {
+      Alert.alert("Unable to open", "Could not open this link.");
+    });
+  };
+
   const saveProfileMutation = useMutation({
     mutationFn: async () => {
-      const payload: {
-        name?: string;
-        mobileNumber?: string;
-        address?: string;
-      } = {};
+      const payload: { name?: string; mobileNumber?: string; address?: string } = {};
       const nextName = name.trim();
       const nextMobile = mobileNumber.trim();
       const nextAddress = address.trim();
@@ -322,9 +325,7 @@ export default function CustomerProfileScreen() {
 
       const profile = response?.data ?? response;
       const nextName = String(profile?.name || name || "").trim();
-      const nextPhone = String(
-        profile?.mobileNumber || mobileNumber || "",
-      ).trim();
+      const nextPhone = String(profile?.mobileNumber || mobileNumber || "").trim();
 
       updateAuthUser({
         name: nextName,
@@ -342,11 +343,11 @@ export default function CustomerProfileScreen() {
       });
 
       await queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
-      Alert.alert("✅ Success", "Profile details updated successfully.");
+      Alert.alert("Success", "Profile details updated successfully.");
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("❌ Error", err?.message || "Please try again");
+      Alert.alert("Error", err?.message || "Please try again");
     },
   });
 
@@ -376,595 +377,338 @@ export default function CustomerProfileScreen() {
       setNewPassword("");
       setConfirmPassword("");
       setShowPasswordFields(false);
-      Alert.alert("✅ Success", "Your password has been changed successfully.");
+      Alert.alert("Success", "Your password has been changed successfully.");
     },
     onError: (err: any) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("❌ Error", err?.message || "Please try again");
+      Alert.alert("Error", err?.message || "Please try again");
     },
   });
 
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
-          title="My Profile"
-          subtitle="Loading profile..."
-          showBackButton
-          onBackPress={() => router.back()}
-        />
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const handleLogout = () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await AuthService.logout();
+          clearAuth();
+          router.replace("/(auth)/login");
+        },
+      },
+    ]);
+  };
+
+  const nurseryProfileSafe = (nurseryProfile || {}) as NurseryPublicProfile;
 
   return (
-    <View style={styles.container}>
-      <FixedHeader
-        title="My Profile"
-        subtitle="Manage your account"
-        showBackButton
-        onBackPress={() => router.back()}
-      />
+    <CustomerScreen
+      title="Profile"
+      subtitle="Manage your account and nursery contact details."
+      actions={
+        <StitchHeaderActionButton
+          iconName={isRefetching ? "sync" : "refresh"}
+          onPress={() => handleRefresh()}
+        />
+      }
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing || isRefetching}
+          onRefresh={handleRefresh}
+          colors={[CustomerColors.primary]}
+          tintColor={CustomerColors.primary}
+        />
+      }
+      footer={
+        <CustomerActionButton
+          label="Log Out"
+          variant="secondary"
+          onPress={handleLogout}
+          icon={<MaterialIcons name="logout" size={18} color={CustomerColors.text} />}
+        />
+      }
+    >
+      <CustomerCard style={styles.heroCard}>
+        <View style={styles.heroTop}>
+          <View style={styles.avatarWrap}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <View style={styles.heroText}>
+            <Text style={styles.heroName} numberOfLines={1}>
+              {name || user?.name || "Customer"}
+            </Text>
+            {user?.email ? <Text style={styles.heroEmail}>{user.email}</Text> : null}
+          </View>
+          <StatusChip label="Customer" tone="info" />
+        </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+        <View style={styles.statsPills}>
+          <StatPill label="Orders" value={statsData ? formatCount(statsData.orders) : "—"} />
+          <StatPill label="Products" value={statsData ? formatCount(statsData.products) : "—"} />
+          <StatPill label="Paid" value={statsData ? formatMoney(statsData.paid) : "—"} />
+        </View>
+        <View style={styles.statsPills}>
+          <StatPill label="Dues" value={statsData ? formatMoney(statsData.dues) : "—"} />
+          <StatPill label="Refresh" value={isLoading ? "..." : "OK"} />
+        </View>
+      </CustomerCard>
+
+      <CustomerCard style={styles.sectionCard}>
+        <SectionHeader title="Personal details" subtitle="These details are used for invoices and nursery contact." />
+
+        {isLoading ? (
+          <View style={styles.loadingInline}>
+            <ActivityIndicator size="small" color={CustomerColors.primary} />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        ) : null}
+
+        {!isLoading && !data ? (
+          <CustomerEmptyState
+            title="Profile unavailable"
+            message="We could not load your profile right now. Pull to refresh and try again."
+            icon={<MaterialIcons name="error-outline" size={44} color={CustomerColors.danger} />}
           />
-        }
-      >
-        {/* Profile Card */}
-        <ProfileCard
-          initials={initials}
-          name={name || user?.name || "Customer"}
-          email={user?.email}
-          role="Customer"
+        ) : null}
+
+        <Field
+          label="Full name"
+          value={name}
+          onChangeText={setName}
+          placeholder="Enter your full name"
+        />
+        <Field
+          label="Mobile number"
+          value={mobileNumber}
+          onChangeText={setMobileNumber}
+          placeholder="Enter mobile number"
+          keyboardType="phone-pad"
+        />
+        <Field
+          label="Address"
+          value={address}
+          onChangeText={setAddress}
+          placeholder="Enter your address"
+          multiline
         />
 
-        {/* Stats Overview */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Orders"
-            value={statsData ? formatCount(statsData.orders) : "—"}
-            icon="shopping-bag"
-            color={Colors.primary}
-          />
-          <StatCard
-            label="Dues"
-            value={statsData ? formatMoney(statsData.dues) : "—"}
-            icon="account-balance"
-            color={Colors.warning}
-          />
-          <StatCard
-            label="Paid"
-            value={statsData ? formatMoney(statsData.paid) : "—"}
-            icon="check-circle"
-            color={Colors.success}
-          />
-          <StatCard
-            label="Products"
-            value={statsData ? formatCount(statsData.products) : "—"}
-            icon="inventory"
-            color={Colors.info}
-          />
-        </View>
+        <CustomerActionButton
+          label={saveProfileMutation.isPending ? "Saving..." : "Save profile"}
+          onPress={() => saveProfileMutation.mutate()}
+          icon={<MaterialIcons name="check-circle" size={18} color={CustomerColors.white} />}
+        />
+      </CustomerCard>
 
-        {/* Personal Details */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <MaterialIcons name="person" size={18} color={Colors.primary} />
-            <Text style={styles.cardTitle}>Personal Details</Text>
-          </View>
-
-          <FormField
-            label="Full Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Enter your full name"
-            icon="person"
-          />
-
-          <FormField
-            label="Mobile Number"
-            value={mobileNumber}
-            onChangeText={setMobileNumber}
-            placeholder="Enter mobile number"
-            icon="phone"
-            keyboardType="phone-pad"
-          />
-
-          <FormField
-            label="Address"
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Enter your address"
-            icon="location-on"
-            multiline
-          />
-
-          <Pressable
-            style={[
-              styles.saveButton,
-              saveProfileMutation.isPending && styles.saveButtonDisabled,
-            ]}
-            onPress={() => saveProfileMutation.mutate()}
-            disabled={saveProfileMutation.isPending}
-          >
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-              style={styles.saveButtonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            >
-              {saveProfileMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.white} />
-              ) : (
-                <>
-                  <MaterialIcons name="save" size={18} color={Colors.white} />
-                  <Text style={styles.saveButtonText}>Save Changes</Text>
-                </>
-              )}
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        {/* Password Section */}
-        <View style={styles.card}>
-          <Pressable
-            style={styles.cardHeader}
-            onPress={() => setShowPasswordFields(!showPasswordFields)}
-          >
-            <View style={styles.cardHeaderLeft}>
-              <MaterialIcons name="lock" size={18} color={Colors.primary} />
-              <Text style={styles.cardTitle}>Password & Security</Text>
-            </View>
-            <MaterialIcons
-              name={
-                showPasswordFields ? "keyboard-arrow-up" : "keyboard-arrow-down"
-              }
-              size={20}
-              color={Colors.textSecondary}
+      <CustomerCard style={styles.sectionCard}>
+        <SectionHeader
+          title="Password and security"
+          subtitle="Update your password for this account."
+          trailing={
+            <CustomerActionButton
+              label={showPasswordFields ? "Hide" : "Update"}
+              variant="secondary"
+              onPress={() => setShowPasswordFields((prev) => !prev)}
             />
-          </Pressable>
+          }
+        />
 
-          {showPasswordFields && (
-            <View style={styles.passwordFields}>
-              <FormField
-                label="Current Password"
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                placeholder="Enter current password"
-                icon="lock"
-                secureTextEntry
-              />
+        {showPasswordFields ? (
+          <View style={styles.passwordBlock}>
+            <Field
+              label="Current password"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              placeholder="Enter current password"
+              secureTextEntry
+            />
+            <Field
+              label="New password"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password"
+              secureTextEntry
+            />
+            <Field
+              label="Confirm password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm new password"
+              secureTextEntry
+            />
+            <CustomerActionButton
+              label={changePasswordMutation.isPending ? "Updating..." : "Update password"}
+              onPress={() => changePasswordMutation.mutate()}
+              icon={<MaterialIcons name="lock" size={18} color={CustomerColors.white} />}
+            />
+          </View>
+        ) : (
+          <Text style={styles.collapsedHint}>Tap update to change your password.</Text>
+        )}
+      </CustomerCard>
 
-              <FormField
-                label="New Password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="Enter new password"
-                icon="lock-outline"
-                secureTextEntry
-              />
+      {user?.nurseryId ? (
+        <NurseryContactCard
+          profile={nurseryProfileSafe}
+          onPayWithUpi={payWithUpi}
+          onCopyUpi={copyUpiId}
+          onUploadProof={() => router.push("/(customer)/dues" as any)}
+          onSaveQr={saveOrShareQr}
+          onOpenWhatsApp={openWhatsApp}
+          onCallPhone={openPhoneDialer}
+          onOpenEmail={openEmail}
+          onOpenExternal={openExternalLink}
+        />
+      ) : null}
 
-              <FormField
-                label="Confirm Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm new password"
-                icon="check-circle-outline"
-                secureTextEntry
-              />
-
-              <Pressable
-                style={[
-                  styles.updateButton,
-                  changePasswordMutation.isPending &&
-                    styles.updateButtonDisabled,
-                ]}
-                onPress={() => changePasswordMutation.mutate()}
-                disabled={changePasswordMutation.isPending}
-              >
-                <LinearGradient
-                  colors={[Colors.success, "#059669"]}
-                  style={styles.updateButtonGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                >
-                  {changePasswordMutation.isPending ? (
-                    <ActivityIndicator size="small" color={Colors.white} />
-                  ) : (
-                    <>
-                      <MaterialIcons
-                        name="lock-reset"
-                        size={18}
-                        color={Colors.white}
-                      />
-                      <Text style={styles.updateButtonText}>
-                        Update Password
-                      </Text>
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.actionsCard}>
-          <Text style={styles.actionsTitle}>Quick Actions</Text>
-
-          <ActionButton
-            icon="payments"
-            label="Dues & Payments"
+      <CustomerCard>
+        <SectionHeader title="Quick actions" subtitle="Jump to common screens." />
+        <View style={styles.actionsList}>
+          <ActionRow
+            icon="receipt-long"
+            title="Payments"
+            subtitle="Dues, proofs and verification"
             onPress={() => router.push("/(customer)/dues" as any)}
-            color={Colors.primary}
           />
-
-          <ActionButton
-            icon="notifications"
-            label="Notifications"
-            onPress={() => router.push("/(customer)/notifications" as any)}
-            color={Colors.warning}
-          />
-
-          <ActionButton
-            icon="history"
-            label="Order History"
+          <ActionRow
+            icon="local-florist"
+            title="My Products"
+            subtitle="Product-wise purchase history"
             onPress={() => router.push("/(customer)/products" as any)}
-            color={Colors.success}
+          />
+          <ActionRow
+            icon="inventory-2"
+            title="Seed Progress"
+            subtitle="Track seed batch lifecycle"
+            onPress={() => router.push("/(customer)/seeds" as any)}
+          />
+          <ActionRow
+            icon="notifications"
+            title="Notifications"
+            subtitle="Updates and reminders"
+            onPress={() => router.push("/(customer)/notifications" as any)}
           />
         </View>
-
-        {/* Logout Button */}
-        <Pressable
-          style={styles.logoutButton}
-          onPress={() => {
-            Alert.alert("Logout", "Are you sure you want to logout?", [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Logout",
-                onPress: () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  // Handle logout
-                },
-                style: "destructive",
-              },
-            ]);
-          }}
-        >
-          <MaterialIcons name="logout" size={18} color={Colors.error} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+      </CustomerCard>
+    </CustomerScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
+  heroCard: {
+    gap: Spacing.md,
   },
-
-  // Header
-  headerTitle: {
-    fontSize: 24,
-  },
-
-  // Center Container
-  centerContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-
-  // Content
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
-    gap: 20,
-  },
-
-  // Stats Grid
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  statCard: {
-    width: "48%",
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  // Profile Card
-  profileCard: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  profileCardContent: {
-    padding: 20,
-  },
-  profileHeader: {
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: Spacing.sm,
   },
-  avatarContainer: {
-    position: "relative",
-  },
-  avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.2)",
+  avatarWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,189,73,0.12)",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  avatarGlow: {
-    position: "absolute",
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    zIndex: -1,
   },
   avatarText: {
-    color: Colors.white,
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
+    color: CustomerColors.primary,
   },
-  profileInfo: {
+  heroText: {
     flex: 1,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  profileEmail: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.9)",
-    marginBottom: 8,
-  },
-  roleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
     gap: 4,
   },
-  roleText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: "600",
+  heroName: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: CustomerColors.text,
   },
-
-  // Card
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
+  heroEmail: {
+    color: CustomerColors.textMuted,
   },
-  cardHeader: {
+  statsPills: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  sectionCard: {
+    gap: Spacing.md,
+  },
+  loadingInline: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: Spacing.sm,
   },
-  cardHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
+  loadingText: {
+    color: CustomerColors.textMuted,
+  },
+  field: {
     gap: 8,
   },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-
-  // Form Field
-  formField: {
-    gap: 6,
-  },
-  formInputWrapper: {
-    position: "relative",
-  },
-  formFieldHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginLeft: 4,
-  },
-  formFieldLabel: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: "#6B7280",
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: CustomerColors.textMuted,
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0.6,
   },
-  formInput: {
+  fieldInput: {
+    minHeight: 52,
+    borderRadius: 16,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: "rgba(15,189,73,0.05)",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#111827",
-    backgroundColor: "#F9FAFB",
+    borderColor: CustomerColors.borderStrong,
+    color: CustomerColors.text,
   },
-  formInputWithAction: {
-    paddingRight: 44,
-  },
-  formInputAction: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-  },
-  formInputMultiline: {
-    minHeight: 80,
+  fieldInputMultiline: {
+    minHeight: 96,
+    paddingTop: Spacing.md,
     textAlignVertical: "top",
   },
-
-  // Save Button
-  saveButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginTop: 4,
+  passwordBlock: {
+    gap: Spacing.md,
   },
-  saveButtonDisabled: {
-    opacity: 0.5,
+  collapsedHint: {
+    color: CustomerColors.textMuted,
+    lineHeight: 20,
   },
-  saveButtonGradient: {
+  actionsList: {
+    marginTop: Spacing.md,
+    gap: Spacing.sm,
+  },
+  actionRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    gap: 8,
-  },
-  saveButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  // Password Fields
-  passwordFields: {
-    gap: 12,
-    marginTop: 8,
-  },
-
-  // Update Button
-  updateButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginTop: 4,
-  },
-  updateButtonDisabled: {
-    opacity: 0.5,
-  },
-  updateButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    gap: 8,
-  },
-  updateButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-  // Actions Card
-  actionsCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: 18,
+    backgroundColor: "rgba(15,189,73,0.05)",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: 12,
+    borderColor: CustomerColors.borderStrong,
   },
-  actionsTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: "#F9FAFB",
-  },
-  actionButtonPressed: {
-    backgroundColor: "#F3F4F6",
-    transform: [{ scale: 0.98 }],
+  actionRowPressed: {
+    opacity: 0.95,
   },
   actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "rgba(15,189,73,0.12)",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
   },
-  actionLabel: {
+  actionTextWrap: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#111827",
+    gap: 4,
   },
-
-  // Logout Button
-  logoutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-    backgroundColor: "#FEF2F2",
-    marginTop: 8,
+  actionTitle: {
+    fontWeight: "800",
+    color: CustomerColors.text,
   },
-  logoutText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.error,
+  actionSubtitle: {
+    fontSize: 12,
+    color: CustomerColors.textMuted,
   },
 });

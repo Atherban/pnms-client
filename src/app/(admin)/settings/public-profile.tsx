@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -12,17 +11,15 @@ import {
   Text,
   TextInput,
   View,
-  Dimensions,
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../../components/common/FixedHeader";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { MultipartFile } from "../../../services/multipart-upload.service";
 import { NurseryPublicProfileService } from "../../../services/nursery-public-profile.service";
 import { useAuthStore } from "../../../stores/auth.store";
-import { Colors, Spacing } from "../../../theme";
 import type {
   NurseryPaymentConfig,
   NurseryPublicContact,
@@ -30,7 +27,6 @@ import type {
 } from "../../../types/public-profile.types";
 import { MaterialIcons } from "@expo/vector-icons";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BOTTOM_NAV_HEIGHT = 80;
 
 type FieldErrors = Record<string, string>;
@@ -157,11 +153,7 @@ const Snackbar = ({ type, text, onDismiss }: { type: "success" | "error"; text: 
   }, [onDismiss]);
 
   return (
-    <BlurView
-      intensity={90}
-      tint={type === "success" ? "light" : "dark"}
-      style={[styles.snackbar, type === "success" ? styles.snackSuccess : styles.snackError]}
-    >
+    <View style={[styles.snackbar, type === "success" ? styles.snackSuccess : styles.snackError]}>
       <MaterialIcons
         name={type === "success" ? "check-circle" : "error-outline"}
         size={20}
@@ -170,13 +162,17 @@ const Snackbar = ({ type, text, onDismiss }: { type: "success" | "error"; text: 
       <Text style={[styles.snackbarText, { color: type === "success" ? "#059669" : "#DC2626" }]}>
         {text}
       </Text>
-    </BlurView>
+    </View>
   );
 };
 
 // ==================== PAYMENT SECTION ====================
 
 interface PaymentSectionProps {
+  logoFile: MultipartFile | null;
+  setLogoFile: (file: MultipartFile | null) => void;
+  logoMutation: any;
+  existingLogoUrl?: string;
   paymentForm: PaymentForm;
   setPaymentForm: (form: PaymentForm) => void;
   paymentErrors: FieldErrors;
@@ -189,6 +185,10 @@ interface PaymentSectionProps {
 }
 
 const PaymentSection = ({
+  logoFile,
+  setLogoFile,
+  logoMutation,
+  existingLogoUrl,
   paymentForm,
   setPaymentForm,
   paymentErrors,
@@ -205,10 +205,55 @@ const PaymentSection = ({
   return (
     <View style={styles.card}>
       <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIcon, { backgroundColor: `${Colors.primary}10` }]}>
-          <MaterialIcons name="payments" size={20} color={Colors.primary} />
+        <View style={[styles.sectionIcon, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
+          <MaterialIcons name="payments" size={20} color={AdminTheme.colors.primary} />
         </View>
         <Text style={styles.sectionTitle}>Payment Settings</Text>
+      </View>
+
+      <View style={styles.qrSection}>
+        <Text style={styles.sectionSubtitle}>Nursery Logo</Text>
+
+        {(existingLogoUrl || logoFile) && (
+          <View style={styles.logoPreviewContainer}>
+            <Image
+              source={{ uri: logoFile?.uri || existingLogoUrl }}
+              style={styles.logoPreview}
+              contentFit="contain"
+            />
+          </View>
+        )}
+
+        <View style={styles.qrActions}>
+          <Pressable
+            style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+            onPress={async () => {
+              const file = await pickImage();
+              if (file) setLogoFile(file);
+            }}
+          >
+            <MaterialIcons name="image" size={16} color={AdminTheme.colors.primary} />
+            <Text style={styles.secondaryButtonText}>Choose Logo</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButtonSmall,
+              (logoMutation.isPending || !logoFile) && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => logoMutation.mutate()}
+            disabled={logoMutation.isPending || !logoFile}
+          >
+            <View style={styles.buttonGradientSmall}>
+              {logoMutation.isPending ? (
+                <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
+              ) : (
+                <Text style={styles.buttonTextSmall}>Upload</Text>
+              )}
+            </View>
+          </Pressable>
+        </View>
       </View>
 
       {/* UPI ID */}
@@ -319,19 +364,16 @@ const PaymentSection = ({
         onPress={() => savePaymentMutation.mutate()}
         disabled={savePaymentMutation.isPending}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.buttonGradient}
-        >
+        <View style={styles.buttonGradient}>
           {savePaymentMutation.isPending ? (
-            <ActivityIndicator size="small" color={Colors.white} />
+            <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
           ) : (
             <>
-              <MaterialIcons name="save" size={18} color={Colors.white} />
+              <MaterialIcons name="save" size={18} color={AdminTheme.colors.surface} />
               <Text style={styles.buttonText}>Save Payment Settings</Text>
             </>
           )}
-        </LinearGradient>
+        </View>
       </Pressable>
 
       {/* QR Code Section */}
@@ -356,7 +398,7 @@ const PaymentSection = ({
               if (file) setPaymentQrFile(file);
             }}
           >
-            <MaterialIcons name="image" size={16} color={Colors.primary} />
+            <MaterialIcons name="image" size={16} color={AdminTheme.colors.primary} />
             <Text style={styles.secondaryButtonText}>Choose QR</Text>
           </Pressable>
 
@@ -369,16 +411,13 @@ const PaymentSection = ({
             onPress={() => paymentQrMutation.mutate()}
             disabled={paymentQrMutation.isPending || !paymentQrFile}
           >
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-              style={styles.buttonGradientSmall}
-            >
+            <View style={styles.buttonGradientSmall}>
               {paymentQrMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.white} />
+                <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
               ) : (
                 <Text style={styles.buttonTextSmall}>Upload</Text>
               )}
-            </LinearGradient>
+            </View>
           </Pressable>
         </View>
       </View>
@@ -418,7 +457,7 @@ const ContactCard = ({
     <View style={styles.contactCard}>
       <View style={styles.contactHeader}>
         <View style={styles.contactHeaderLeft}>
-          <View style={[styles.contactAvatar, { backgroundColor: `${Colors.primary}10` }]}>
+          <View style={[styles.contactAvatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
             <Text style={styles.contactInitial}>
               {contact.label?.charAt(0).toUpperCase() || "C"}
             </Text>
@@ -490,7 +529,7 @@ const ContactCard = ({
           style={({ pressed }) => [styles.contactAction, pressed && styles.buttonPressed]}
           onPress={() => onEdit(contact)}
         >
-          <MaterialIcons name="edit" size={14} color={Colors.primary} />
+          <MaterialIcons name="edit" size={14} color={AdminTheme.colors.primary} />
           <Text style={styles.contactActionText}>Edit</Text>
         </Pressable>
 
@@ -500,10 +539,10 @@ const ContactCard = ({
           disabled={isUploading}
         >
           {isUploading ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={AdminTheme.colors.primary} />
           ) : (
             <>
-              <MaterialIcons name="qr-code" size={14} color={Colors.primary} />
+              <MaterialIcons name="qr-code" size={14} color={AdminTheme.colors.primary} />
               <Text style={styles.contactActionText}>Upload QR</Text>
             </>
           )}
@@ -528,11 +567,11 @@ const ContactCard = ({
           disabled={isDeleting}
         >
           {isDeleting ? (
-            <ActivityIndicator size="small" color={Colors.error} />
+            <ActivityIndicator size="small" color={AdminTheme.colors.danger} />
           ) : (
             <>
-              <MaterialIcons name="delete-outline" size={14} color={Colors.error} />
-              <Text style={[styles.contactActionText, { color: Colors.error }]}>Delete</Text>
+              <MaterialIcons name="delete-outline" size={14} color={AdminTheme.colors.danger} />
+              <Text style={[styles.contactActionText, { color: AdminTheme.colors.danger }]}>Delete</Text>
             </>
           )}
         </Pressable>
@@ -676,7 +715,7 @@ const ContactFormComponent = ({
             if (file) setImageFile(file);
           }}
         >
-          <MaterialIcons name="image" size={16} color={Colors.primary} />
+          <MaterialIcons name="image" size={16} color={AdminTheme.colors.primary} />
           <Text style={styles.secondaryButtonText}>
             {imageFile ? "Change Image" : "Choose Image"}
           </Text>
@@ -704,21 +743,18 @@ const ContactFormComponent = ({
           onPress={onSubmit}
           disabled={isPending}
         >
-          <LinearGradient
-            colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-            style={styles.buttonGradient}
-          >
+          <View style={styles.buttonGradient}>
             {isPending ? (
-              <ActivityIndicator size="small" color={Colors.white} />
+              <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
             ) : (
               <>
-                <MaterialIcons name={mode === "create" ? "add" : "save"} size={18} color={Colors.white} />
+                <MaterialIcons name={mode === "create" ? "add" : "save"} size={18} color={AdminTheme.colors.surface} />
                 <Text style={styles.buttonText}>
                   {mode === "create" ? "Add Contact" : "Save Changes"}
                 </Text>
               </>
             )}
-          </LinearGradient>
+          </View>
         </Pressable>
       </View>
     </View>
@@ -728,6 +764,7 @@ const ContactFormComponent = ({
 // ==================== MAIN COMPONENT ====================
 
 export default function AdminPublicProfileScreen() {
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const nurseryId = user?.nurseryId;
@@ -736,6 +773,7 @@ export default function AdminPublicProfileScreen() {
   const [paymentForm, setPaymentForm] = useState<PaymentForm>(emptyPaymentForm);
   const [paymentErrors, setPaymentErrors] = useState<FieldErrors>({});
   const [paymentQrFile, setPaymentQrFile] = useState<MultipartFile | null>(null);
+  const [logoFile, setLogoFile] = useState<MultipartFile | null>(null);
   const [contacts, setContacts] = useState<NurseryPublicContact[]>([]);
   const [snack, setSnack] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [qrUploadingForId, setQrUploadingForId] = useState<string | null>(null);
@@ -831,6 +869,24 @@ export default function AdminPublicProfileScreen() {
     },
     onError: (err: any) =>
       setSnack({ type: "error", text: err?.message || "Unable to upload payment QR." }),
+  });
+
+  const logoMutation = useMutation({
+    mutationFn: async () => {
+      if (!logoFile) throw new Error("Select logo image first.");
+      return NurseryPublicProfileService.uploadLogoImage(nurseryId, logoFile);
+    },
+    onSuccess: (result) => {
+      setLogoFile(null);
+      updateCache((prev) => ({
+        ...(prev || ({ nurseryId: nurseryId || "", updatedAt: new Date().toISOString() } as NurseryPublicProfile)),
+        logoImageUrl: result.logoImageUrl,
+      }));
+      setSnack({ type: "success", text: "Nursery logo updated." });
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err: any) =>
+      setSnack({ type: "error", text: err?.message || "Unable to upload nursery logo." }),
   });
 
   const createContactMutation = useMutation({
@@ -929,6 +985,7 @@ export default function AdminPublicProfileScreen() {
         ...(prev || ({ nurseryId: nurseryId || "", updatedAt: new Date().toISOString() } as NurseryPublicProfile)),
         contactDetails: (prev?.contactDetails || []).filter((item) => item.id !== contactId),
       }));
+      queryClient.invalidateQueries({ queryKey });
       setSnack({ type: "success", text: "Contact deleted." });
     },
     onError: (err: any) =>
@@ -942,10 +999,10 @@ export default function AdminPublicProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <StitchHeader
         title="Public Profile"
-        subtitle="Manage payment and contact details visible to customers"
-        titleStyle={styles.headerTitle}
+        subtitle="Manage branding, payment and contact details visible to customers"
+        onBackPress={() => router.back()}
       />
 
       {snack && (
@@ -962,6 +1019,10 @@ export default function AdminPublicProfileScreen() {
       >
         {/* Payment Section */}
         <PaymentSection
+          logoFile={logoFile}
+          setLogoFile={setLogoFile}
+          logoMutation={logoMutation}
+          existingLogoUrl={data?.logoImageUrl}
           paymentForm={paymentForm}
           setPaymentForm={setPaymentForm}
           paymentErrors={paymentErrors}
@@ -976,8 +1037,8 @@ export default function AdminPublicProfileScreen() {
         {/* Contacts Section */}
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <View style={[styles.sectionIcon, { backgroundColor: `${Colors.primary}10` }]}>
-              <MaterialIcons name="contacts" size={20} color={Colors.primary} />
+            <View style={[styles.sectionIcon, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
+              <MaterialIcons name="contacts" size={20} color={AdminTheme.colors.primary} />
             </View>
             <Text style={styles.sectionTitle}>Public Contacts</Text>
           </View>
@@ -1023,7 +1084,7 @@ export default function AdminPublicProfileScreen() {
             <Text style={styles.listTitle}>Existing Contacts</Text>
             {isLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+                <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
               </View>
             ) : contacts.length === 0 ? (
               <View style={styles.emptyContainer}>
@@ -1112,7 +1173,7 @@ const styles = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
@@ -1225,12 +1286,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   buttonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600",
   },
   buttonTextSmall: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1249,17 +1310,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: AdminTheme.colors.primary,
     backgroundColor: "#EFF6FF",
   },
   secondaryButtonText: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontSize: 13,
     fontWeight: "600",
   },
   cancelButton: {
     borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   submitButton: {
     flex: 1,
@@ -1280,10 +1341,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
+  logoPreviewContainer: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignSelf: "flex-start",
+  },
   qrPreview: {
     width: "100%",
     height: 140,
     borderRadius: 8,
+  },
+  logoPreview: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
   },
   qrActions: {
     flexDirection: "row",
@@ -1379,7 +1454,7 @@ const styles = StyleSheet.create({
   contactInitial: {
     fontSize: 18,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   contactInfo: {
     flex: 1,
@@ -1467,7 +1542,7 @@ const styles = StyleSheet.create({
   contactActionText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
 
   // Error Text

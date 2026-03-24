@@ -1,54 +1,45 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-import { useMemo, useState, useCallback } from "react";
+import { useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  Platform,
-  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, {
-  FadeInDown,
-  FadeInUp,
-  Layout,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import StitchHeader from "../../components/common/StitchHeader";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../../components/navigation/SharedBottomNav";
+import { AdminTheme } from "../../components/admin/theme";
 import { SoftDeleteService, SoftDeletedAuditRow } from "../../services/soft-delete.service";
-import { useAuthStore } from "../../stores/auth.store";
-import { Colors } from "../../theme";
 
-const BOTTOM_NAV_HEIGHT = 80;
+const ENTITY_FILTERS = [
+  "ALL",
+  "Seed",
+  "PlantType",
+  "Inventory",
+  "Sowing",
+  "Germination",
+  "Sale",
+  "Customer",
+  "User",
+] as const;
 
-// ==================== TYPES ====================
-
-type EntityType = "Seed" | "PlantType" | "Inventory" | "Sowing" | "Germination" | "Sale" | "Customer" | "User" | "ALL";
-
-interface FilterState {
-  entityType: EntityType;
-  dateRange: "ALL" | "TODAY" | "WEEK" | "MONTH";
-  deletedBy: "ALL" | "USER" | "SYSTEM";
-}
-
-// ==================== UTILITIES ====================
+type EntityFilter = (typeof ENTITY_FILTERS)[number];
 
 const formatDateTime = (value?: string) => {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  
+
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -57,73 +48,62 @@ const formatDateTime = (value?: string) => {
     return `Today, ${d.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
+      hour12: true,
     })}`;
-  } else if (d.toDateString() === yesterday.toDateString()) {
+  }
+
+  if (d.toDateString() === yesterday.toDateString()) {
     return `Yesterday, ${d.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
+      hour12: true,
     })}`;
   }
-  
+
   return d.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
 };
 
-const formatDateOnly = (value?: string) => {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
-const getEntityIcon = (entityType: string) => {
-  switch (entityType) {
-    case "Seed": return "grass";
-    case "PlantType": return "spa";
-    case "Inventory": return "inventory";
-    case "Sowing": return "agriculture";
-    case "Germination": return "sprout";
-    case "Sale": return "receipt";
-    case "Customer": return "person";
-    case "User": return "badge";
-    default: return "delete";
+const getEntityIcon = (entityType?: string) => {
+  switch (entityType?.toLowerCase()) {
+    case "seed":
+      return "grass";
+    case "planttype":
+      return "spa";
+    case "inventory":
+      return "inventory";
+    case "sowing":
+      return "agriculture";
+    case "germination":
+      return "eco";
+    case "sale":
+      return "receipt";
+    case "customer":
+      return "person";
+    case "user":
+      return "badge";
+    default:
+      return "delete";
   }
 };
 
-const getEntityColor = (entityType: string) => {
-  switch (entityType) {
-    case "Seed": return "#10B981";
-    case "PlantType": return "#8B5CF6";
-    case "Inventory": return "#3B82F6";
-    case "Sowing": return "#F59E0B";
-    case "Germination": return "#EC4899";
-    case "Sale": return "#059669";
-    case "Customer": return "#6366F1";
-    case "User": return "#6B7280";
-    default: return "#6B7280";
-  }
-};
+const getSafeEntityLabel = (record: SoftDeletedAuditRow) =>
+  record.entityName?.trim() || `${record.entityType} record`;
 
-const getSafeEntityLabel = (log: SoftDeletedAuditRow) =>
-  log.entityName?.trim() || `${log.entityType} record`;
-
-const getAuditActor = (log: SoftDeletedAuditRow) =>
-  log.deletedBy?.trim() ||
-  (typeof log.metadata?.actorName === "string" ? log.metadata.actorName : "") ||
+const getAuditActor = (record: SoftDeletedAuditRow) =>
+  record.deletedBy?.trim() ||
+  (typeof record.metadata?.actorName === "string" ? record.metadata.actorName : "") ||
   "System";
 
-const getAuditAction = (log: SoftDeletedAuditRow) => {
+const getAuditAction = (record: SoftDeletedAuditRow) => {
   const rawAction =
-    typeof log.metadata?.action === "string" ? log.metadata.action : "SOFT_DELETED";
+    typeof record.metadata?.action === "string" ? record.metadata.action : "SOFT_DELETED";
   const normalized = rawAction.toUpperCase();
   if (normalized.includes("SOFT_DELETED")) return "deleted";
   if (normalized.includes("DELETED")) return "removed";
@@ -132,802 +112,430 @@ const getAuditAction = (log: SoftDeletedAuditRow) => {
   return "changed";
 };
 
-const getAuditSummary = (log: SoftDeletedAuditRow) =>
-  `${getAuditActor(log)} ${getAuditAction(log)} ${getSafeEntityLabel(log)}`;
+const getAuditSummary = (record: SoftDeletedAuditRow) =>
+  `${getAuditActor(record)} ${getAuditAction(record)} ${getSafeEntityLabel(record)}`;
 
-// ==================== STATS CARD ====================
-
-interface StatsCardProps {
-  totalLogs: number;
-  uniqueEntities: number;
-  oldestLog: string;
-  newestLog: string;
-}
-
-const StatsCard = ({ totalLogs, uniqueEntities, oldestLog, newestLog }: StatsCardProps) => (
-  <BlurView intensity={80} tint="light" style={styles.statsCard}>
+const StatsCard = ({
+  totalRecords,
+  entityTypes,
+  latestRecord,
+}: {
+  totalRecords: number;
+  entityTypes: number;
+  latestRecord?: string;
+}) => (
+  <View style={styles.statsCard}>
     <View style={styles.statsRow}>
       <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: `${Colors.primary}15` }]}>
-          <MaterialIcons name="history" size={18} color={Colors.primary} />
+        <View style={[styles.statIcon, { backgroundColor: `${AdminTheme.colors.primary}12` }]}>
+          <MaterialIcons name="delete-outline" size={16} color={AdminTheme.colors.primary} />
         </View>
         <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{totalLogs}</Text>
-          <Text style={styles.statLabel}>Total Logs</Text>
+          <Text style={styles.statNumber}>{totalRecords}</Text>
+          <Text style={styles.statLabel}>Records</Text>
         </View>
       </View>
 
       <View style={styles.statDivider} />
 
       <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: "#10B98115" }]}>
-          <MaterialIcons name="category" size={18} color="#10B981" />
+        <View style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}>
+          <MaterialIcons name="category" size={16} color="#2563EB" />
         </View>
         <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{uniqueEntities}</Text>
-          <Text style={styles.statLabel}>Entity Types</Text>
+          <Text style={styles.statNumber}>{entityTypes}</Text>
+          <Text style={styles.statLabel}>Types</Text>
         </View>
       </View>
-
-      <View style={styles.statDivider} />
-
-      <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: "#3B82F615" }]}>
-          <MaterialIcons name="date-range" size={18} color="#3B82F6" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{formatDateOnly(newestLog)}</Text>
-          <Text style={styles.statLabel}>Latest</Text>
-        </View>
-      </View>
-    </View>
-
-    <View style={styles.statsSecondaryRow}>
-      <MaterialIcons name="history" size={12} color="#6B7280" />
-      <Text style={styles.statsSecondaryText}>
-        Oldest: {formatDateOnly(oldestLog)}
-      </Text>
-    </View>
-  </BlurView>
-);
-
-// ==================== FILTER BAR ====================
-
-interface FilterBarProps {
-  filters: FilterState;
-  onFilterChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
-  activeFilterCount: number;
-  onClearFilters: () => void;
-}
-
-const FilterBar = ({ filters, onFilterChange, activeFilterCount, onClearFilters }: FilterBarProps) => {
-  const [showFilters, setShowFilters] = useState(false);
-
-  const filterButtonScale = useSharedValue(1);
-
-  const handlePressIn = () => {
-    filterButtonScale.value = withSpring(0.92, { damping: 15, stiffness: 300 });
-  };
-
-  const handlePressOut = () => {
-    filterButtonScale.value = withSpring(1, { damping: 15, stiffness: 300 });
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: filterButtonScale.value }],
-  }));
-
-  return (
-    <View style={styles.filterWrapper}>
-      {/* Search Row */}
-      <View style={styles.searchRow}>
-        <BlurView intensity={80} tint="light" style={styles.searchContainer}>
-          <MaterialIcons name="search" size={18} color="rgba(0,0,0,0.4)" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Use filters to narrow logs"
-            placeholderTextColor="rgba(0,0,0,0.3)"
-            value={filters.entityType === "ALL" ? "" : filters.entityType}
-            onChangeText={() => {}}
-            editable={false}
-          />
-        </BlurView>
-
-        <Animated.View style={animatedStyle}>
-          <Pressable
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            onPress={() => setShowFilters(!showFilters)}
-            style={({ pressed }) => [
-              styles.filterButton,
-              (activeFilterCount > 0 || showFilters) && styles.filterButtonActive,
-            ]}
-          >
-            <BlurView intensity={80} tint="light" style={styles.filterButtonBlur}>
-              <MaterialIcons
-                name="tune"
-                size={18}
-                color={(activeFilterCount > 0 || showFilters) ? Colors.primary : "rgba(0,0,0,0.5)"}
-              />
-              {activeFilterCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                </View>
-              )}
-            </BlurView>
-          </Pressable>
-        </Animated.View>
-      </View>
-
-      {/* Filter Chips */}
-      {showFilters && (
-        <Animated.View 
-          entering={FadeInDown.springify().damping(35)} 
-          style={styles.filterChipsContainer}
-        >
-          {/* Entity Type Filters */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Entity Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipsScroll}>
-              <View style={styles.filterChipsRow}>
-                {["ALL", "Seed", "PlantType", "Inventory", "Sowing", "Germination", "Sale", "Customer", "User"].map((type) => (
-                  <Pressable
-                    key={type}
-                    style={[
-                      styles.filterChip,
-                      filters.entityType === type && styles.filterChipActive,
-                      filters.entityType === type && { borderColor: getEntityColor(type) },
-                    ]}
-                    onPress={() => onFilterChange("entityType", type as EntityType)}
-                  >
-                    {type !== "ALL" && (
-                      <MaterialIcons 
-                        name={getEntityIcon(type) as any} 
-                        size={12} 
-                        color={filters.entityType === type ? getEntityColor(type) : "#6B7280"} 
-                      />
-                    )}
-                    <Text
-                      style={[
-                        styles.filterChipText,
-                        filters.entityType === type && styles.filterChipTextActive,
-                        filters.entityType === type && { color: getEntityColor(type) },
-                      ]}
-                    >
-                      {type === "ALL" ? "All Types" : type}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* Date Range Filters */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Date Range</Text>
-            <View style={styles.filterChipsRow}>
-              {[
-                { id: "ALL", label: "All Time" },
-                { id: "TODAY", label: "Today" },
-                { id: "WEEK", label: "This Week" },
-                { id: "MONTH", label: "This Month" },
-              ].map((range) => (
-                <Pressable
-                  key={range.id}
-                  style={[
-                    styles.filterChip,
-                    filters.dateRange === range.id && styles.filterChipActive,
-                  ]}
-                  onPress={() => onFilterChange("dateRange", range.id as any)}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filters.dateRange === range.id && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {range.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Deleted By Filters */}
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Deleted By</Text>
-            <View style={styles.filterChipsRow}>
-              {[
-                { id: "ALL", label: "All" },
-                { id: "USER", label: "User" },
-                { id: "SYSTEM", label: "System" },
-              ].map((deletedBy) => (
-                <Pressable
-                  key={deletedBy.id}
-                  style={[
-                    styles.filterChip,
-                    filters.deletedBy === deletedBy.id && styles.filterChipActive,
-                  ]}
-                  onPress={() => onFilterChange("deletedBy", deletedBy.id as any)}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      filters.deletedBy === deletedBy.id && styles.filterChipTextActive,
-                    ]}
-                  >
-                    {deletedBy.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Clear Filters Button */}
-          {activeFilterCount > 0 && (
-            <Pressable onPress={onClearFilters} style={styles.clearFiltersButton}>
-              <Text style={styles.clearFiltersText}>Clear all filters</Text>
-            </Pressable>
-          )}
-        </Animated.View>
-      )}
-    </View>
-  );
-};
-
-// ==================== AUDIT LOG CARD ====================
-
-interface AuditLogCardProps {
-  log: SoftDeletedAuditRow;
-  index: number;
-}
-
-const AuditLogCard = ({ log, index }: AuditLogCardProps) => {
-  const entityColor = getEntityColor(log.entityType);
-  const entityIcon = getEntityIcon(log.entityType);
-  const scale = useSharedValue(1);
-
-  // Calculate days until purge
-  const daysUntilPurge = useMemo(() => {
-    if (!log.purgeAt) return null;
-    const purgeDate = new Date(log.purgeAt);
-    const now = new Date();
-    const diffDays = Math.ceil((purgeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays;
-  }, [log.purgeAt]);
-
-  const handlePressIn = () => {
-    scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
-  };
-
-  const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-  };
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View
-      entering={FadeInUp.delay(index * 80).springify().damping(35)}
-      layout={Layout.springify().damping(35)}
-      style={styles.cardWrapper}
-    >
-      <Pressable
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={({ pressed }) => [
-          styles.auditCard,
-          pressed && styles.auditCardPressed,
-        ]}
-      >
-        <Animated.View style={[styles.auditCardInner, animatedStyle]}>
-          {/* Header */}
-          <View style={styles.auditHeader}>
-            <View style={styles.auditHeaderLeft}>
-              <View style={[styles.entityIcon, { backgroundColor: `${entityColor}15` }]}>
-                <MaterialIcons name={entityIcon as any} size={20} color={entityColor} />
-              </View>
-              <View style={styles.entityInfo}>
-                <View style={styles.entityTypeRow}>
-                  <Text style={styles.entityType}>{log.entityType}</Text>
-                  <View style={[styles.deletedByBadge, { backgroundColor: log.deletedBy ? `${Colors.primary}10` : "#F3F4F6" }]}>
-                    <MaterialIcons 
-                      name={log.deletedBy ? "person" : "smart-toy"} 
-                      size={10} 
-                      color={log.deletedBy ? Colors.primary : "#6B7280"} 
-                    />
-                    <Text style={[styles.deletedByText, { color: log.deletedBy ? Colors.primary : "#6B7280" }]}>
-                      {log.deletedBy ? "User" : "System"}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.entityName} numberOfLines={1}>
-                  {getSafeEntityLabel(log)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Action Summary */}
-          <View style={[styles.actionSummary, { backgroundColor: `${entityColor}08` }]}>
-            <MaterialIcons name="history-toggle-off" size={14} color={entityColor} />
-            <Text style={[styles.actionSummaryText, { color: entityColor }]}>
-              {getAuditSummary(log)}
-            </Text>
-          </View>
-
-          {/* Timeline */}
-          <View style={styles.timelineContainer}>
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, { backgroundColor: Colors.primary }]} />
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineLabel}>Deleted</Text>
-                <Text style={styles.timelineValue}>{formatDateTime(log.deletedAt)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.timelineLine} />
-
-            <View style={styles.timelineItem}>
-              <View style={[styles.timelineDot, styles.timelineDotWarning]} />
-              <View style={styles.timelineContent}>
-                <Text style={styles.timelineLabel}>Auto Purge</Text>
-                <Text style={styles.timelineValue}>{formatDateTime(log.purgeAt)}</Text>
-                {daysUntilPurge !== null && daysUntilPurge <= 7 && (
-                  <View style={styles.purgeWarning}>
-                    <MaterialIcons name="warning" size={12} color="#D97706" />
-                    <Text style={styles.purgeWarningText}>
-                      {daysUntilPurge <= 0 ? "Today" : `${daysUntilPurge} days left`}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.auditFooter}>
-            <View style={styles.auditFooterItem}>
-              <MaterialIcons name="person-outline" size={12} color="#9CA3AF" />
-              <Text style={styles.auditFooterText}>By: {getAuditActor(log)}</Text>
-            </View>
-          </View>
-        </Animated.View>
-      </Pressable>
-    </Animated.View>
-  );
-};
-
-// ==================== EMPTY STATE ====================
-
-interface EmptyStateProps {
-  hasFilters: boolean;
-  onClearFilters: () => void;
-}
-
-const EmptyState = ({ hasFilters, onClearFilters }: EmptyStateProps) => (
-  <Animated.View entering={FadeInUp.springify().damping(35)} style={styles.emptyContainer}>
-    <View style={styles.emptyIconContainer}>
-      <LinearGradient
-        colors={["#F3F4F6", "#F9FAFB"]}
-        style={styles.emptyIconGradient}
-      >
-        <MaterialIcons name="history" size={48} color="#9CA3AF" />
-      </LinearGradient>
-    </View>
-    <Text style={styles.emptyTitle}>No Audit Logs Found</Text>
-    <Text style={styles.emptyMessage}>
-      {hasFilters
-        ? "Try adjusting your filters to see more results"
-        : "Deleted records will appear here for 30 days before auto-purge"}
-    </Text>
-    {hasFilters && (
-      <Pressable onPress={onClearFilters} style={styles.emptyButton}>
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-        >
-          <MaterialIcons name="clear-all" size={16} color={Colors.white} />
-          <Text style={styles.emptyButtonText}>Clear Filters</Text>
-        </LinearGradient>
-      </Pressable>
-    )}
-  </Animated.View>
-);
-
-// ==================== LOADING STATE ====================
-
-const LoadingState = () => (
-  <View style={styles.centerContainer}>
-    <View style={styles.loadingCard}>
-      <ActivityIndicator size="large" color={Colors.primary} />
-      <Text style={styles.loadingText}>Loading audit logs...</Text>
     </View>
   </View>
 );
 
-// ==================== MAIN COMPONENT ====================
+const FilterCard = ({
+  selected,
+  onSelect,
+  onClear,
+}: {
+  selected: EntityFilter;
+  onSelect: (value: EntityFilter) => void;
+  onClear: () => void;
+}) => (
+  <View style={styles.selectorCard}>
+    <View style={styles.selectorHeader}>
+      <View style={styles.selectorTitleRow}>
+        <MaterialIcons name="filter-alt" size={18} color={AdminTheme.colors.primary} />
+        <Text style={styles.selectorTitle}>Filter Entity Type</Text>
+      </View>
+      {selected !== "ALL" ? (
+        <Pressable onPress={onClear} hitSlop={8}>
+          <Text style={styles.clearText}>Clear</Text>
+        </Pressable>
+      ) : null}
+    </View>
 
-export default function AdminAuditLogsScreen() {
-  const user = useAuthStore((s) => s.user);
-  const nurseryId = user?.nurseryId;
-  const [refreshing, setRefreshing] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    entityType: "ALL",
-    dateRange: "ALL",
-    deletedBy: "ALL",
-  });
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.selectorScroll}
+    >
+      {ENTITY_FILTERS.map((item) => {
+        const isSelected = item === selected;
+        return (
+          <Pressable
+            key={item}
+            style={[styles.filterChip, isSelected && styles.filterChipSelected]}
+            onPress={() => onSelect(item)}
+          >
+            <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
+              {item === "ALL" ? "All Logs" : item}
+            </Text>
+            {isSelected ? (
+              <MaterialIcons name="check-circle" size={14} color={AdminTheme.colors.primary} />
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  </View>
+);
 
-  const { data, refetch, isRefetching, isLoading } = useQuery({
-    queryKey: ["audit-logs", "admin", nurseryId],
-    queryFn: () => SoftDeleteService.listAuditLogs({ nurseryId }),
-    enabled: Boolean(nurseryId),
-  });
-
-  const purgeMutation = useMutation({
-    mutationFn: () => SoftDeleteService.purgeExpired({ nurseryId, retentionDays: 30 }),
-    onSuccess: () => {
-      Alert.alert(
-        "✅ Cleanup Started",
-        "Soft-deleted items and their audit logs older than 30 days are being purged.",
-      );
-      refetch();
-    },
-    onError: (err: any) =>
-      Alert.alert("❌ Failed", err?.message || "Unable to start cleanup for this nursery."),
-  });
-
-  const clearLogsMutation = useMutation({
-    mutationFn: () => {
-      const params: {
-        nurseryId?: string;
-        entityType?: string;
-        from?: string;
-        to?: string;
-      } = { nurseryId };
-
-      if (filters.entityType !== "ALL") {
-        params.entityType = filters.entityType;
-      }
-
-      if (filters.dateRange !== "ALL") {
-        const now = new Date();
-        const from = new Date(now);
-        from.setHours(0, 0, 0, 0);
-        if (filters.dateRange === "WEEK") {
-          from.setDate(from.getDate() - 7);
-        } else if (filters.dateRange === "MONTH") {
-          from.setDate(from.getDate() - 30);
-        }
-        params.from = from.toISOString();
-        params.to = now.toISOString();
-      }
-
-      return SoftDeleteService.clearAuditLogs(params);
-    },
-    onSuccess: async (res: any) => {
-      const deletedCount = Number(res?.data?.deletedCount ?? res?.deletedCount ?? 0);
-      Alert.alert("✅ Logs Cleared", `${deletedCount} log${deletedCount === 1 ? "" : "s"} removed.`);
-      await refetch();
-    },
-    onError: (err: any) =>
-      Alert.alert("❌ Failed", err?.message || "Unable to clear audit logs."),
-  });
-
-  // Filter and search logic
-  const filteredLogs = useMemo(() => {
-    const logs: SoftDeletedAuditRow[] = Array.isArray(data) ? data : [];
-    
-    return logs.filter((log: SoftDeletedAuditRow) => {
-      // Entity type filter
-      if (filters.entityType !== "ALL" && log.entityType !== filters.entityType) {
-        return false;
-      }
-
-      // Date range filter
-      if (filters.dateRange !== "ALL") {
-        const deletedDate = new Date(log.deletedAt);
-        const now = new Date();
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-
-        if (filters.dateRange === "TODAY") {
-          if (deletedDate < startOfToday) return false;
-        } else if (filters.dateRange === "WEEK") {
-          const weekAgo = new Date(startOfToday);
-          weekAgo.setDate(weekAgo.getDate() - 7);
-          if (deletedDate < weekAgo) return false;
-        } else if (filters.dateRange === "MONTH") {
-          const monthAgo = new Date(startOfToday);
-          monthAgo.setDate(monthAgo.getDate() - 30);
-          if (deletedDate < monthAgo) return false;
-        }
-      }
-
-      // Deleted by filter
-      if (filters.deletedBy !== "ALL") {
-        const isUserDeleted = !!log.deletedBy;
-        if (filters.deletedBy === "USER" && !isUserDeleted) return false;
-        if (filters.deletedBy === "SYSTEM" && isUserDeleted) return false;
-      }
-
-      return true;
-    });
-  }, [data, filters]);
-
-  // Calculate stats
-  const stats = useMemo(() => {
-    const logs = filteredLogs;
-    const totalLogs = logs.length;
-    const uniqueEntities = new Set(logs.map((log: SoftDeletedAuditRow) => log.entityType)).size;
-    const dates = logs
-      .map((log: SoftDeletedAuditRow) => new Date(log.deletedAt).getTime())
-      .filter((dateMs: number) => !isNaN(dateMs));
-    const oldestLog = dates.length ? new Date(Math.min(...dates)).toISOString() : new Date().toISOString();
-    const newestLog = dates.length ? new Date(Math.max(...dates)).toISOString() : new Date().toISOString();
-
-    return { totalLogs, uniqueEntities, oldestLog, newestLog };
-  }, [filteredLogs]);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.entityType !== "ALL") count++;
-    if (filters.dateRange !== "ALL") count++;
-    if (filters.deletedBy !== "ALL") count++;
-    return count;
-  }, [filters]);
-
-  const handleFilterChange = <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const handleClearFilters = () => {
-    setFilters({
-      entityType: "ALL",
-      dateRange: "ALL",
-      deletedBy: "ALL",
-    });
-  };
-
-  const handleRunCleanup = () => {
-    Alert.alert(
-      "🧹 Run Cleanup",
-      "Delete records that are soft-deleted for more than 30 days?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Run Cleanup", onPress: () => purgeMutation.mutate() },
-      ],
-    );
-  };
-
-  const handleClearLogs = () => {
-    Alert.alert(
-      "🗑️ Clear Logs",
-      "Permanently remove currently scoped audit logs?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Clear Logs", style: "destructive", onPress: () => clearLogsMutation.mutate() },
-      ],
-    );
-  };
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
-          title="Audit Logs"
-          subtitle="See which user deleted what"
-          titleStyle={styles.headerTitle}
-        />
-        <LoadingState />
-      </SafeAreaView>
-    );
-  }
-
-  const hasLogs = filteredLogs.length > 0;
+const AuditCard = ({ record }: { record: SoftDeletedAuditRow }) => {
+  const icon = getEntityIcon(record.entityType);
+  const isExpired = record.purgeAt && new Date(record.purgeAt) < new Date();
 
   return (
-    <View style={styles.container}>
-      <FixedHeader
+    <View style={[styles.auditCard, isExpired && styles.auditCardExpired]}>
+      <View style={styles.auditHeader}>
+        <View style={styles.auditHeaderLeft}>
+          <View style={[styles.auditIcon, { backgroundColor: `${AdminTheme.colors.danger}10` }]}>
+            <MaterialIcons name={icon as any} size={18} color={AdminTheme.colors.danger} />
+          </View>
+          <View style={styles.auditTitleContainer}>
+            <Text style={styles.auditEntityType}>{record.entityType}</Text>
+            <Text style={styles.auditEntityName} numberOfLines={1}>
+              {getSafeEntityLabel(record)}
+            </Text>
+          </View>
+        </View>
+
+        {isExpired ? (
+          <View style={styles.expiredBadge}>
+            <MaterialIcons name="warning" size={12} color={AdminTheme.colors.danger} />
+            <Text style={styles.expiredBadgeText}>Expired</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.actionSummary}>
+        <MaterialIcons name="history-toggle-off" size={14} color={AdminTheme.colors.primary} />
+        <Text style={styles.actionSummaryText}>{getAuditSummary(record)}</Text>
+      </View>
+
+      <View style={styles.auditDetails}>
+        <View style={styles.auditDetailRow}>
+          <MaterialIcons name="access-time" size={12} color="#9CA3AF" />
+          <Text style={styles.auditDetailLabel}>Deleted:</Text>
+          <Text style={styles.auditDetailValue}>{formatDateTime(record.deletedAt)}</Text>
+        </View>
+        <View style={styles.auditDetailRow}>
+          <MaterialIcons name="person-outline" size={12} color="#9CA3AF" />
+          <Text style={styles.auditDetailLabel}>Actor:</Text>
+          <Text style={styles.auditDetailValue}>{getAuditActor(record)}</Text>
+        </View>
+        <View style={styles.auditDetailRow}>
+          <MaterialIcons name="event-busy" size={12} color="#9CA3AF" />
+          <Text style={styles.auditDetailLabel}>Purge:</Text>
+          <Text
+            style={[
+              styles.auditDetailValue,
+              isExpired ? { color: AdminTheme.colors.danger } : undefined,
+            ]}
+          >
+            {formatDateTime(record.purgeAt)}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const EmptyState = ({ hasFilter }: { hasFilter: boolean }) => (
+  <View style={styles.emptyState}>
+    <View style={styles.emptyIconWrap}>
+      <MaterialIcons name="delete-sweep" size={42} color="#9CA3AF" />
+    </View>
+    <Text style={styles.emptyTitle}>No Audit Logs Found</Text>
+    <Text style={styles.emptyText}>
+      {hasFilter
+        ? "No soft-delete audit logs matched the selected entity filter."
+        : "Deleted records and their activity trail will appear here."}
+    </Text>
+  </View>
+);
+
+export default function AdminAuditLogsScreen() {
+  const router = useRouter();
+  const [entityFilter, setEntityFilter] = useState<EntityFilter>("ALL");
+
+  const queryParams = useMemo(
+    () => ({
+      entityType: entityFilter === "ALL" ? undefined : entityFilter,
+      limit: 100,
+    }),
+    [entityFilter],
+  );
+
+  const logsQuery = useQuery({
+    queryKey: ["admin-soft-delete-audit", queryParams],
+    queryFn: () => SoftDeleteService.listAuditLogs(queryParams),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: () =>
+      SoftDeleteService.clearAuditLogs({
+        entityType: entityFilter === "ALL" ? undefined : entityFilter,
+      }),
+    onSuccess: async () => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await logsQuery.refetch();
+      Alert.alert("Logs Cleared", "Matching soft-delete audit logs were cleared successfully.");
+    },
+    onError: async (err: any) => {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Unable to Clear Logs", err?.message || "Please try again.");
+    },
+  });
+
+  const rows = useMemo(() => logsQuery.data ?? [], [logsQuery.data]);
+  const stats = useMemo(() => {
+    const entityTypes = new Set(rows.map((row) => row.entityType)).size;
+    const latestRecord = rows[0]?.deletedAt;
+    return {
+      totalRecords: rows.length,
+      entityTypes,
+      latestRecord,
+    };
+  }, [rows]);
+
+  return (
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+      <StitchHeader
         title="Audit Logs"
-        subtitle="See which user deleted what"
-        titleStyle={styles.headerTitle}
+        subtitle="Deleted records and recovery trail"
+        onBackPress={() => router.back()}
         actions={
-          <Pressable 
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]} 
-            onPress={handleRefresh}
+          <Pressable
+            style={styles.headerAction}
+            onPress={() => logsQuery.refetch()}
           >
             <MaterialIcons
-              name={isRefetching ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
+              name={logsQuery.isRefetching ? "sync" : "refresh"}
+              size={18}
+              color={AdminTheme.colors.surface}
             />
           </Pressable>
         }
       />
 
-      {/* Stats Card */}
-      {hasLogs && (
-        <View style={styles.statsWrapper}>
-          <StatsCard
-            totalLogs={stats.totalLogs}
-            uniqueEntities={stats.uniqueEntities}
-            oldestLog={stats.oldestLog}
-            newestLog={stats.newestLog}
-          />
-        </View>
-      )}
-
-      {/* Filter Bar */}
-      <FilterBar
-        filters={filters}
-        onFilterChange={handleFilterChange}
-        activeFilterCount={activeFilterCount}
-        onClearFilters={handleClearFilters}
-      />
-
-      {/* Cleanup Toolbar */}
-      {hasLogs && (
-        <View style={styles.toolbar}>
-          <View style={styles.toolbarLeft}>
-            <MaterialIcons name="info-outline" size={16} color="#6B7280" />
-            <Text style={styles.toolbarText}>Retention: 30 days auto-delete</Text>
-          </View>
-          <View style={styles.toolbarActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.clearLogsButton,
-                pressed && styles.cleanupButtonPressed,
-              ]}
-              onPress={handleClearLogs}
-              disabled={clearLogsMutation.isPending}
-            >
-              <MaterialIcons name="delete-forever" size={14} color={Colors.error} />
-              <Text style={styles.clearLogsButtonText}>
-                {clearLogsMutation.isPending ? "Clearing..." : "Clear Logs"}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.cleanupButton,
-                pressed && styles.cleanupButtonPressed,
-              ]}
-              onPress={handleRunCleanup}
-            >
-              <LinearGradient
-                colors={["#D97706", "#B45309"]}
-                style={styles.cleanupButtonGradient}
-              >
-                <MaterialIcons name="delete-sweep" size={14} color={Colors.white} />
-                <Text style={styles.cleanupButtonText}>
-                  {purgeMutation.isPending ? "Cleaning..." : "Run Cleanup"}
-                </Text>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
-      {/* Results Info */}
-      {hasLogs && (
-        <View style={styles.resultsInfo}>
-          <View style={styles.resultsLeft}>
-            <MaterialIcons name="list" size={14} color="#6B7280" />
-            <Text style={styles.resultsText}>
-              Showing {filteredLogs.length} {filteredLogs.length === 1 ? "log" : "logs"}
-            </Text>
-          </View>
-          {activeFilterCount > 0 && (
-            <Pressable onPress={handleClearFilters} style={styles.resultsClear}>
-              <Text style={styles.resultsClearText}>Clear filters</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            refreshing={logsQuery.isRefetching}
+            onRefresh={() => logsQuery.refetch()}
+            tintColor={AdminTheme.colors.primary}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {!hasLogs ? (
-          <EmptyState
-            hasFilters={activeFilterCount > 0}
-            onClearFilters={handleClearFilters}
-          />
+        {logsQuery.isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
+            <Text style={styles.loadingText}>Loading audit logs…</Text>
+          </View>
         ) : (
-          filteredLogs.map((log, index) => (
-            <AuditLogCard key={log.id} log={log} index={index} />
-          ))
+          <>
+            <LinearGradient
+              colors={[AdminTheme.colors.primary, AdminTheme.colors.primaryDark || "#15803D"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCard}
+            >
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroBadge}>
+                  <MaterialIcons name="policy" size={14} color={AdminTheme.colors.surface} />
+                  <Text style={styles.heroBadgeText}>Recovery Trail</Text>
+                </View>
+                <View style={styles.heroPill}>
+                  <MaterialIcons name="shield" size={14} color={AdminTheme.colors.surface} />
+                  <Text style={styles.heroPillText}>Admin View</Text>
+                </View>
+              </View>
+              <Text style={styles.heroTitle}>Track every soft-deleted record in one place</Text>
+              <Text style={styles.heroSubtitle}>
+                Review deletion history, confirm who made the change, and clear stale entries when
+                needed.
+              </Text>
+            </LinearGradient>
+
+            <StatsCard
+              totalRecords={stats.totalRecords}
+              entityTypes={stats.entityTypes}
+              latestRecord={stats.latestRecord}
+            />
+
+            <FilterCard
+              selected={entityFilter}
+              onSelect={setEntityFilter}
+              onClear={() => setEntityFilter("ALL")}
+            />
+
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionEyebrow}>Activity Feed</Text>
+                <Text style={styles.sectionHeading}>Soft Delete Activity</Text>
+              </View>
+              {rows.length > 0 ? (
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      "Clear Audit Logs",
+                      "This will remove the visible soft-delete audit logs. Continue?",
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: clearMutation.isPending ? "Clearing..." : "Clear",
+                          style: "destructive",
+                          onPress: () => clearMutation.mutate(),
+                        },
+                      ],
+                    );
+                  }}
+                  disabled={clearMutation.isPending}
+                >
+                  <Text style={styles.clearLogsText}>
+                    {clearMutation.isPending ? "Clearing..." : "Clear Logs"}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {rows.length === 0 ? (
+              <EmptyState hasFilter={entityFilter !== "ALL"} />
+            ) : (
+              rows.map((record) => <AuditCard key={record.id} record={record} />)
+            )}
+          </>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
-
-// ==================== STYLES ====================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#F7FAFC",
   },
-  headerTitle: {
-    fontSize: 24,
+  content: {
+    padding: 20,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 24,
+    gap: 14,
   },
-  headerIconBtn: {
+  heroCard: {
+    borderRadius: 24,
+    padding: 20,
+    gap: 12,
+    overflow: "hidden",
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  heroBadgeText: {
+    color: AdminTheme.colors.surface,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  heroPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  heroPillText: {
+    color: AdminTheme.colors.surface,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  heroTitle: {
+    color: AdminTheme.colors.surface,
+    fontSize: 22,
+    lineHeight: 30,
+    fontWeight: "800",
+    maxWidth: "92%",
+  },
+  heroSubtitle: {
+    color: "rgba(255,255,255,0.86)",
+    fontSize: 13,
+    lineHeight: 20,
+    maxWidth: "95%",
+  },
+  headerAction: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
   },
-  headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    transform: [{ scale: 0.95 }],
+  loadingWrap: {
+    paddingVertical: 80,
+    alignItems: "center",
+    gap: 12,
   },
-
-  // Stats Card
-  statsWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+  loadingText: {
+    color: "#6B7280",
+    fontSize: 15,
   },
   statsCard: {
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
-    padding: 16,
-    overflow: "hidden",
+    padding: 18,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    backgroundColor: "rgba(255,255,255,0.9)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    borderColor: "#E5E7EB",
+    ...AdminTheme.shadow.card,
   },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
   },
   statItem: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -935,525 +543,236 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statNumber: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#111827",
-    marginBottom: 2,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#6B7280",
-    fontWeight: "500",
+    marginTop: 2,
   },
   statDivider: {
     width: 1,
-    height: 30,
+    height: 34,
     backgroundColor: "#E5E7EB",
-    marginHorizontal: 8,
+    marginHorizontal: 10,
   },
-  statsSecondaryRow: {
+  latestRow: {
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
   },
-  statsSecondaryText: {
-    fontSize: 11,
+  latestText: {
+    fontSize: 12,
     color: "#6B7280",
   },
-
-  // Filter Bar
-  filterWrapper: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+  selectorCard: {
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    ...AdminTheme.shadow.card,
   },
-  searchRow: {
+  selectorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  selectorTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  searchContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 48,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.5)",
-    backgroundColor: "rgba(255,255,255,0.7)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  searchInput: {
-    flex: 1,
+  selectorTitle: {
     fontSize: 14,
-    color: "#111827",
-    padding: 0,
-  },
-  filterButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.5)",
-  },
-  filterButtonActive: {
-    borderColor: Colors.primary,
-  },
-  filterButtonBlur: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterBadge: {
-    position: "absolute",
-    top: 2,
-    right: 2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-    borderWidth: 1,
-    borderColor: Colors.white,
-  },
-  filterBadgeText: {
-    color: Colors.white,
-    fontSize: 9,
     fontWeight: "700",
+    color: "#111827",
   },
-  filterChipsContainer: {
-    marginTop: 12,
-    gap: 12,
-  },
-  filterSection: {
-    gap: 8,
-  },
-  filterSectionTitle: {
+  clearText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#374151",
-    marginLeft: 4,
+    fontWeight: "700",
+    color: AdminTheme.colors.primary,
   },
-  filterChipsScroll: {
-    flexGrow: 0,
-  },
-  filterChipsRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 20,
+  selectorScroll: {
+    gap: 10,
+    paddingRight: 12,
   },
   filterChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 6,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
-    gap: 4,
+    borderColor: "#D1D5DB",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
   },
-  filterChipActive: {
-    borderWidth: 1.5,
-    backgroundColor: `${Colors.primary}08`,
+  filterChipSelected: {
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
   },
   filterChipText: {
     fontSize: 12,
-    color: "#4B5563",
-  },
-  filterChipTextActive: {
-    color: Colors.primary,
     fontWeight: "600",
+    color: "#374151",
   },
-  clearFiltersButton: {
-    alignItems: "center",
-    paddingVertical: 8,
+  filterChipTextSelected: {
+    color: AdminTheme.colors.primary,
   },
-  clearFiltersText: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "600",
-  },
-
-  // Toolbar
-  toolbar: {
+  sectionHeaderRow: {
+    marginTop: 4,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
-  toolbarLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    color: AdminTheme.colors.primary,
+    marginBottom: 4,
   },
-  toolbarText: {
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#111827",
+  },
+  clearLogsText: {
     fontSize: 12,
-    color: "#4B5563",
+    fontWeight: "700",
+    color: AdminTheme.colors.danger,
   },
-  toolbarActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  clearLogsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#FCA5A5",
-    backgroundColor: "#FEF2F2",
-  },
-  clearLogsButtonText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.error,
-  },
-  cleanupButton: {
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  cleanupButtonPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  cleanupButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  cleanupButtonText: {
-    color: Colors.white,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  // Results Info
-  resultsInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginHorizontal: 20,
-    marginBottom: 8,
-  },
-  resultsLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  resultsText: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  resultsClear: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: `${Colors.primary}10`,
-  },
-  resultsClearText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-
-  // Content
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 20,
-    gap: 12,
-  },
-
-  // Card Wrapper
-  cardWrapper: {
-    marginBottom: 8,
-  },
-
-  // Audit Card
   auditCard: {
-    borderRadius: 16,
-    overflow: "hidden",
+    backgroundColor: AdminTheme.colors.surface,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    ...AdminTheme.shadow.card,
   },
-  auditCardPressed: {
-    opacity: 0.98,
-  },
-  auditCardInner: {
-    padding: 16,
+  auditCardExpired: {
+    borderColor: "#FECACA",
+    backgroundColor: "#FFFBFB",
   },
   auditHeader: {
-    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   auditHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    flex: 1,
   },
-  entityIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  auditIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  entityInfo: {
+  auditTitleContainer: {
     flex: 1,
   },
-  entityTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+  auditEntityType: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
-  entityType: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  deletedByBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
-  },
-  deletedByText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  entityName: {
+  auditEntityName: {
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#111827",
+    marginTop: 4,
+  },
+  expiredBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#FEE2E2",
+  },
+  expiredBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: AdminTheme.colors.danger,
   },
   actionSummary: {
+    marginTop: 14,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
   actionSummaryText: {
     flex: 1,
-    fontSize: 12,
-    fontWeight: "500",
-  },
-
-  // Timeline
-  timelineContainer: {
-    marginBottom: 16,
-  },
-  timelineItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-  },
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  timelineDotWarning: {
-    backgroundColor: "#D97706",
-  },
-  timelineContent: {
-    flex: 1,
-  },
-  timelineLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  timelineValue: {
     fontSize: 13,
-    fontWeight: "500",
-    color: "#111827",
+    lineHeight: 18,
+    color: "#374151",
   },
-  timelineLine: {
-    width: 2,
-    height: 16,
-    backgroundColor: "#E5E7EB",
-    marginLeft: 3,
-    marginBottom: 4,
+  auditDetails: {
+    marginTop: 12,
+    gap: 8,
   },
-  purgeWarning: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
-  },
-  purgeWarningText: {
-    fontSize: 11,
-    color: "#D97706",
-    fontWeight: "600",
-  },
-
-  // Audit Footer
-  auditFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
-  },
-  auditFooterItem: {
+  auditDetailRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  auditFooterText: {
-    fontSize: 11,
+  auditDetailLabel: {
+    fontSize: 12,
     color: "#6B7280",
+    minWidth: 48,
   },
-
-  // Center Container
-  centerContainer: {
+  auditDetailValue: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    fontSize: 12,
+    color: "#111827",
   },
-  loadingCard: {
-    backgroundColor: Colors.white,
-    padding: 24,
+  emptyState: {
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 24,
     alignItems: "center",
-    gap: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
   },
-  loadingText: {
-    fontSize: 15,
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-
-  // Empty State
-  emptyContainer: {
+  emptyIconWrap: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 48,
-    paddingHorizontal: 20,
-  },
-  emptyIconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 20,
-    overflow: "hidden",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  emptyIconGradient: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#F3F4F6",
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "800",
     color: "#111827",
-    marginBottom: 8,
   },
-  emptyMessage: {
+  emptyText: {
+    marginTop: 8,
     fontSize: 14,
+    lineHeight: 22,
     color: "#6B7280",
     textAlign: "center",
-    lineHeight: 20,
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  emptyButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  emptyButtonGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  emptyButtonText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: "600",
   },
 });

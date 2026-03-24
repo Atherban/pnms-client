@@ -1,7 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import {
@@ -19,14 +19,19 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ModuleScreenFrame from "../common/ModuleScreenFrame";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../navigation/SharedBottomNav";
 import { LabourService } from "../../services/labour.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import type { Labour } from "../../types/labour.types";
 import { formatErrorMessage } from "../../utils/error";
+import { AdminTheme } from "../admin/theme";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import { moduleBadge } from "../common/moduleStyles";
+import StitchCard from "../common/StitchCard";
+import StitchSectionHeader from "../common/StitchSectionHeader";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const BOTTOM_NAV_HEIGHT = 80;
 const WORK_TYPE_OPTIONS = [
   "SEED_SOWING",
   "WATERING",
@@ -47,6 +52,7 @@ export function LaboursModuleScreen({
   title,
   canWrite,
 }: LaboursModuleScreenProps) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const role = useAuthStore((state) => state.user?.role);
   const canDeleteLabours = role === "NURSERY_ADMIN" || role === "SUPER_ADMIN";
@@ -296,7 +302,7 @@ export function LaboursModuleScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.loadingCard}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading labour records...</Text>
         </View>
       </SafeAreaView>
@@ -307,7 +313,7 @@ export function LaboursModuleScreen({
     return (
       <SafeAreaView style={styles.center} edges={["left", "right"]}>
         <View style={styles.errorCard}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
           <Text style={styles.errorTitle}>Failed to Load</Text>
           <Text style={styles.errorMessage}>
             {(error as any)?.message || "Failed to load labour records"}
@@ -322,7 +328,7 @@ export function LaboursModuleScreen({
               pressed && styles.retryButtonPressed,
             ]}
           >
-            <MaterialIcons name="refresh" size={20} color={Colors.white} />
+            <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
             <Text style={styles.retryButtonText}>Try Again</Text>
           </Pressable>
         </View>
@@ -331,129 +337,28 @@ export function LaboursModuleScreen({
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      {/* Header with Gradient */}
-      <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <MaterialIcons name="people" size={24} color={Colors.white} />
-            <View>
-              <Text style={styles.headerTitle}>{title}</Text>
-              <Text style={styles.headerSubtitle}>
-                {stats.totalRecords} records • {stats.uniqueWorkers} workers
-              </Text>
-            </View>
-          </View>
-          {canWrite && (
-            <Pressable
-              onPress={toggleForm}
-              style={({ pressed }) => [
-                styles.addButton,
-                pressed && styles.addButtonPressed,
-              ]}
-            >
-              <MaterialIcons
-                name={showForm ? "close" : "add"}
-                size={20}
-                color={Colors.white}
-              />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Stats Cards */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <View
-              style={[
-                styles.statIconContainer,
-                { backgroundColor: Colors.primary },
-              ]}
-            >
-              <MaterialIcons
-                name="access-time"
-                size={16}
-                color={Colors.white}
-              />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statValue}>{stats.totalHours}</Text>
-              <Text style={styles.statLabel}>Total Hours</Text>
-            </View>
-          </View>
-
-          <View style={styles.statCard}>
-            <View
-              style={[
-                styles.statIconContainer,
-                { backgroundColor: Colors.success },
-              ]}
-            >
-              <MaterialIcons
-                name="currency-rupee"
-                size={16}
-                color={Colors.white}
-              />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statValue}>
-                {formatCurrency(stats.totalWage)}
-              </Text>
-              <Text style={styles.statLabel}>Total Cost</Text>
-            </View>
-          </View>
-
-          <View style={styles.statCard}>
-            <View
-              style={[
-                styles.statIconContainer,
-                { backgroundColor: Colors.warning },
-              ]}
-            >
-              <MaterialIcons
-                name="trending-up"
-                size={16}
-                color={Colors.white}
-              />
-            </View>
-            <View style={styles.statInfo}>
-              <Text style={styles.statValue}>
-                {formatCurrency(stats.averageWage)}
-              </Text>
-              <Text style={styles.statLabel}>Avg Wage/Hr</Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-
-      {/* Search Bar */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color={Colors.textSecondary} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by name, work type, or date..."
-            placeholderTextColor={Colors.textTertiary}
-            style={styles.searchInput}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} style={styles.clearButton}>
-              <MaterialIcons
-                name="close"
-                size={20}
-                color={Colors.textSecondary}
-              />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
+    <ModuleScreenFrame
+      title={title}
+      subtitle={`${stats.totalRecords} records • ${stats.uniqueWorkers} workers`}
+      onBackPress={() => router.back()}
+      actions={
+        canWrite ? (
+          <Pressable
+            onPress={toggleForm}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+            ]}
+          >
+            <MaterialIcons
+              name={showForm ? "close" : "add"}
+              size={20}
+              color={AdminTheme.colors.surface}
+            />
+          </Pressable>
+        ) : null
+      }
+    >
       {/* Form Bottom Sheet */}
       {canWrite && (
         <Modal
@@ -483,7 +388,7 @@ export function LaboursModuleScreen({
               <MaterialIcons
                 name={editing ? "edit" : "person-add"}
                 size={20}
-                color={Colors.primary}
+                color={AdminTheme.colors.primary}
               />
               <Text style={styles.formTitle}>
                 {editing ? "Edit Labour Record" : "Add Labour Record"}
@@ -494,7 +399,7 @@ export function LaboursModuleScreen({
                 <MaterialIcons
                   name="refresh"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
             )}
@@ -512,7 +417,7 @@ export function LaboursModuleScreen({
                 <MaterialIcons
                   name="person"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Labour Name *</Text>
               </View>
@@ -520,7 +425,7 @@ export function LaboursModuleScreen({
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter labour name"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 style={[
                   styles.input,
                   !name.trim() && name.length > 0 && styles.inputError,
@@ -537,7 +442,7 @@ export function LaboursModuleScreen({
                 <MaterialIcons
                   name="work"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Work Type *</Text>
               </View>
@@ -567,7 +472,7 @@ export function LaboursModuleScreen({
                       : "keyboard-arrow-down"
                   }
                   size={20}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
               {showWorkTypeDropdown && (
@@ -592,8 +497,8 @@ export function LaboursModuleScreen({
                           size={16}
                           color={
                             workType === option
-                              ? Colors.primary
-                              : Colors.textSecondary
+                              ? AdminTheme.colors.primary
+                              : AdminTheme.colors.textMuted
                           }
                         />
                         <Text
@@ -609,7 +514,7 @@ export function LaboursModuleScreen({
                         <MaterialIcons
                           name="check-circle"
                           size={16}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                       )}
                     </Pressable>
@@ -628,7 +533,7 @@ export function LaboursModuleScreen({
                   <MaterialIcons
                     name="access-time"
                     size={16}
-                    color={Colors.textSecondary}
+                    color={AdminTheme.colors.textMuted}
                   />
                   <Text style={styles.inputLabelText}>Hours Worked</Text>
                 </View>
@@ -638,7 +543,7 @@ export function LaboursModuleScreen({
                     setHoursWorked(text.replace(/[^0-9.]/g, ""))
                   }
                   placeholder="0.0"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                   keyboardType="decimal-pad"
                   style={styles.input}
                 />
@@ -649,7 +554,7 @@ export function LaboursModuleScreen({
                   <MaterialIcons
                     name="currency-rupee"
                     size={16}
-                    color={Colors.textSecondary}
+                    color={AdminTheme.colors.textMuted}
                   />
                   <Text style={styles.inputLabelText}>Wage/Hour</Text>
                 </View>
@@ -659,7 +564,7 @@ export function LaboursModuleScreen({
                     setWagePerHour(text.replace(/[^0-9.]/g, ""))
                   }
                   placeholder="0.00"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                   keyboardType="decimal-pad"
                   style={styles.input}
                 />
@@ -672,16 +577,16 @@ export function LaboursModuleScreen({
               Number(hoursWorked) > 0 &&
               Number(wagePerHour) > 0 && (
                 <View style={styles.costPreview}>
-                  <LinearGradient
-                    colors={[Colors.success + "20", Colors.success + "10"]}
-                    style={styles.costPreviewGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
+                  <View
+                    style={[
+                      styles.costPreviewGradient,
+                      { backgroundColor: AdminTheme.colors.success + "12" },
+                    ]}
                   >
                     <MaterialIcons
                       name="calculate"
                       size={16}
-                      color={Colors.success}
+                      color={AdminTheme.colors.success}
                     />
                     <Text style={styles.costPreviewLabel}>
                       Total Labour Cost:
@@ -691,7 +596,7 @@ export function LaboursModuleScreen({
                         Number(hoursWorked) * Number(wagePerHour),
                       )}
                     </Text>
-                  </LinearGradient>
+                  </View>
                 </View>
               )}
 
@@ -701,7 +606,7 @@ export function LaboursModuleScreen({
                 <MaterialIcons
                   name="calendar-month"
                   size={16}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.inputLabelText}>Date</Text>
               </View>
@@ -713,7 +618,7 @@ export function LaboursModuleScreen({
                 <MaterialIcons
                   name="calendar-today"
                   size={18}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
               </Pressable>
             </View>
@@ -744,19 +649,20 @@ export function LaboursModuleScreen({
                   pressed && styles.saveFormButtonPressed,
                 ]}
               >
-                <LinearGradient
-                  colors={
-                    !isFormValid() || saveMutation.isPending
-                      ? [Colors.border, Colors.borderLight]
-                      : [Colors.success, "#34D399"]
-                  }
-                  style={styles.saveFormGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                <View
+                  style={[
+                    styles.saveFormGradient,
+                    {
+                      backgroundColor:
+                        !isFormValid() || saveMutation.isPending
+                          ? AdminTheme.colors.border
+                          : AdminTheme.colors.success,
+                    },
+                  ]}
                 >
                   {saveMutation.isPending ? (
                     <>
-                      <ActivityIndicator size="small" color={Colors.white} />
+                      <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
                       <Text style={styles.saveFormButtonText}>Saving...</Text>
                     </>
                   ) : (
@@ -764,14 +670,14 @@ export function LaboursModuleScreen({
                       <MaterialIcons
                         name="check-circle"
                         size={18}
-                        color={Colors.white}
+                        color={AdminTheme.colors.surface}
                       />
                       <Text style={styles.saveFormButtonText}>
                         {editing ? "Update" : "Save Record"}
                       </Text>
                     </>
                   )}
-                </LinearGradient>
+                </View>
               </Pressable>
             </View>
           </ScrollView>
@@ -797,24 +703,58 @@ export function LaboursModuleScreen({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        ListFooterComponent={<View style={styles.bottomSpacer} />}
         ListHeaderComponent={
-          filtered.length > 0 ? (
-            <View style={styles.listHeader}>
-              <Text style={styles.listHeaderTitle}>Labour Records</Text>
-              <Text style={styles.listHeaderCount}>
-                {filtered.length} records
-              </Text>
-            </View>
-          ) : null
+          <>
+            <ModuleScreenIntro
+              stats={[
+                {
+                  label: "Total Hours",
+                  value: stats.totalHours,
+                  icon: "access-time",
+                  tone: "info",
+                },
+                {
+                  label: "Total Cost",
+                  value: formatCurrency(stats.totalWage),
+                  icon: "currency-rupee",
+                  tone: "success",
+                },
+                {
+                  label: "Avg Wage/Hr",
+                  value: formatCurrency(stats.averageWage),
+                  icon: "trending-up",
+                  tone: "warning",
+                },
+                {
+                  label: "Workers",
+                  value: stats.uniqueWorkers,
+                  icon: "groups",
+                  tone: "primary",
+                },
+              ]}
+              search={{
+                value: search,
+                onChangeText: setSearch,
+                onClear: () => setSearch(""),
+                placeholder: "Search by name, work type, or date...",
+              }}
+            />
+            <StitchSectionHeader
+              title="Labour Records"
+              subtitle={`${filtered.length} records`}
+            />
+          </>
         }
+        ListFooterComponent={<View style={styles.bottomSpacer} />}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialIcons
+          <StitchCard style={styles.emptyContainer}>
+            <View style={{alignItems: "center", gap: AdminTheme.spacing.md}}>
+              <MaterialIcons
               name="people-outline"
               size={64}
-              color={Colors.textTertiary}
+              color={AdminTheme.colors.textSoft}
             />
+            </View>
             <Text style={styles.emptyTitle}>
               {search ? "No Results Found" : "No Labour Records"}
             </Text>
@@ -825,7 +765,7 @@ export function LaboursModuleScreen({
                   ? "Tap the + button to add your first labour record."
                   : "No labour records available."}
             </Text>
-          </View>
+          </StitchCard>
         }
         renderItem={({ item }) => {
           const hours = Number(item.hoursWorked ?? 0);
@@ -834,7 +774,7 @@ export function LaboursModuleScreen({
           const workTypeIcon = getWorkTypeIcon(item.workType);
 
           return (
-            <View style={styles.labourCard}>
+            <StitchCard style={styles.labourCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardHeaderLeft}>
                   <View style={styles.workerAvatar}>
@@ -849,7 +789,7 @@ export function LaboursModuleScreen({
                         <MaterialIcons
                           name={workTypeIcon}
                           size={12}
-                          color={Colors.primary}
+                          color={AdminTheme.colors.primary}
                         />
                         <Text style={styles.workTypeText}>{item.workType}</Text>
                       </View>
@@ -867,7 +807,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="more-vert"
                       size={20}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                   </Pressable>
                 )}
@@ -880,7 +820,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="access-time"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Hours:</Text>
                     <Text style={styles.detailValue}>{hours}</Text>
@@ -889,7 +829,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="currency-rupee"
                       size={14}
-                      color={Colors.textSecondary}
+                      color={AdminTheme.colors.textMuted}
                     />
                     <Text style={styles.detailLabel}>Wage/Hr:</Text>
                     <Text style={styles.detailValue}>{wage}</Text>
@@ -902,7 +842,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="receipt"
                       size={14}
-                      color={Colors.success}
+                      color={AdminTheme.colors.success}
                     />
                     <Text style={styles.totalCostLabel}>Total Cost:</Text>
                     <Text style={styles.totalCostValue}>
@@ -917,7 +857,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="calendar-today"
                       size={12}
-                      color={Colors.textTertiary}
+                      color={AdminTheme.colors.textSoft}
                     />
                     <Text style={styles.dateText}>{formatDate(item.date)}</Text>
                   </View>
@@ -938,7 +878,7 @@ export function LaboursModuleScreen({
                     <MaterialIcons
                       name="edit"
                       size={14}
-                      color={Colors.primary}
+                      color={AdminTheme.colors.primary}
                     />
                     <Text style={styles.editActionText}>Edit</Text>
                   </Pressable>
@@ -954,62 +894,41 @@ export function LaboursModuleScreen({
                       <MaterialIcons
                         name="delete-outline"
                         size={14}
-                        color={Colors.error}
+                        color={AdminTheme.colors.danger}
                       />
                       <Text style={styles.deleteActionText}>Delete</Text>
                     </Pressable>
                   )}
                 </View>
               )}
-            </View>
+            </StitchCard>
           );
         }}
       />
-    </SafeAreaView>
+    </ModuleScreenFrame>
   );
 }
 
 /* -------------------- Styles -------------------- */
 
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
+
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: AdminTheme.colors.background,
   },
   center: {
     flex: 1,
     justifyContent: "center" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.background,
-  },
-  // Header Styles
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.lg,
-  },
-  headerLeft: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: Spacing.md,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.9)",
+    backgroundColor: AdminTheme.colors.background,
   },
   addButton: {
     width: 44,
@@ -1023,75 +942,15 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     transform: [{ scale: 0.95 }],
   },
-  // Stats Styles
-  statsGrid: {
-    flexDirection: "row" as const,
-    gap: Spacing.sm,
-  },
-  statCard: {
-    flex: 1,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  statIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  statInfo: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 10,
-    color: "rgba(255, 255, 255, 0.8)",
-  },
-  // Search Styles
-  searchSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.background,
-  },
-  searchContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    paddingHorizontal: Spacing.md,
-    minHeight: 50,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  clearButton: {
-    padding: Spacing.xs,
-  },
   // Loading & Error States
   loadingCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.xl,
     borderRadius: 20,
     alignItems: "center" as const,
-    gap: Spacing.lg,
-    shadowColor: Colors.shadow,
+    gap: AdminTheme.spacing.lg,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -1099,50 +958,51 @@ const styles = {
   },
   loadingText: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorCard: {
-    backgroundColor: Colors.white,
-    padding: Spacing.xl,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
+    padding: AdminTheme.spacing.xl,
     borderRadius: 20,
     alignItems: "center" as const,
-    gap: Spacing.md,
-    shadowColor: Colors.shadow,
+    gap: AdminTheme.spacing.md,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 4,
-    maxWidth: SCREEN_WIDTH - Spacing.xl * 2,
+    maxWidth: SCREEN_WIDTH - AdminTheme.spacing.xl * 2,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
-    marginTop: Spacing.sm,
+    color: AdminTheme.colors.danger,
+    marginTop: AdminTheme.spacing.sm,
   },
   errorMessage: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   retryButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
     borderRadius: 12,
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
+    marginTop: AdminTheme.spacing.sm,
   },
   retryButtonPressed: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: AdminTheme.colors.primaryDark,
     transform: [{ scale: 0.98 }],
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "600" as const,
   },
@@ -1157,7 +1017,7 @@ const styles = {
     justifyContent: "flex-end" as const,
   },
   sheetContainer: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "88%" as const,
@@ -1167,10 +1027,10 @@ const styles = {
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Colors.border,
+    backgroundColor: AdminTheme.colors.border,
     alignSelf: "center" as const,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
+    marginTop: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.xs,
   },
   formScroll: {
     flexGrow: 0,
@@ -1179,51 +1039,51 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surface,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   formTitleContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   formTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   resetButton: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   formContainer: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
   },
   inputWrapper: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   inputLabel: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.xs,
   },
   inputLabelText: {
     fontSize: 13,
     fontWeight: "500" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   input: {
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.text,
-    backgroundColor: Colors.white,
+    color: AdminTheme.colors.text,
+    backgroundColor: AdminTheme.colors.surface,
     minHeight: 50,
   },
   dropdownTrigger: {
@@ -1233,48 +1093,48 @@ const styles = {
   },
   dropdownTriggerText: {
     fontSize: 16,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   dropdownPlaceholderText: {
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     fontWeight: "400" as const,
   },
   dropdownMenu: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: AdminTheme.colors.border,
     borderRadius: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     overflow: "hidden" as const,
   },
   dropdownOption: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm + 2,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
+    borderBottomColor: AdminTheme.colors.borderSoft,
   },
   dropdownOptionLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   dropdownOptionSelected: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   dropdownOptionPressed: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   dropdownOptionText: {
     fontSize: 14,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   dropdownOptionTextSelected: {
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "700" as const,
   },
   dateInput: {
@@ -1287,72 +1147,72 @@ const styles = {
   },
   dateInputText: {
     fontSize: 16,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
   },
   inputError: {
-    borderColor: Colors.error,
+    borderColor: AdminTheme.colors.danger,
   },
   fieldError: {
     fontSize: 12,
-    color: Colors.error,
-    paddingHorizontal: Spacing.xs,
+    color: AdminTheme.colors.danger,
+    paddingHorizontal: AdminTheme.spacing.xs,
   },
   rowContainer: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   halfWidth: {
     flex: 1,
   },
   costPreview: {
-    marginTop: Spacing.xs,
+    marginTop: AdminTheme.spacing.xs,
   },
   costPreviewGradient: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderRadius: 12,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   costPreviewLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   costPreviewValue: {
     fontSize: 14,
     fontWeight: "700" as const,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
   },
   formActions: {
     flexDirection: "row" as const,
-    gap: Spacing.md,
-    marginTop: Spacing.sm,
+    gap: AdminTheme.spacing.md,
+    marginTop: AdminTheme.spacing.sm,
   },
   cancelFormButton: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingVertical: AdminTheme.spacing.md,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
   },
   cancelFormButtonPressed: {
-    backgroundColor: Colors.surfaceDark,
+    backgroundColor: AdminTheme.colors.surfaceDark,
     transform: [{ scale: 0.98 }],
   },
   cancelFormButtonText: {
     fontSize: 15,
     fontWeight: "600" as const,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   saveFormButton: {
     flex: 2,
     borderRadius: 12,
     overflow: "hidden" as const,
-    shadowColor: Colors.success,
+    shadowColor: AdminTheme.colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1369,66 +1229,68 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   saveFormButtonText: {
     fontSize: 15,
     fontWeight: "700" as const,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   // List Styles
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xs,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.xs,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
     flexGrow: 1,
   },
   bottomSpacer: {
-    height: Spacing.sm,
+    height: AdminTheme.spacing.sm,
   },
   listHeader: {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
   },
   listHeaderTitle: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   listHeaderCount: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   emptyContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl * 2,
-    gap: Spacing.md,
+    paddingVertical: AdminTheme.spacing.xl * 2,
+    gap: AdminTheme.spacing.md,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600" as const,
-    color: Colors.text,
-    marginTop: Spacing.md,
+    color: AdminTheme.colors.text,
+    marginTop: AdminTheme.spacing.md,
+    textAlign: "center" as const,
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   // Labour Card Styles
   labourCard: {
-    backgroundColor: Colors.white,
+    ...cardSurface,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.lg,
-    marginBottom: Spacing.sm,
+    padding: AdminTheme.spacing.lg,
+    marginBottom: AdminTheme.spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
@@ -1438,26 +1300,26 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   cardHeaderLeft: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
     flex: 1,
   },
   workerAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primary + "20",
+    backgroundColor: AdminTheme.colors.primary + "20",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
   workerInitials: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   workerInfo: {
     flex: 1,
@@ -1466,13 +1328,14 @@ const styles = {
   workerName: {
     fontSize: 16,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   workTypeBadge: {
+    ...moduleBadge,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.primary + "10",
-    paddingHorizontal: Spacing.sm,
+    backgroundColor: AdminTheme.colors.primary + "10",
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 2,
     borderRadius: 12,
     alignSelf: "flex-start" as const,
@@ -1481,7 +1344,7 @@ const styles = {
   workTypeText: {
     fontSize: 11,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   cardMenuButton: {
     width: 36,
@@ -1491,15 +1354,15 @@ const styles = {
     justifyContent: "center" as const,
   },
   cardMenuButtonPressed: {
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
   },
   cardDetails: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.xs,
   },
   detailRow: {
     flexDirection: "row" as const,
-    gap: Spacing.lg,
+    gap: AdminTheme.spacing.lg,
   },
   detailItem: {
     flexDirection: "row" as const,
@@ -1508,29 +1371,29 @@ const styles = {
   },
   detailLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   detailValue: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   totalCostContainer: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.success + "10",
-    padding: Spacing.sm,
+    backgroundColor: AdminTheme.colors.success + "10",
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
     gap: 6,
   },
   totalCostLabel: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   totalCostValue: {
     fontSize: 14,
     fontWeight: "700" as const,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
   },
   dateContainer: {
     flexDirection: "row" as const,
@@ -1539,21 +1402,21 @@ const styles = {
   },
   dateText: {
     fontSize: 12,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
   },
   cardActions: {
     flexDirection: "row" as const,
     justifyContent: "flex-end" as const,
-    gap: Spacing.sm,
-    paddingTop: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
+    paddingTop: AdminTheme.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: Colors.borderLight,
+    borderTopColor: AdminTheme.colors.borderSoft,
   },
   actionButton: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     minHeight: 40,
     borderRadius: 8,
     gap: 6,
@@ -1563,19 +1426,19 @@ const styles = {
     opacity: 0.8,
   },
   editAction: {
-    backgroundColor: Colors.primary + "10",
+    backgroundColor: AdminTheme.colors.primary + "10",
   },
   editActionText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   deleteAction: {
-    backgroundColor: Colors.error + "10",
+    backgroundColor: AdminTheme.colors.danger + "10",
   },
   deleteActionText: {
     fontSize: 13,
     fontWeight: "600" as const,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
 };

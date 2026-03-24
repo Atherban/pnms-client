@@ -1,8 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   Alert,
@@ -15,15 +14,18 @@ import {
   TextInput,
   View,
   Platform,
+  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import FixedHeader from "../../../components/common/FixedHeader";
+import StitchCard from "../../../components/common/StitchCard";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { PaymentService } from "../../../services/payment.service";
 import { useAuthStore } from "../../../stores/auth.store";
-import { Colors } from "../../../theme";
 
 const BOTTOM_NAV_HEIGHT = 80;
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 const formatMoney = (amount: number) => 
   new Intl.NumberFormat("en-IN", {
@@ -116,55 +118,52 @@ interface StatsCardProps {
 }
 
 const StatsCard = ({ total, pending, approved, rejected }: StatsCardProps) => (
-  <BlurView intensity={80} tint="light" style={styles.statsCard}>
+  <View style={styles.statsCard}>
     <View style={styles.statsRow}>
+
       <View style={styles.statItem}>
-        <View style={[styles.statIcon, { backgroundColor: `${Colors.primary}20` }]}>
-          <MaterialIcons name="receipt" size={16} color={Colors.primary} />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{total}</Text>
+        <View style={[styles.statIcon, { backgroundColor: `${AdminTheme.colors.primary}20` }]}>
           <Text style={styles.statLabel}>Total</Text>
+          <MaterialIcons name="receipt" size={16} color={AdminTheme.colors.primary} />
+          <Text style={styles.statNumber}>{total}</Text>
         </View>
+        
       </View>
 
-      <View style={styles.statDivider} />
+      
 
       <View style={styles.statItem}>
         <View style={[styles.statIcon, { backgroundColor: "#D9770620" }]}>
-          <MaterialIcons name="pending" size={16} color="#D97706" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{pending}</Text>
           <Text style={styles.statLabel}>Pending</Text>
+          <MaterialIcons name="pending" size={16} color="#D97706" />
+          <Text style={styles.statNumber}>{pending}</Text>
         </View>
+        
+        
       </View>
 
-      <View style={styles.statDivider} />
+      
 
       <View style={styles.statItem}>
         <View style={[styles.statIcon, { backgroundColor: "#05966920" }]}>
-          <MaterialIcons name="check-circle" size={16} color="#059669" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{approved}</Text>
           <Text style={styles.statLabel}>Approved</Text>
+          <MaterialIcons name="check-circle" size={16} color="#059669" />
+          <Text style={styles.statNumber}>{approved}</Text>
         </View>
+       
       </View>
 
-      <View style={styles.statDivider} />
+
 
       <View style={styles.statItem}>
         <View style={[styles.statIcon, { backgroundColor: "#DC262620" }]}>
-          <MaterialIcons name="cancel" size={16} color="#DC2626" />
-        </View>
-        <View style={styles.statInfo}>
-          <Text style={styles.statNumber}>{rejected}</Text>
           <Text style={styles.statLabel}>Rejected</Text>
+          <MaterialIcons name="cancel" size={16} color="#DC2626" />
+          <Text style={styles.statNumber}>{rejected}</Text>
         </View>
       </View>
     </View>
-  </BlurView>
+  </View>
 );
 
 // ==================== PAYMENT CARD ====================
@@ -196,7 +195,7 @@ const PaymentCard = ({ proof, onPress }: PaymentCardProps) => {
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
-            <View style={[styles.avatar, { backgroundColor: `${Colors.primary}10` }]}>
+            <View style={[styles.avatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
               <Text style={styles.avatarText}>
                 {customerName?.charAt(0).toUpperCase() || "?"}
               </Text>
@@ -312,10 +311,10 @@ const DetailsModal = ({
           style={styles.modalKeyboardAvoid}
         >
           <View style={styles.modalSheet}>
-            <BlurView intensity={90} tint="light" style={styles.modalBlur}>
+            <View style={styles.modalBlur}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
-                <View style={[styles.modalAvatar, { backgroundColor: `${Colors.primary}10` }]}>
+                <View style={[styles.modalAvatar, { backgroundColor: `${AdminTheme.colors.primary}10` }]}>
                   <Text style={styles.modalAvatarText}>
                     {customerName?.charAt(0).toUpperCase() || "?"}
                   </Text>
@@ -479,26 +478,20 @@ const DetailsModal = ({
                   disabled={isPending}
                   style={[styles.modalRejectButton, isPending && styles.modalButtonDisabled]}
                 >
-                  <LinearGradient
-                    colors={["#DC2626", "#B91C1C"]}
-                    style={styles.modalButtonGradient}
-                  >
-                    <MaterialIcons name="close" size={18} color={Colors.white} />
+                  <View style={[styles.modalButtonGradient, { backgroundColor: "#DC2626" }]}>
+                    <MaterialIcons name="close" size={18} color={AdminTheme.colors.surface} />
                     <Text style={styles.modalButtonText}>Reject</Text>
-                  </LinearGradient>
+                  </View>
                 </Pressable>
                 <Pressable
                   onPress={onApprove}
                   disabled={isPending}
                   style={[styles.modalApproveButton, isPending && styles.modalButtonDisabled]}
                 >
-                  <LinearGradient
-                    colors={["#059669", "#047857"]}
-                    style={styles.modalButtonGradient}
-                  >
-                    <MaterialIcons name="check" size={18} color={Colors.white} />
+                  <View style={[styles.modalButtonGradient, { backgroundColor: "#059669" }]}>
+                    <MaterialIcons name="check" size={18} color={AdminTheme.colors.surface} />
                     <Text style={styles.modalButtonText}>Approve</Text>
-                  </LinearGradient>
+                  </View>
                 </Pressable>
               </View>
             )}
@@ -519,7 +512,7 @@ const DetailsModal = ({
                 </Pressable>
               </View>
             )}
-            </BlurView>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </View>
@@ -530,6 +523,7 @@ const DetailsModal = ({
 // ==================== MAIN COMPONENT ====================
 
 export default function AdminPaymentVerificationScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const [selectedProofId, setSelectedProofId] = useState<string | null>(null);
@@ -609,22 +603,22 @@ export default function AdminPaymentVerificationScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <StitchHeader
         title="Payment Verification"
         subtitle="Approve or reject payment screenshots"
-        titleStyle={styles.headerTitle}
+        onBackPress={() => router.back()}
         actions={
-          <Pressable 
+          <Pressable
             style={({ pressed }) => [
               styles.headerIconBtn,
               pressed && styles.headerIconBtnPressed,
-            ]} 
+            ]}
             onPress={handleRefresh}
           >
             <MaterialIcons
               name={isRefetching ? "sync" : "refresh"}
               size={20}
-              color={Colors.white}
+              color={AdminTheme.colors.surface}
             />
           </Pressable>
         }
@@ -646,12 +640,9 @@ export default function AdminPaymentVerificationScreen() {
       >
         {proofs.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <LinearGradient
-              colors={["#F3F4F6", "#F9FAFB"]}
-              style={styles.emptyIconContainer}
-            >
+            <View style={styles.emptyIconContainer}>
               <MaterialIcons name="receipt" size={48} color="#9CA3AF" />
-            </LinearGradient>
+            </View>
             <Text style={styles.emptyTitle}>No Payment Proofs</Text>
             <Text style={styles.emptyText}>
               Payment screenshots submitted by customers will appear here
@@ -685,62 +676,50 @@ export default function AdminPaymentVerificationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
-  },
-  headerTitle: {
-    fontSize: 24,
+    backgroundColor: AdminTheme.colors.background,
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
+    borderColor: "rgba(255, 255, 255, 0.3)",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.21)",
   },
   headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    
     transform: [{ scale: 0.95 }],
   },
 
   // Stats Card
   statsCard: {
     marginHorizontal: 20,
+    gap:10,
     marginTop: 20,
     marginBottom: 8,
-    borderRadius: 20,
-    padding: 12,
+    // backgroundColor:"red",
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    backgroundColor: "rgba(255,255,255,0.7)",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    
   },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "center",
+    // backgroundColor:"red"
   },
   statItem: {
     flex: 1,
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     gap: 8,
   },
   statIcon: {
-    width: 36,
-    height: 36,
+    flexDirection:"column",
+    width: SCREEN_WIDTH / 4 -20,
+    paddingVertical: 12,
+    gap:5,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
@@ -761,7 +740,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     width: 1,
-    height: 30,
+    height: "100%",
     backgroundColor: "rgba(0,0,0,0.1)",
     marginHorizontal: 8,
   },
@@ -776,7 +755,7 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
@@ -818,7 +797,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 18,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   customerInfo: {
     flex: 1,
@@ -996,7 +975,7 @@ const styles = StyleSheet.create({
   modalAvatarText: {
     fontSize: 20,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   modalTitle: {
     fontSize: 18,
@@ -1156,7 +1135,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modalCancelButtonText: {
     fontSize: 14,
@@ -1186,7 +1165,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   modalButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1199,12 +1178,12 @@ const styles = StyleSheet.create({
   modalCloseAction: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: Colors.primary,
+    backgroundColor: AdminTheme.colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
   modalCloseActionText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 15,
     fontWeight: "600",
   },

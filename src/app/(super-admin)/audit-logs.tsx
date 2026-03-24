@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,16 +16,16 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import SuperAdminHeader from "../../components/super-admin/SuperAdminHeader";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../../components/navigation/SharedBottomNav";
+import { SuperAdminTheme } from "../../components/super-admin/theme";
 import { NurseryService } from "../../services/nursery.service";
 import {
   SoftDeleteService,
   SoftDeletedAuditRow,
   SoftDeletedCollectionItem,
 } from "../../services/soft-delete.service";
-import { Colors } from "../../theme";
 
-const BOTTOM_NAV_HEIGHT = 80;
 const COLLECTION_FILTERS = [
   "ALL",
   "users",
@@ -140,9 +141,9 @@ const StatsCard = ({
     <View style={styles.statsRow}>
       <View style={styles.statItem}>
         <View
-          style={[styles.statIcon, { backgroundColor: `${Colors.primary}10` }]}
+          style={[styles.statIcon, { backgroundColor: `${SuperAdminTheme.colors.primary}10` }]}
         >
-          <MaterialIcons name="delete" size={16} color={Colors.primary} />
+          <MaterialIcons name="delete" size={16} color={SuperAdminTheme.colors.primary} />
         </View>
         <View style={styles.statInfo}>
           <Text style={styles.statNumber}>{totalRecords}</Text>
@@ -154,9 +155,9 @@ const StatsCard = ({
 
       <View style={styles.statItem}>
         <View
-          style={[styles.statIcon, { backgroundColor: `${Colors.info}10` }]}
+          style={[styles.statIcon, { backgroundColor: `${SuperAdminTheme.colors.info}10` }]}
         >
-          <MaterialIcons name="category" size={16} color={Colors.info} />
+          <MaterialIcons name="category" size={16} color={SuperAdminTheme.colors.info} />
         </View>
         <View style={styles.statInfo}>
           <Text style={styles.statNumber}>{entityTypes}</Text>
@@ -182,7 +183,7 @@ const NurserySelector = ({
 }: NurserySelectorProps) => (
   <View style={styles.selectorCard}>
     <View style={styles.selectorHeader}>
-      <MaterialIcons name="store" size={18} color={Colors.primary} />
+      <MaterialIcons name="store" size={18} color={SuperAdminTheme.colors.primary} />
       <Text style={styles.selectorTitle}>Select Nursery</Text>
     </View>
 
@@ -211,7 +212,7 @@ const NurserySelector = ({
           <MaterialIcons
             name="check-circle"
             size={14}
-            color={Colors.primary}
+            color={SuperAdminTheme.colors.primary}
           />
         )}
       </Pressable>
@@ -239,7 +240,7 @@ const NurserySelector = ({
               <MaterialIcons
                 name="check-circle"
                 size={14}
-                color={Colors.primary}
+                color={SuperAdminTheme.colors.primary}
               />
             )}
           </Pressable>
@@ -264,9 +265,9 @@ const AuditCard = ({ record }: AuditCardProps) => {
       <View style={styles.auditHeader}>
         <View style={styles.auditHeaderLeft}>
           <View
-            style={[styles.auditIcon, { backgroundColor: `${Colors.error}10` }]}
+            style={[styles.auditIcon, { backgroundColor: `${SuperAdminTheme.colors.danger}10` }]}
           >
-            <MaterialIcons name={icon as any} size={18} color={Colors.error} />
+            <MaterialIcons name={icon as any} size={18} color={SuperAdminTheme.colors.danger} />
           </View>
           <View style={styles.auditTitleContainer}>
             <Text style={styles.auditEntityType}>{record.entityType}</Text>
@@ -279,10 +280,10 @@ const AuditCard = ({ record }: AuditCardProps) => {
           <View
             style={[
               styles.expiredBadge,
-              { backgroundColor: `${Colors.error}10` },
+              { backgroundColor: `${SuperAdminTheme.colors.danger}10` },
             ]}
           >
-            <MaterialIcons name="warning" size={12} color={Colors.error} />
+            <MaterialIcons name="warning" size={12} color={SuperAdminTheme.colors.danger} />
             <Text style={styles.expiredBadgeText}>Expired</Text>
           </View>
         )}
@@ -292,7 +293,7 @@ const AuditCard = ({ record }: AuditCardProps) => {
         <MaterialIcons
           name="history-toggle-off"
           size={14}
-          color={Colors.primary}
+          color={SuperAdminTheme.colors.primary}
         />
         <Text style={styles.actionSummaryText}>{getAuditSummary(record)}</Text>
       </View>
@@ -312,7 +313,7 @@ const AuditCard = ({ record }: AuditCardProps) => {
           <Text
             style={[
               styles.auditDetailValue,
-              isExpired && { color: Colors.error },
+              isExpired && { color: SuperAdminTheme.colors.danger },
             ]}
           >
             {formatDateTime(record.purgeAt)}
@@ -359,10 +360,10 @@ const CollectionItemCard = ({
         disabled={isDeleting}
       >
         {isDeleting ? (
-          <ActivityIndicator size="small" color={Colors.error} />
+          <ActivityIndicator size="small" color={SuperAdminTheme.colors.danger} />
         ) : (
           <>
-            <MaterialIcons name="delete-forever" size={14} color={Colors.error} />
+            <MaterialIcons name="delete-forever" size={14} color={SuperAdminTheme.colors.danger} />
             <Text style={styles.deleteOneText}>Permanent Delete</Text>
           </>
         )}
@@ -383,6 +384,7 @@ export default function SuperAdminAuditLogsScreen() {
   const [nurseryId, setNurseryId] = useState<string | undefined>(undefined);
   const [collectionFilter, setCollectionFilter] =
     useState<CollectionFilter>("ALL");
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: nurseries = [], isLoading: loadingNurseries } = useQuery({
@@ -538,12 +540,18 @@ export default function SuperAdminAuditLogsScreen() {
   if (loadingNurseries) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-        <FixedHeader
+        <SuperAdminHeader
           title="Audit Logs"
           subtitle="Loading nurseries..."
+          onBackPress={() => router.back()}
+          actions={
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+              <MaterialIcons name="refresh" size={20} color={SuperAdminTheme.colors.surface} />
+            </Pressable>
+          }
         />
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={SuperAdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading nurseries...</Text>
         </View>
       </SafeAreaView>
@@ -552,9 +560,19 @@ export default function SuperAdminAuditLogsScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <SuperAdminHeader
         title="Audit Logs"
         subtitle="Track who deleted what across nurseries"
+        onBackPress={() => router.back()}
+        actions={
+          <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
+            <MaterialIcons
+              name={refreshing ? "sync" : "refresh"}
+              size={20}
+              color={SuperAdminTheme.colors.surface}
+            />
+          </Pressable>
+        }
       />
 
       <ScrollView
@@ -566,8 +584,8 @@ export default function SuperAdminAuditLogsScreen() {
               refreshing || isRefetching || isRefetchingCollectionItems
             }
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[SuperAdminTheme.colors.primary]}
+            tintColor={SuperAdminTheme.colors.primary}
           />
         }
       >
@@ -591,7 +609,7 @@ export default function SuperAdminAuditLogsScreen() {
         {/* Cleanup Button */}
         <View style={styles.cleanupCard}>
             <View style={styles.cleanupInfo}>
-              <MaterialIcons name="info" size={16} color={Colors.warning} />
+              <MaterialIcons name="info" size={16} color={SuperAdminTheme.colors.warning} />
               <Text style={styles.cleanupText}>
                 Records older than 30 days in{" "}
                 <Text style={styles.cleanupHighlight}>
@@ -624,19 +642,19 @@ export default function SuperAdminAuditLogsScreen() {
               disabled={purgeMutation.isPending}
             >
               <LinearGradient
-                colors={[Colors.warning, "#D97706"]}
+                colors={[SuperAdminTheme.colors.warning, "#D97706"]}
                 style={styles.cleanupGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
               >
                 {purgeMutation.isPending ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
+                  <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
                 ) : (
                   <>
                     <MaterialIcons
                       name="cleaning-services"
                       size={16}
-                      color={Colors.white}
+                      color={SuperAdminTheme.colors.surface}
                     />
                     <Text style={styles.cleanupButtonText}>
                       Run Auto Cleanup
@@ -651,7 +669,7 @@ export default function SuperAdminAuditLogsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="storage" size={18} color={Colors.primary} />
+              <MaterialIcons name="storage" size={18} color={SuperAdminTheme.colors.primary} />
               <Text style={styles.sectionTitle}>Cleanup Queue</Text>
             </View>
             <Text style={styles.sectionCount}>
@@ -714,19 +732,19 @@ export default function SuperAdminAuditLogsScreen() {
             }
           >
             <LinearGradient
-              colors={[Colors.error, "#DC2626"]}
+              colors={[SuperAdminTheme.colors.danger, "#DC2626"]}
               style={styles.cleanupGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
               {hardDeleteFilteredMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.white} />
+                <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
               ) : (
                 <>
                   <MaterialIcons
                     name="delete-forever"
                     size={16}
-                    color={Colors.white}
+                    color={SuperAdminTheme.colors.surface}
                   />
                   <Text style={styles.cleanupButtonText}>
                     Delete Filtered Queue
@@ -738,7 +756,7 @@ export default function SuperAdminAuditLogsScreen() {
 
           {loadingCollectionItems ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={SuperAdminTheme.colors.primary} />
               <Text style={styles.loadingSmallText}>
                 Loading cleanup queue...
               </Text>
@@ -782,7 +800,7 @@ export default function SuperAdminAuditLogsScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="history" size={18} color={Colors.primary} />
+              <MaterialIcons name="history" size={18} color={SuperAdminTheme.colors.primary} />
               <Text style={styles.sectionTitle}>Deletion History</Text>
             </View>
             <View style={styles.sectionHeaderActions}>
@@ -808,7 +826,7 @@ export default function SuperAdminAuditLogsScreen() {
                 }
                 disabled={clearLogsMutation.isPending}
               >
-                <MaterialIcons name="delete-forever" size={14} color={Colors.error} />
+                <MaterialIcons name="delete-forever" size={14} color={SuperAdminTheme.colors.danger} />
                 <Text style={styles.clearLogsButtonText}>
                   {clearLogsMutation.isPending ? "Clearing..." : "Clear Logs"}
                 </Text>
@@ -818,7 +836,7 @@ export default function SuperAdminAuditLogsScreen() {
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={SuperAdminTheme.colors.primary} />
               <Text style={styles.loadingSmallText}>Loading audit logs...</Text>
             </View>
           ) : !data?.length ? (
@@ -845,9 +863,18 @@ export default function SuperAdminAuditLogsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
-
+headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.21)",
+    backgroundColor: "rgba(255, 255, 255, 0.17)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   // Header
   headerTitle: {
     fontSize: 24,
@@ -870,13 +897,13 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 100,
     gap: 20,
   },
 
   // Stats Card
   statsCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -923,7 +950,7 @@ const styles = StyleSheet.create({
 
   // Nursery Selector
   selectorCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -952,13 +979,13 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     gap: 6,
     marginRight: 8,
   },
   nurseryChipSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}05`,
+    borderColor: SuperAdminTheme.colors.primary,
+    backgroundColor: `${SuperAdminTheme.colors.primary}05`,
   },
   nurseryChipText: {
     fontSize: 13,
@@ -967,13 +994,13 @@ const styles = StyleSheet.create({
     maxWidth: 150,
   },
   nurseryChipTextSelected: {
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "600",
   },
 
   // Cleanup Card
   cleanupCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -995,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   cleanupHighlight: {
     fontWeight: "700",
-    color: Colors.warning,
+    color: SuperAdminTheme.colors.warning,
   },
   cleanupButton: {
     borderRadius: 12,
@@ -1015,7 +1042,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cleanupButtonText: {
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -1062,7 +1089,7 @@ const styles = StyleSheet.create({
   clearLogsButtonText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
 
   // Loading
@@ -1070,7 +1097,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 32,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1086,7 +1113,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 48,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -1109,7 +1136,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   auditCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -1117,7 +1144,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   auditCardExpired: {
-    borderColor: Colors.error + "30",
+    borderColor: SuperAdminTheme.colors.danger + "30",
     backgroundColor: "#FEF2F2",
   },
   auditHeader: {
@@ -1162,7 +1189,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${SuperAdminTheme.colors.primary}10`,
   },
   actionSummaryText: {
     flex: 1,
@@ -1181,7 +1208,7 @@ const styles = StyleSheet.create({
   expiredBadgeText: {
     fontSize: 10,
     fontWeight: "600",
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
   auditDetails: {
     gap: 6,
@@ -1206,7 +1233,7 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
   collectionItemCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -1223,11 +1250,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: `${Colors.primary}10`,
+    backgroundColor: `${SuperAdminTheme.colors.primary}10`,
   },
   collectionItemBadgeText: {
     fontSize: 10,
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "700",
   },
   collectionItemTitle: {
@@ -1257,6 +1284,6 @@ const styles = StyleSheet.create({
   deleteOneText: {
     fontSize: 11,
     fontWeight: "700",
-    color: Colors.error,
+    color: SuperAdminTheme.colors.danger,
   },
 });

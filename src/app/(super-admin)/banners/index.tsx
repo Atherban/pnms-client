@@ -4,8 +4,8 @@ export default function SuperAdminBannersScreen() {
   return (
     <BannerManagementScreen
       role="SUPER_ADMIN"
-      title="Global Advertisements"
-      subtitle="Manage platform banners shown to all customers"
+      title="Advertisements"
+      subtitle="Manage platform banners shown customers"
       queryKey={["super-admin", "banners"]}
     />
   );

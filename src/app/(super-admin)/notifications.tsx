@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -15,12 +16,11 @@ import {
   View,
 } from "react-native";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import SuperAdminHeader from "../../components/super-admin/SuperAdminHeader";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../../components/navigation/SharedBottomNav";
+import { SuperAdminTheme } from "../../components/super-admin/theme";
 import { NotificationService } from "../../services/notification.service";
 import { NurseryService } from "../../services/nursery.service";
-import { Colors } from "../../theme";
-
-const BOTTOM_NAV_HEIGHT = 80;
 
 type SendMode = "TARGETED" | "GLOBAL";
 
@@ -46,7 +46,7 @@ const ModeSelector = ({ mode, onModeChange }: ModeSelectorProps) => (
         <MaterialIcons
           name="people"
           size={18}
-          color={mode === "TARGETED" ? Colors.primary : Colors.textSecondary}
+          color={mode === "TARGETED" ? SuperAdminTheme.colors.primary : SuperAdminTheme.colors.textMuted}
         />
         <Text
           style={[
@@ -69,7 +69,7 @@ const ModeSelector = ({ mode, onModeChange }: ModeSelectorProps) => (
         <MaterialIcons
           name="public"
           size={18}
-          color={mode === "GLOBAL" ? Colors.primary : Colors.textSecondary}
+          color={mode === "GLOBAL" ? SuperAdminTheme.colors.primary : SuperAdminTheme.colors.textMuted}
         />
         <Text
           style={[
@@ -101,7 +101,7 @@ const NurserySelector = ({
 }: NurserySelectorProps) => (
   <View style={styles.nurseryContainer}>
     <View style={styles.nurseryHeader}>
-      <MaterialIcons name="store" size={16} color={Colors.primary} />
+      <MaterialIcons name="store" size={16} color={SuperAdminTheme.colors.primary} />
       <Text style={styles.sectionLabel}>Select Nursery</Text>
     </View>
 
@@ -135,7 +135,7 @@ const NurserySelector = ({
               <MaterialIcons
                 name="check-circle"
                 size={14}
-                color={Colors.primary}
+                color={SuperAdminTheme.colors.primary}
               />
             )}
           </Pressable>
@@ -148,7 +148,7 @@ const NurserySelector = ({
         <MaterialIcons
           name="admin-panel-settings"
           size={14}
-          color={Colors.info}
+          color={SuperAdminTheme.colors.info}
         />
         <Text style={styles.adminBadgeText}>
           {adminCount} admin{adminCount !== 1 ? "s" : ""} will receive this
@@ -184,7 +184,7 @@ const ComposerCard = ({
 }: ComposerCardProps) => (
   <View style={styles.composerCard}>
     <View style={styles.composerHeader}>
-      <MaterialIcons name="edit-note" size={18} color={Colors.primary} />
+      <MaterialIcons name="edit-note" size={18} color={SuperAdminTheme.colors.primary} />
       <Text style={styles.composerTitle}>Compose Message</Text>
     </View>
 
@@ -217,19 +217,19 @@ const ComposerCard = ({
       disabled={!isValid || isPending}
     >
       <LinearGradient
-        colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
+        colors={[SuperAdminTheme.colors.primary, SuperAdminTheme.colors.primaryDark || SuperAdminTheme.colors.primary]}
         style={styles.sendButtonGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
         {isPending ? (
-          <ActivityIndicator size="small" color={Colors.white} />
+          <ActivityIndicator size="small" color={SuperAdminTheme.colors.surface} />
         ) : (
           <>
             <MaterialIcons
               name={mode === "GLOBAL" ? "public" : "send"}
               size={18}
-              color={Colors.white}
+              color={SuperAdminTheme.colors.surface}
             />
             <Text style={styles.sendButtonText}>
               {mode === "GLOBAL"
@@ -257,9 +257,9 @@ const NotificationCard = ({ notification }: NotificationCardProps) => {
   };
 
   const getAudienceColor = () => {
-    if (notification.audience === "ALL") return Colors.info;
-    if (notification.audience === "NURSERY_ADMIN") return Colors.success;
-    return Colors.textSecondary;
+    if (notification.audience === "ALL") return SuperAdminTheme.colors.info;
+    if (notification.audience === "NURSERY_ADMIN") return SuperAdminTheme.colors.success;
+    return SuperAdminTheme.colors.textMuted;
   };
 
   return (
@@ -333,17 +333,17 @@ export default function SuperAdminNotificationsScreen() {
   const [selectedNurseryId, setSelectedNurseryId] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, refetch, isRefetching } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: notificationsQueryKey,
     queryFn: () => NotificationService.list("SUPER_ADMIN"),
   });
 
-  const { data: nurseries, isLoading: loadingNurseries } = useQuery({
+  const { data: nurseries } = useQuery({
     queryKey: ["super-admin", "nurseries", "notification-targets"],
     queryFn: () => NurseryService.list(),
   });
 
-  const { data: nurseryAdmins, isLoading: loadingAdmins } = useQuery({
+  const { data: nurseryAdmins } = useQuery({
     queryKey: ["super-admin", "nursery-admins", selectedNurseryId],
     queryFn: () => NurseryService.listAdmins(selectedNurseryId),
     enabled: Boolean(selectedNurseryId) && mode === "TARGETED",
@@ -442,6 +442,7 @@ export default function SuperAdminNotificationsScreen() {
     );
   };
 
+  const router = useRouter();
   const isValid =
     title.trim().length > 0 &&
     body.trim().length > 0 &&
@@ -451,39 +452,28 @@ export default function SuperAdminNotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <FixedHeader
+      <SuperAdminHeader
         title="Notifications"
         subtitle="Send messages to nursery admins"
-        showBackButton
-        onBackPress={() => {}}
+        onBackPress={() => router.back()}
         actions={
           <View style={styles.headerActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                pressed && styles.headerIconBtnPressed,
-              ]}
-              onPress={handleRefresh}
-            >
+            <Pressable style={styles.headerIconBtn} onPress={handleRefresh}>
               <MaterialIcons
                 name={refreshing ? "sync" : "refresh"}
                 size={20}
-                color={Colors.white}
+                color={SuperAdminTheme.colors.surface}
               />
             </Pressable>
             <Pressable
-              style={({ pressed }) => [
-                styles.headerIconBtn,
-                styles.headerDangerBtn,
-                pressed && styles.headerIconBtnPressed,
-              ]}
+              style={[styles.headerIconBtn]}
               onPress={handleClearAll}
               disabled={!notifications.length || clearAllMutation.isPending}
             >
               <MaterialIcons
                 name={clearAllMutation.isPending ? "hourglass-empty" : "delete-sweep"}
                 size={20}
-                color={Colors.white}
+                color={SuperAdminTheme.colors.surface}
               />
             </Pressable>
           </View>
@@ -497,8 +487,8 @@ export default function SuperAdminNotificationsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[SuperAdminTheme.colors.primary]}
+            tintColor={SuperAdminTheme.colors.primary}
           />
         }
       >
@@ -531,7 +521,7 @@ export default function SuperAdminNotificationsScreen() {
         <View style={styles.historySection}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionHeaderLeft}>
-              <MaterialIcons name="history" size={18} color={Colors.primary} />
+              <MaterialIcons name="history" size={18} color={SuperAdminTheme.colors.primary} />
               <Text style={styles.sectionTitle}>Sent Notifications</Text>
             </View>
             <Text style={styles.sectionCount}>
@@ -541,7 +531,7 @@ export default function SuperAdminNotificationsScreen() {
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={SuperAdminTheme.colors.primary} />
               <Text style={styles.loadingText}>Loading notifications...</Text>
             </View>
           ) : notifications.length === 0 ? (
@@ -562,7 +552,7 @@ export default function SuperAdminNotificationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
 
   // Header
@@ -575,6 +565,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.34)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -582,10 +573,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  headerDangerBtn: {
-    backgroundColor: "transparent",
-    borderColor: "rgba(255,255,255,0.34)",
-  },
+  
   headerIconBtnPressed: {
     backgroundColor: "rgba(255,255,255,0.1)",
     transform: [{ scale: 0.95 }],
@@ -595,7 +583,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: BOTTOM_NAV_HEIGHT + 100,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + 100,
     gap: 20,
   },
 
@@ -604,7 +592,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   composerCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -630,7 +618,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#111827",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   bodyInput: {
     borderWidth: 1,
@@ -640,7 +628,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#111827",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     minHeight: 100,
     textAlignVertical: "top",
   },
@@ -663,7 +651,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sendButtonText: {
-    color: Colors.white,
+    color: SuperAdminTheme.colors.surface,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -692,11 +680,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
   },
   modeButtonActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}05`,
+    borderColor: SuperAdminTheme.colors.primary,
+    backgroundColor: `${SuperAdminTheme.colors.primary}05`,
   },
   modeButtonPressed: {
     transform: [{ scale: 0.98 }],
@@ -707,13 +695,13 @@ const styles = StyleSheet.create({
     color: "#6B7280",
   },
   modeButtonTextActive: {
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
   },
 
   // Nursery Selector
   nurseryContainer: {
     gap: 12,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
@@ -736,13 +724,13 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    backgroundColor: "#F9FAFB",
+    backgroundColor: SuperAdminTheme.colors.surfaceMuted,
     gap: 6,
     marginRight: 8,
   },
   nurseryChipSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}05`,
+    borderColor: SuperAdminTheme.colors.primary,
+    backgroundColor: `${SuperAdminTheme.colors.primary}05`,
   },
   nurseryChipPressed: {
     transform: [{ scale: 0.96 }],
@@ -754,7 +742,7 @@ const styles = StyleSheet.create({
     maxWidth: 150,
   },
   nurseryChipTextSelected: {
-    color: Colors.primary,
+    color: SuperAdminTheme.colors.primary,
     fontWeight: "600",
   },
   adminBadge: {
@@ -802,7 +790,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 32,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -818,7 +806,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 48,
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E5E7EB",
@@ -841,7 +829,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   notificationCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: SuperAdminTheme.colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,

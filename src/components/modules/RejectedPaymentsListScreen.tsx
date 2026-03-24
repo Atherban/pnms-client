@@ -1,46 +1,35 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { LinearGradient } from "expo-linear-gradient";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  ScrollView,
+  Text,
+  View,
 } from "react-native";
-import Animated, {
-    FadeInDown,
-    FadeInUp,
-    Layout,
-} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "@/src/components/common/FixedHeader";
+import { CustomerActionButton } from "@/src/components/customer/CustomerActionButton";
+import StitchHeader from "../common/StitchHeader";
+import StitchCard from "../common/StitchCard";
+import StitchSectionHeader from "../common/StitchSectionHeader";
+import StitchStatusBadge from "../common/StitchStatusBadge";
 import { PaymentService } from "@/src/services/payment.service";
-import { useAuthStore } from "@/src/stores/auth.store";
-import { Colors, Spacing } from "@/src/theme";
 import type { PaymentProof } from "@/src/types/payment.types";
+import { AdminTheme } from "../admin/theme";
+import { moduleListRow } from "../common/moduleStyles";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const formatMoney = (amount: number) => `₹${Math.round(amount).toLocaleString("en-IN")}`;
 
-const formatMoney = (amount: number) =>
-  `₹${Math.round(amount).toLocaleString("en-IN")}`;
-
-const formatCompactMoney = (amount: number) => {
-  if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`;
-  return `₹${amount}`;
-};
-
-const formatDate = (dateString?: string) => {
-  if (!dateString) return "N/A";
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString;
+const formatDate = (value?: string) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -48,222 +37,8 @@ const formatDate = (dateString?: string) => {
   });
 };
 
-// ==================== STATS CARD ====================
-
-interface StatsCardProps {
-  totalCount: number;
-  totalAmount: number;
-  latestDate?: string;
-}
-
-const StatsCard = ({ totalCount, totalAmount, latestDate }: StatsCardProps) => {
-  return (
-    <Animated.View
-      entering={FadeInDown.springify().damping(35)}
-      style={styles.statsCard}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.statsCardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.error + "10" },
-              ]}
-            >
-              <MaterialIcons name="error" size={20} color={Colors.error} />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Total Rejected</Text>
-              <Text style={[styles.statValue, { color: Colors.error }]}>
-                {totalCount}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.warning + "10" },
-              ]}
-            >
-              <MaterialIcons
-                name="attach-money"
-                size={20}
-                color={Colors.warning}
-              />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Amount</Text>
-              <Text style={[styles.statValue, { color: Colors.warning }]}>
-                {formatCompactMoney(totalAmount)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.statDivider} />
-
-          <View style={styles.statItem}>
-            <View
-              style={[
-                styles.statIcon,
-                { backgroundColor: Colors.textTertiary + "10" },
-              ]}
-            >
-              <MaterialIcons
-                name="calendar-today"
-                size={20}
-                color={Colors.textTertiary}
-              />
-            </View>
-            <View style={styles.statContent}>
-              <Text style={styles.statLabel}>Latest</Text>
-              <Text style={[styles.statValue, { color: Colors.text }]}>
-                {formatDate(latestDate)}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-    </Animated.View>
-  );
-};
-
-// ==================== REJECTED PAYMENT CARD ====================
-
-interface RejectedPaymentCardProps {
-  item: PaymentProof;
-  onPress: (id: string) => void;
-  index: number;
-}
-
-const RejectedPaymentCard = ({
-  item,
-  onPress,
-  index,
-}: RejectedPaymentCardProps) => {
-  const submittedDate = formatDate(item.submittedAt);
-  const reviewedDate = formatDate(item.reviewedAt);
-
-  const reasonPreview = item.rejectionReason
-    ? item.rejectionReason.split("\n")[0].substring(0, 80)
-    : "No reason provided";
-  const showMore = item.rejectionReason
-    ? item.rejectionReason.length > 80
-    : false;
-
-  return (
-    <Animated.View
-      entering={FadeInUp.delay(index * 100)
-        .springify()
-        .damping(35)}
-      layout={Layout.springify()}
-      style={styles.card}
-    >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        {/* Header - Amount & Status */}
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <Text style={styles.amountLabel}>Not Verified</Text>
-            <Text style={styles.amountValue}>{formatMoney(item.amount)}</Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: Colors.error + "10" },
-            ]}
-          >
-            <MaterialIcons name="error" size={12} color={Colors.error} />
-            <Text style={[styles.statusText, { color: Colors.error }]}>
-              Rejected
-            </Text>
-          </View>
-        </View>
-
-        {/* Customer Info */}
-        <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Customer</Text>
-            <Text style={styles.infoValue}>{item.customerName}</Text>
-          </View>
-        </View>
-
-        {/* Payment Mode & Dates */}
-        <View style={styles.metaSection}>
-          <View style={styles.metaRow}>
-            <MaterialIcons
-              name="payment"
-              size={14}
-              color={Colors.textTertiary}
-            />
-            <Text style={styles.metaText}>
-              {item.mode?.replace("_", " ") || "N/A"}
-            </Text>
-          </View>
-          <View style={styles.metaRow}>
-            <MaterialIcons
-              name="calendar-today"
-              size={14}
-              color={Colors.textTertiary}
-            />
-            <Text style={styles.metaText}>Submitted: {submittedDate}</Text>
-          </View>
-          {item.reviewedAt && (
-            <View style={styles.metaRow}>
-              <MaterialIcons
-                name="check-circle"
-                size={14}
-                color={Colors.textTertiary}
-              />
-              <Text style={styles.metaText}>Reviewed: {reviewedDate}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Rejection Reason Preview */}
-        <View style={styles.reasonPreviewContainer}>
-          <Text style={styles.reasonPreviewLabel}>Rejection Reason</Text>
-          <Text style={styles.reasonPreviewText} numberOfLines={2}>
-            {reasonPreview}
-            {showMore ? "..." : ""}
-          </Text>
-        </View>
-
-        {/* View Details Button */}
-        <Pressable
-          onPress={() => onPress(item.id)}
-          style={({ pressed }) => [
-            styles.viewButton,
-            pressed && styles.buttonPressed,
-          ]}
-        >
-          <Text style={styles.viewButtonText}>View Details</Text>
-          <MaterialIcons name="arrow-forward" size={16} color={Colors.error} />
-        </Pressable>
-      </LinearGradient>
-    </Animated.View>
-  );
-};
-
-// ==================== MAIN SCREEN ====================
-
 export default function RejectedPaymentsListScreen() {
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const user = useAuthStore((s) => s.user);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["payment-proofs", "rejected"],
@@ -271,447 +46,258 @@ export default function RejectedPaymentsListScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const rejectedPayments = (data || []) as PaymentProof[];
+  const rejectedPayments = useMemo(() => (Array.isArray(data) ? data : []), [data]) as PaymentProof[];
 
-  // Calculate stats
   const stats = useMemo(() => {
     const totalCount = rejectedPayments.length;
-    const totalAmount = rejectedPayments.reduce(
-      (sum, item) => sum + (item.amount || 0),
-      0,
-    );
-    const latestDate =
-      rejectedPayments.length > 0
-        ? rejectedPayments.sort(
-            (a, b) =>
-              new Date(b.reviewedAt || b.submittedAt).getTime() -
-              new Date(a.reviewedAt || a.submittedAt).getTime(),
-          )[0].reviewedAt || rejectedPayments[0].submittedAt
-        : undefined;
-
+    const totalAmount = rejectedPayments.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const latest = [...rejectedPayments]
+      .sort(
+        (a, b) =>
+          new Date(b.reviewedAt || b.submittedAt || 0).getTime() -
+          new Date(a.reviewedAt || a.submittedAt || 0).getTime(),
+      )[0];
+    const latestDate = latest?.reviewedAt || latest?.submittedAt;
     return { totalCount, totalAmount, latestDate };
   }, [rejectedPayments]);
 
-  // Refetch when screen is focused
   useFocusEffect(
     useCallback(() => {
       refetch();
     }, [refetch]),
   );
 
-  const handlePaymentPress = (id: string) => {
-    router.push({
-      pathname: "/(customer)/rejected-payments/[id]",
-      params: { id },
-    });
-  };
-
   return (
-    <View style={styles.container}>
-      <FixedHeader
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+      <StitchHeader
         title="Rejected Payments"
-        subtitle="Review and resubmit your rejected payments"
-        titleStyle={styles.headerTitle}
+        subtitle="Review failed proofs and re-submit against the invoice."
+        variant="gradient"
+        showBackButton
+        onBackPress={() => router.back()}
         actions={
-          <Pressable
-            style={({ pressed }) => [
-              styles.headerIconBtn,
-              pressed && styles.headerIconBtnPressed,
-            ]}
-            onPress={() => refetch()}
-          >
-            <MaterialIcons
-              name={isRefetching ? "sync" : "refresh"}
-              size={20}
-              color={Colors.white}
-            />
+          <Pressable onPress={() => refetch()} style={styles.headerRefreshButton}>
+            <MaterialIcons name={isRefetching ? "sync" : "refresh"} size={20} color={AdminTheme.colors.text} />
           </Pressable>
         }
       />
-
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            onRefresh={refetch}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
+        contentContainerStyle={styles.scrollContent}
       >
-        {/* Stats Card */}
-        {rejectedPayments.length > 0 && (
-          <StatsCard
-            totalCount={stats.totalCount}
-            totalAmount={stats.totalAmount}
-            latestDate={stats.latestDate}
+        <StitchCard style={styles.explainCard}>
+          <StitchSectionHeader
+            title="Common rejection reasons"
+            subtitle="Blurry screenshots, incorrect amounts, or missing transaction reference usually cause rejection."
+            action={<StitchStatusBadge label="Fix and re-submit" tone="warning" />}
           />
-        )}
+          <Text style={styles.explainHint}>
+            Open any invoice below and upload a clearer proof under Payment Details.
+          </Text>
+        </StitchCard>
 
-        {/* Loading State */}
+        {rejectedPayments.length > 0 ? (
+          <View style={styles.statsRow}>
+            <StitchCard style={styles.statCard}>
+              <Text style={styles.statLabel}>Rejected</Text>
+              <Text style={styles.statValue}>{String(stats.totalCount)}</Text>
+            </StitchCard>
+            <StitchCard style={styles.statCard}>
+              <Text style={styles.statLabel}>Amount</Text>
+              <Text style={styles.statValue}>{formatMoney(stats.totalAmount)}</Text>
+            </StitchCard>
+            <StitchCard style={styles.statCard}>
+              <Text style={styles.statLabel}>Latest</Text>
+              <Text style={styles.statValue}>{stats.latestDate ? formatDate(stats.latestDate) : "-"}</Text>
+            </StitchCard>
+          </View>
+        ) : null}
+
         {isLoading ? (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            style={styles.loadingContainer}
-          >
-            <ActivityIndicator size="large" color={Colors.error} />
+          <StitchCard style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
             <Text style={styles.loadingText}>Loading rejected payments...</Text>
-          </Animated.View>
-        ) : error ? (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            style={styles.errorCard}
-          >
-            <View style={styles.errorIconContainer}>
-              <MaterialIcons
-                name="error-outline"
-                size={48}
-                color={Colors.error}
-              />
-            </View>
-            <Text style={styles.errorTitle}>Unable to Load</Text>
-            <Text style={styles.errorMessage}>
-              {error instanceof Error
-                ? error.message
-                : "Failed to load rejected payments"}
+          </StitchCard>
+        ) : null}
+
+        {!isLoading && error ? (
+          <StitchCard style={styles.loadingCard}>
+            <MaterialIcons name="error-outline" size={44} color={AdminTheme.colors.danger} />
+            <Text style={styles.loadingText}>
+              {error instanceof Error ? error.message : "Failed to load rejected payments."}
             </Text>
-            <Pressable
+            <CustomerActionButton
+              label="Retry"
               onPress={() => refetch()}
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </Pressable>
-          </Animated.View>
-        ) : rejectedPayments.length === 0 ? (
-          <Animated.View
-            entering={FadeInDown.springify()}
-            style={styles.emptyCard}
-          >
-            <View style={styles.emptyIconContainer}>
-              <MaterialIcons
-                name="check-circle"
-                size={48}
-                color={Colors.success}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>No Rejected Payments</Text>
-            <Text style={styles.emptyMessage}>
-              All your payments are verified. Great job!
-            </Text>
-          </Animated.View>
-        ) : (
-          rejectedPayments.map((item, index) => (
-            <RejectedPaymentCard
-              key={item.id}
-              item={item}
-              onPress={handlePaymentPress}
-              index={index}
+              icon={<MaterialIcons name="refresh" size={18} color={AdminTheme.colors.surface} />}
             />
-          ))
-        )}
+          </StitchCard>
+        ) : null}
+
+        {!isLoading && !error && rejectedPayments.length === 0 ? (
+          <StitchCard style={styles.loadingCard}>
+            <MaterialIcons name="task-alt" size={44} color={AdminTheme.colors.textMuted} />
+            <Text style={styles.loadingText}>
+              All your payment proofs are approved or currently being processed.
+            </Text>
+          </StitchCard>
+        ) : null}
+
+        {!isLoading && !error ? (
+          <View style={styles.list}>
+            {rejectedPayments.map((item) => {
+            const reason =
+              (item.rejectionReason || "").trim() || "No rejection reason provided.";
+            const submittedAt = item.submittedAt ? formatDate(item.submittedAt) : "-";
+            const reviewedAt = item.reviewedAt ? formatDate(item.reviewedAt) : undefined;
+
+            return (
+              <StitchCard key={item.id} style={styles.itemCard}>
+                <View style={styles.itemHeader}>
+                  <View style={styles.itemTitleWrap}>
+                    <Text style={styles.itemAmount}>{formatMoney(item.amount || 0)}</Text>
+                    <Text style={styles.itemMeta}>
+                      {reviewedAt ? `Reviewed ${reviewedAt}` : `Submitted ${submittedAt}`}
+                      {item.mode ? ` • ${String(item.mode).replace(/_/g, " ")}` : ""}
+                    </Text>
+                  </View>
+                  <StitchStatusBadge label="Rejected" tone="danger" />
+                </View>
+
+                <View style={styles.reasonBox}>
+                  <MaterialIcons name="error-outline" size={16} color={AdminTheme.colors.danger} />
+                  <Text style={styles.reasonText} numberOfLines={3}>
+                    {reason}
+                  </Text>
+                </View>
+
+                <View style={styles.actionsRow}>
+                  <CustomerActionButton
+                    label="Open Invoice"
+                    variant="secondary"
+                    onPress={() => router.push(`/(customer)/dues/${item.saleId}` as any)}
+                    style={styles.flex}
+                  />
+                  <CustomerActionButton
+                    label="Upload Proof"
+                    onPress={() => router.push(`/(customer)/dues/${item.saleId}` as any)}
+                    style={styles.flex}
+                  />
+                </View>
+              </StitchCard>
+            );
+            })}
+          </View>
+        ) : null}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: AdminTheme.colors.background,
   },
-  headerTitle: {
-    fontSize: 24,
+  scrollContent: {
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingBottom: AdminTheme.spacing.xl,
+    gap: AdminTheme.spacing.md,
   },
-  headerIconBtn: {
+  headerRefreshButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.32)",
+    borderColor: AdminTheme.colors.borderSoft,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(15,189,73,0.10)",
   },
-  headerIconBtnPressed: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    transform: [{ scale: 0.95 }],
+  explainCard: {
+    gap: AdminTheme.spacing.sm,
   },
-  content: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: 100,
-    gap: Spacing.md,
-  },
-
-  // Stats Card
-  statsCard: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.xs,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statsCardGradient: {
-    padding: Spacing.lg,
+  explainHint: {
+    color: AdminTheme.colors.textMuted,
+    lineHeight: 20,
   },
   statsRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    gap: AdminTheme.spacing.sm,
   },
-  statItem: {
+  statCard: {
     flex: 1,
-    flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
-  },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statContent: {
-    flex: 1,
+    gap: 4,
   },
   statLabel: {
     fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 2,
+    color: AdminTheme.colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
   statValue: {
     fontSize: 14,
     fontWeight: "700",
+    color: AdminTheme.colors.text,
   },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "#E5E7EB",
-    marginHorizontal: 6,
-  },
-
-  // Rejected Payment Card
-  card: {
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardGradient: {
-    padding: Spacing.lg,
-  },
-  cardHeader: {
-    flexDirection: "row",
+  loadingCard: {
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
-  cardHeaderLeft: {
-    flex: 1,
-  },
-  amountLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 2,
-  },
-  amountValue: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#111827",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  // Info Section
-  infoSection: {
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  infoValue: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#111827",
-    flex: 1,
-    textAlign: "right",
-  },
-  monospace: {
-    fontFamily: "monospace",
-    fontSize: 11,
-  },
-
-  // Meta Section
-  metaSection: {
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    gap: Spacing.xs,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  metaText: {
-    fontSize: 11,
-    color: "#6B7280",
-  },
-
-  // Reason Preview
-  reasonPreviewContainer: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-  },
-  reasonPreviewLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.error,
-    marginBottom: 4,
-  },
-  reasonPreviewText: {
-    fontSize: 13,
-    color: "#5F2828",
-    lineHeight: 16,
-  },
-
-  // View Details Button
-  viewButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  viewButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.error,
-  },
-  buttonPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-
-  // Loading State
-  loadingContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    paddingVertical: AdminTheme.spacing.xl,
   },
   loadingText: {
-    fontSize: 14,
-    color: "#6B7280",
+    color: AdminTheme.colors.textMuted,
   },
-
-  // Error State
-  errorCard: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: Spacing.md,
+  list: {
+    gap: AdminTheme.spacing.md,
   },
-  errorIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#FEF2F2",
-    alignItems: "center",
-    justifyContent: "center",
+  itemCard: {
+    ...moduleListRow,
+    gap: AdminTheme.spacing.md,
   },
-  errorTitle: {
+  itemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: AdminTheme.spacing.sm,
+  },
+  itemTitleWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  itemAmount: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
+    fontWeight: "900",
+    color: AdminTheme.colors.text,
   },
-  errorMessage: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    paddingHorizontal: 24,
+  itemMeta: {
+    color: AdminTheme.colors.textMuted,
+    fontSize: 12,
   },
-  retryButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.error,
-    borderRadius: 12,
+  reasonBox: {
+    flexDirection: "row",
+    gap: 8,
+    padding: AdminTheme.spacing.sm,
+    borderRadius: 16,
+    backgroundColor: "#FCE8E8",
   },
-  retryButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.white,
+  reasonText: {
+    flex: 1,
+    color: AdminTheme.colors.danger,
+    lineHeight: 20,
   },
-
-  // Empty State
-  emptyCard: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-    backgroundColor: Colors.white,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    gap: Spacing.md,
+  actionsRow: {
+    flexDirection: "row",
+    gap: AdminTheme.spacing.sm,
   },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.success + "10",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: "#6B7280",
-    textAlign: "center",
-    paddingHorizontal: 32,
+  flex: {
+    flex: 1,
   },
 });

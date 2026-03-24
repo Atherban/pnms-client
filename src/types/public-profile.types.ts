@@ -21,8 +21,12 @@ export interface NurseryPublicContact {
 
 export interface NurseryPublicProfile {
   nurseryId: string;
+  name?: string;
+  code?: string;
   paymentConfig?: NurseryPaymentConfig;
   contactDetails?: NurseryPublicContact[];
+  logoImageUrl?: string;
+  phoneNumber?: string;
   upiId?: string;
   qrImageUrl?: string;
   primaryPhone?: string;

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   Image,
   ImageStyle,
+  ImageResizeMode,
   StyleProp,
   View,
   ViewStyle,
@@ -16,6 +17,7 @@ type BannerCardImageProps = {
   label?: string | null;
   iconName?: keyof typeof MaterialIcons.glyphMap;
   minHeight?: number;
+  resizeMode?: ImageResizeMode;
   containerStyle?: StyleProp<ViewStyle>;
   imageStyle?: StyleProp<ImageStyle>;
   children?: ReactNode;
@@ -25,6 +27,7 @@ export default function BannerCardImage({
   uri,
   iconName = "spa",
   minHeight = 90,
+  resizeMode = "cover",
   containerStyle,
   imageStyle,
   children,
@@ -45,7 +48,6 @@ export default function BannerCardImage({
       style={[
         {
           backgroundColor: Colors.surface,
-          borderRadius: 12,
           minHeight,
           alignItems: "center",
           justifyContent: "center",
@@ -58,7 +60,7 @@ export default function BannerCardImage({
       {validUri ? (
         <Image
           source={{ uri: validUri }}
-          resizeMode="cover"
+          resizeMode={resizeMode}
           style={[
             {
               width: "100%",

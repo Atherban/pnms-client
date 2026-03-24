@@ -1,8 +1,5 @@
-import { Text, View } from "react-native";
-import { Spacing, Typography } from "../../theme";
+import { StitchEmptyState } from "../common/StitchScreen";
 
 export const EmptyState = ({ text }: { text: string }) => (
-  <View style={{ padding: Spacing.lg, alignItems: "center" }}>
-    <Text style={Typography.body as any}>{text}</Text>
-  </View>
+  <StitchEmptyState title="Nothing here yet" message={text} />
 );

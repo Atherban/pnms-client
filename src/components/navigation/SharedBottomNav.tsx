@@ -23,6 +23,9 @@ export type NavItem = {
   color: string;
 };
 
+export const CUSTOMER_BOTTOM_NAV_HEIGHT = 72;
+export const SHARED_BOTTOM_NAV_HEIGHT = CUSTOMER_BOTTOM_NAV_HEIGHT;
+
 type SharedBottomNavProps = {
   items: NavItem[];
 };
@@ -136,176 +139,179 @@ export default function SharedBottomNav({ items }: SharedBottomNavProps) {
 
   return (
     <View style={styles.container}>
-      {/* Main Navigation Bar */}
-      <BlurView intensity={95} tint="light" style={styles.blurBackground}>
-        {/* Top Highlight Line */}
-        <LinearGradient
-          colors={["transparent", Colors.primary + "15", "transparent"]}
-          style={styles.topGlow}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
-
-        {/* Animated Indicator */}
-        <Animated.View
-          style={[
-            styles.activeIndicator,
-            {
-              transform: [{ translateX: indicatorAnim }],
-              width: navItemWidth - 24,
-            },
-          ]}
-        >
+      <LinearGradient
+        colors={[Colors.primary, Colors.primaryDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientShell}
+      >
+        <BlurView intensity={5} tint="dark" style={styles.blurBackground}>
+          {/* Top Highlight Line */}
           <LinearGradient
-            colors={[
-              items[activeIndex]?.color + "25",
-              items[activeIndex]?.color + "08",
-            ]}
-            style={styles.activeIndicatorGradient}
+            colors={["rgba(255,255,255,0.08)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.08)"]}
+            style={styles.topGlow}
             start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            end={{ x: 1, y: 0 }}
           />
+
+          {/* Animated Indicator */}
+          <Animated.View
+            style={[
+              styles.activeIndicator,
+              {
+                transform: [{ translateX: indicatorAnim }],
+                width: navItemWidth - 24,
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={[
+                "rgba(255,255,255,0.34)",
+                "rgba(255,255,255,0.14)",
+              ]}
+              style={styles.activeIndicatorGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            <View
+              style={[
+                styles.activeIndicatorBorder,
+                { borderColor: "rgba(255,255,255,0.28)" },
+              ]}
+            />
+          </Animated.View>
+
+          {/* Navigation Items */}
           <View
             style={[
-              styles.activeIndicatorBorder,
-              { borderColor: items[activeIndex]?.color + "30" },
+              styles.navItemsContainer,
+              { paddingBottom: Math.max(insets.bottom, Spacing.sm) },
             ]}
-          />
-        </Animated.View>
+          >
+            {items.map((item, index) => {
+              const isActive = activeIndex === index;
+              const isPressed = pressedIndex === index;
+              const IconComponent = item.icon;
 
-        {/* Navigation Items */}
-        <View
-          style={[
-            styles.navItemsContainer,
-            { paddingBottom: Math.max(insets.bottom, Spacing.sm) },
-          ]}
-        >
-          {items.map((item, index) => {
-            const isActive = activeIndex === index;
-            const isPressed = pressedIndex === index;
-            const IconComponent = item.icon;
-
-            return (
-              <Pressable
-                key={item.path}
-                onPressIn={() => handlePressIn(index)}
-                onPressOut={handlePressOut}
-                onPress={() => handleNavigation(index, item.path)}
-                style={styles.navItem}
-              >
-                <View style={styles.iconWrapper}>
-                  {/* Icon Background */}
-                  <Animated.View
-                    style={[
-                      styles.iconBackground,
-                      isActive && styles.iconBackgroundActive,
-                      isActive && {
-                        backgroundColor: item.color + "08",
-                        borderColor: item.color + "20",
-                      },
-                      {
-                        transform: [
-                          { scale: isActive ? bounceAnim : scaleAnim },
-                        ],
-                      },
-                    ]}
-                  />
-
-                  {/* Icon Container */}
-                  <Animated.View
-                    style={[
-                      styles.iconContainer,
-                      isActive && styles.iconContainerActive,
-                      isActive && {
-                        shadowColor: item.color,
-                      },
-                      {
-                        transform: [
-                          { scale: isActive ? bounceAnim : scaleAnim },
-                        ],
-                      },
-                    ]}
-                  >
-                    {/* Icon Shadow for Active State */}
-                    {isActive && (
-                      <View
-                        style={[
-                          styles.iconShadow,
-                          { backgroundColor: item.color + "15" },
-                        ]}
-                      />
-                    )}
-
-                    {/* Lucide Icon */}
-                    <IconComponent
-                      size={isActive ? 22 : 20}
-                      color={isActive ? item.color : Colors.textSecondary}
-                      strokeWidth={isActive ? 2.2 : 1.8}
-                    />
-
-                    {/* Active Dot */}
-                    {isActive && (
-                      <View
-                        style={[
-                          styles.activeDot,
-                          { backgroundColor: item.color },
-                        ]}
-                      />
-                    )}
-                  </Animated.View>
-
-                  {/* Label */}
-                  <Animated.Text
-                    style={[
-                      styles.label,
-                      {
-                        color: isActive ? item.color : Colors.textSecondary,
-                        opacity: isActive ? 1 : 0.6,
-                        transform: [
-                          {
-                            scale: isPressed ? labelScaleAnim : 1,
-                          },
-                        ],
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.label}
-                  </Animated.Text>
-
-                  {/* Ripple Effect */}
-                  {isPressed && (
+              return (
+                <Pressable
+                  key={item.path}
+                  onPressIn={() => handlePressIn(index)}
+                  onPressOut={handlePressOut}
+                  onPress={() => handleNavigation(index, item.path)}
+                  style={styles.navItem}
+                >
+                  <View style={styles.iconWrapper}>
+                    {/* Icon Background */}
                     <Animated.View
                       style={[
-                        styles.rippleEffect,
+                        styles.iconBackground,
+                        isActive && styles.iconBackgroundActive,
+                        isActive && {
+                          backgroundColor: "rgba(255,255,255,0.12)",
+                          borderColor: "rgba(255,255,255,0.22)",
+                        },
                         {
-                          backgroundColor: item.color + "15",
                           transform: [
-                            {
-                              scale: scaleAnim.interpolate({
-                                inputRange: [0.92, 1],
-                                outputRange: [1.2, 0.8],
-                              }),
-                            },
+                            { scale: isActive ? bounceAnim : scaleAnim },
                           ],
                         },
                       ]}
                     />
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
 
-        {/* Bottom Shadow */}
-        <LinearGradient
-          colors={["rgba(0,0,0,0.02)", "transparent"]}
-          style={styles.bottomShadow}
-          start={{ x: 0, y: 1 }}
-          end={{ x: 0, y: 0 }}
-        />
-      </BlurView>
+                    {/* Icon Container */}
+                    <Animated.View
+                      style={[
+                        styles.iconContainer,
+                        isActive && styles.iconContainerActive,
+                        {
+                          transform: [
+                            { scale: isActive ? bounceAnim : scaleAnim },
+                          ],
+                        },
+                      ]}
+                    >
+                      {/* Icon Shadow for Active State */}
+                      {isActive && (
+                        <View
+                          style={[
+                            styles.iconShadow,
+                            { backgroundColor: "rgba(255,255,255,0.18)" },
+                          ]}
+                        />
+                      )}
+
+                      {/* Lucide Icon */}
+                      <IconComponent
+                        size={isActive ? 22 : 20}
+                        color={isActive ? Colors.white : "rgba(255,255,255,0.72)"}
+                        strokeWidth={isActive ? 2.2 : 1.8}
+                      />
+
+                      {/* Active Dot */}
+                      {isActive && (
+                        <View
+                          style={[
+                            styles.activeDot,
+                            { backgroundColor: Colors.white },
+                          ]}
+                        />
+                      )}
+                    </Animated.View>
+
+                    {/* Label */}
+                    <Animated.Text
+                      style={[
+                        styles.label,
+                        {
+                          color: isActive ? Colors.white : "rgba(255,255,255,0.72)",
+                          opacity: isActive ? 1 : 0.78,
+                          transform: [
+                            {
+                              scale: isPressed ? labelScaleAnim : 1,
+                            },
+                          ],
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.label}
+                    </Animated.Text>
+
+                    {/* Ripple Effect */}
+                    {isPressed && (
+                      <Animated.View
+                        style={[
+                          styles.rippleEffect,
+                          {
+                            backgroundColor: "rgba(255,255,255,0.16)",
+                            transform: [
+                              {
+                                scale: scaleAnim.interpolate({
+                                  inputRange: [0.92, 1],
+                                  outputRange: [1.2, 0.8],
+                                }),
+                              },
+                            ],
+                          },
+                        ]}
+                      />
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Bottom Shadow */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0.12)", "transparent"]}
+            style={styles.bottomShadow}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 0, y: 0 }}
+          />
+        </BlurView>
+      </LinearGradient>
     </View>
   );
 }
@@ -318,22 +324,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "transparent",
   },
-  blurBackground: {
+  gradientShell: {
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.4)",
-    borderLeftWidth: 1,
-    borderLeftColor: "rgba(255, 255, 255, 0.2)",
-    borderRightWidth: 1,
-    borderRightColor: "rgba(255, 255, 255, 0.2)",
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowColor: Colors.primaryDark,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
     elevation: 24,
+  },
+  blurBackground: {
+    overflow: "hidden",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.26)",
+    borderLeftWidth: 1,
+    borderLeftColor: "rgba(255, 255, 255, 0.12)",
+    borderRightWidth: 1,
+    borderRightColor: "rgba(255, 255, 255, 0.12)",
+    backgroundColor: "rgba(11, 47, 22, 0.19)",
   },
   navItemsContainer: {
     flexDirection: "row",
@@ -372,13 +381,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 2,
     position: "relative",
-    backgroundColor: "rgba(255, 255, 255, 0.6)",
+    backgroundColor: "rgba(255, 255, 255, 0.10)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(255, 255, 255, 0.14)",
   },
   iconContainerActive: {
-    backgroundColor: "rgba(255, 255, 255, 0.98)",
-    borderColor: "rgba(255, 255, 255, 0.5)",
+    backgroundColor: "rgba(255, 255, 255, 0.20)",
+    borderColor: "rgba(255, 255, 255, 0.28)",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
@@ -399,7 +408,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    shadowColor: "#000",
+    shadowColor: Colors.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 1,

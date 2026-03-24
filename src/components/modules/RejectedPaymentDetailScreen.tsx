@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
@@ -26,13 +25,15 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { PaymentService } from "@/src/services/payment.service";
-import { Colors, Spacing } from "@/src/theme";
 import type { PaymentProof } from "@/src/types/payment.types";
+import StitchHeader from "../common/StitchHeader";
+import StitchStatusBadge from "../common/StitchStatusBadge";
+import { AdminTheme } from "../admin/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const PAYMENT_MODES = [
-  { id: "UPI", label: "UPI", icon: "qr-code", color: Colors.primary },
+  { id: "UPI", label: "UPI", icon: "qr-code", color: AdminTheme.colors.primary },
   { id: "ONLINE", label: "Online", icon: "language", color: "#8B5CF6" },
   {
     id: "BANK_TRANSFER",
@@ -115,7 +116,7 @@ const ImageZoomModal = ({
       <View style={styles.zoomOverlay}>
         <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
         <Pressable style={styles.zoomClose} onPress={onClose}>
-          <MaterialIcons name="close" size={28} color={Colors.white} />
+          <MaterialIcons name="close" size={28} color={AdminTheme.colors.surface} />
         </Pressable>
         <Image
           source={{ uri: imageUri }}
@@ -196,7 +197,7 @@ const ResubmitModal = ({
               <MaterialIcons
                 name="close"
                 size={20}
-                color={Colors.textSecondary}
+                color={AdminTheme.colors.textMuted}
               />
             </Pressable>
           </View>
@@ -244,7 +245,7 @@ const ResubmitModal = ({
                         <MaterialIcons
                           name={item.icon as any}
                           size={18}
-                          color={isActive ? item.color : Colors.textSecondary}
+                          color={isActive ? item.color : AdminTheme.colors.textMuted}
                         />
                       </View>
                       <Text
@@ -272,11 +273,11 @@ const ResubmitModal = ({
                   placeholder="Enter amount"
                   keyboardType="numeric"
                   style={styles.amountInput}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                 />
               </View>
               {amount && Number(amount) > dueAmount && (
-                <Text style={styles.errorText}>
+                <Text style={styles.validationErrorText}>
                   Amount cannot exceed {formatMoney(dueAmount)}
                 </Text>
               )}
@@ -294,7 +295,7 @@ const ResubmitModal = ({
                   onChangeText={setUtrNumber}
                   placeholder="Enter transaction ID from your payment app"
                   style={styles.modalInput}
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={AdminTheme.colors.textSoft}
                   autoCapitalize="characters"
                 />
               </View>
@@ -310,7 +311,7 @@ const ResubmitModal = ({
                 <MaterialIcons
                   name="calendar-today"
                   size={18}
-                  color={Colors.primary}
+                  color={AdminTheme.colors.primary}
                 />
                 <Text
                   style={
@@ -341,7 +342,7 @@ const ResubmitModal = ({
                   <MaterialIcons
                     name="add-photo-alternate"
                     size={24}
-                    color={Colors.primary}
+                    color={AdminTheme.colors.primary}
                   />
                   <Text style={styles.uploadButtonText}>Choose Screenshot</Text>
                 </Pressable>
@@ -364,7 +365,7 @@ const ResubmitModal = ({
                       <MaterialIcons
                         name="close"
                         size={16}
-                        color={Colors.white}
+                        color={AdminTheme.colors.surface}
                       />
                     </Pressable>
                   </View>
@@ -382,7 +383,7 @@ const ResubmitModal = ({
                 onChangeText={setReference}
                 placeholder="Any additional information"
                 style={[styles.modalInput, styles.textArea]}
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={AdminTheme.colors.textSoft}
                 multiline
                 numberOfLines={3}
               />
@@ -403,15 +404,15 @@ const ResubmitModal = ({
                 isSubmitting && styles.modalSubmitButtonDisabled,
               ]}
             >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.modalSubmitGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
+                style={[
+                  styles.modalSubmitGradient,
+                  { backgroundColor: AdminTheme.colors.primary },
+                ]}
               >
                 {isSubmitting ? (
                   <>
-                    <MaterialIcons name="sync" size={18} color={Colors.white} />
+                    <MaterialIcons name="sync" size={18} color={AdminTheme.colors.surface} />
                     <Text style={styles.modalSubmitButtonText}>
                       Submitting...
                     </Text>
@@ -421,14 +422,14 @@ const ResubmitModal = ({
                     <MaterialIcons
                       name="check-circle"
                       size={18}
-                      color={Colors.white}
+                      color={AdminTheme.colors.surface}
                     />
                     <Text style={styles.modalSubmitButtonText}>
                       Submit Payment
                     </Text>
                   </>
                 )}
-              </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </Animated.View>
@@ -572,7 +573,7 @@ export default function RejectedPaymentDetailScreen({
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
           <Text style={styles.loadingText}>Loading payment details...</Text>
         </View>
       </View>
@@ -583,7 +584,7 @@ export default function RejectedPaymentDetailScreen({
     return (
       <View style={styles.container}>
         <View style={styles.errorContainer}>
-          <MaterialIcons name="error-outline" size={48} color={Colors.error} />
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
           <Text style={styles.errorText}>Unable to load payment details</Text>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -595,37 +596,15 @@ export default function RejectedPaymentDetailScreen({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <Animated.View
-        entering={FadeInDown.springify().damping(35)}
-        style={styles.header}
-      >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryDark]}
-          style={styles.headerGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.headerContent}>
-            <Pressable onPress={() => router.back()} style={styles.backIcon}>
-              <MaterialIcons name="arrow-back" size={24} color={Colors.white} />
-            </Pressable>
-            <View style={styles.headerTitle}>
-              <Text style={styles.headerTitleText}>Payment Details</Text>
-              <View
-                style={[
-                  styles.headerBadge,
-                  { backgroundColor: Colors.error + "20" },
-                ]}
-              >
-                <MaterialIcons name="error" size={12} color={Colors.error} />
-                <Text style={[styles.headerBadgeText, { color: Colors.error }]}>
-                  Rejected
-                </Text>
-              </View>
-            </View>
-          </View>
-        </LinearGradient>
+      <Animated.View entering={FadeInDown.springify().damping(35)}>
+        <StitchHeader
+          title="Payment Details"
+          subtitle="Rejected payment proof"
+          variant="gradient"
+          showBackButton
+          onBackPress={() => router.back()}
+          actions={<StitchStatusBadge label="Rejected" tone="danger" />}
+        />
       </Animated.View>
 
       <ScrollView
@@ -680,7 +659,7 @@ export default function RejectedPaymentDetailScreen({
         >
           <View style={styles.rejectionCard}>
             <View style={styles.rejectionHeader}>
-              <MaterialIcons name="warning" size={20} color={Colors.error} />
+              <MaterialIcons name="warning" size={20} color={AdminTheme.colors.danger} />
               <Text style={styles.rejectionTitle}>Rejection Reason</Text>
             </View>
 
@@ -730,7 +709,7 @@ export default function RejectedPaymentDetailScreen({
                   <MaterialIcons
                     name="zoom-in"
                     size={32}
-                    color={Colors.white}
+                    color={AdminTheme.colors.surface}
                   />
                   <Text style={styles.screenshotText}>Tap to Zoom</Text>
                 </View>
@@ -773,7 +752,7 @@ export default function RejectedPaymentDetailScreen({
         >
           <View style={styles.actionCard}>
             <View style={styles.actionHeader}>
-              <MaterialIcons name="refresh" size={24} color={Colors.primary} />
+              <MaterialIcons name="refresh" size={24} color={AdminTheme.colors.primary} />
               <View style={styles.actionTitleContainer}>
                 <Text style={styles.actionTitle}>Resubmit Payment</Text>
                 <Text style={styles.actionSubtitle}>
@@ -793,15 +772,15 @@ export default function RejectedPaymentDetailScreen({
                 pressed && styles.buttonPressed,
               ]}
             >
-              <LinearGradient
-                colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-                style={styles.resubmitButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+              <View
+                style={[
+                  styles.resubmitButtonGradient,
+                  { backgroundColor: AdminTheme.colors.primary },
+                ]}
               >
-                <MaterialIcons name="send" size={18} color={Colors.white} />
+                <MaterialIcons name="send" size={18} color={AdminTheme.colors.surface} />
                 <Text style={styles.resubmitButtonText}>Resubmit Payment</Text>
-              </LinearGradient>
+              </View>
             </Pressable>
           </View>
         </Animated.View>
@@ -851,37 +830,10 @@ const styles = StyleSheet.create({
   header: {
     overflow: "hidden",
   },
-  headerGradient: {
-    padding: Spacing.lg,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  backIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    flex: 1,
-  },
-  headerTitleText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: Colors.white,
-    marginBottom: 4,
-  },
   headerBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 8,
     gap: 4,
@@ -894,23 +846,23 @@ const styles = StyleSheet.create({
 
   // Content
   content: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.lg,
     paddingBottom: 100,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
 
   // Section
   section: {
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   sectionCard: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    shadowColor: Colors.shadow,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -927,14 +879,14 @@ const styles = StyleSheet.create({
   amountLabel: {
     fontSize: 12,
     color: "#6B7280",
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
 
   // Divider
   divider: {
     height: 1,
     backgroundColor: "#E5E7EB",
-    marginVertical: Spacing.md,
+    marginVertical: AdminTheme.spacing.md,
   },
 
   // Info Row
@@ -942,7 +894,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.sm,
   },
   infoLabel: {
     fontSize: 13,
@@ -965,35 +917,35 @@ const styles = StyleSheet.create({
   rejectionCard: {
     backgroundColor: "#FEF2F2",
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
     borderColor: "#FEE2E2",
   },
   rejectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
+    gap: AdminTheme.spacing.sm,
+    marginBottom: AdminTheme.spacing.md,
   },
   rejectionTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   rejectionReasonText: {
     fontSize: 15,
     color: "#5F2828",
     fontWeight: "500",
     lineHeight: 20,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   rejectionDivider: {
     height: 1,
     backgroundColor: "#FEE2E2",
-    marginVertical: Spacing.md,
+    marginVertical: AdminTheme.spacing.md,
   },
   rejectionMeta: {
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   rejectionMetaRow: {
     flexDirection: "row",
@@ -1013,7 +965,7 @@ const styles = StyleSheet.create({
   screenshotContainer: {
     borderRadius: 12,
     overflow: "hidden",
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   screenshot: {
     width: "100%",
@@ -1029,11 +981,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.3)",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   screenshotText: {
     fontSize: 12,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontWeight: "600",
   },
 
@@ -1041,7 +993,7 @@ const styles = StyleSheet.create({
   transactionDetails: {
     backgroundColor: "#F9FAFB",
     borderRadius: 12,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     borderWidth: 1,
     borderColor: "#E5E7EB",
   },
@@ -1049,13 +1001,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#374151",
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: Spacing.xs,
+    paddingVertical: AdminTheme.spacing.xs,
   },
   detailLabel: {
     fontSize: 12,
@@ -1067,22 +1019,22 @@ const styles = StyleSheet.create({
     color: "#111827",
     textAlign: "right",
     flex: 1,
-    marginLeft: Spacing.md,
+    marginLeft: AdminTheme.spacing.md,
   },
 
   // Action Card
   actionCard: {
     backgroundColor: "#F0F7FF",
     borderRadius: 16,
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
     borderWidth: 1,
     borderColor: "#DBEAFE",
   },
   actionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
+    gap: AdminTheme.spacing.md,
+    marginBottom: AdminTheme.spacing.lg,
   },
   actionTitleContainer: {
     flex: 1,
@@ -1105,13 +1057,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   resubmitButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
   buttonPressed: {
     transform: [{ scale: 0.98 }],
@@ -1122,7 +1074,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#374151",
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
 
   // Loading & Error
@@ -1130,7 +1082,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   loadingText: {
     fontSize: 14,
@@ -1140,8 +1092,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
+    gap: AdminTheme.spacing.lg,
+    paddingHorizontal: AdminTheme.spacing.lg,
   },
   errorText: {
     fontSize: 16,
@@ -1150,15 +1102,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   backButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.primary,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.primary,
     borderRadius: 12,
   },
   backButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
 
   // Zoom Modal
@@ -1184,7 +1136,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: "90%",
@@ -1193,8 +1145,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: "#F3F4F6",
   },
@@ -1217,13 +1169,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#F3F4F6",
   },
   modalBody: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
   },
   dueHighlight: {
     backgroundColor: "#FEF2F2",
     borderRadius: 16,
-    padding: Spacing.md,
+    padding: AdminTheme.spacing.md,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#FEE2E2",
@@ -1239,13 +1191,13 @@ const styles = StyleSheet.create({
     color: "#DC2626",
   },
   modalSection: {
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
   },
   modalSectionTitle: {
     fontSize: 14,
     fontWeight: "600",
     color: "#374151",
-    marginBottom: Spacing.sm,
+    marginBottom: AdminTheme.spacing.sm,
   },
   requiredStar: {
     color: "#DC2626",
@@ -1259,23 +1211,23 @@ const styles = StyleSheet.create({
   modeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   modeOption: {
     flex: 1,
     minWidth: "45%",
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.sm,
+    padding: AdminTheme.spacing.sm,
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    backgroundColor: Colors.white,
-    gap: Spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
+    gap: AdminTheme.spacing.sm,
   },
   modeOptionActive: {
     borderWidth: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modeIcon: {
     width: 32,
@@ -1295,15 +1247,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingHorizontal: AdminTheme.spacing.md,
     height: 48,
   },
   amountCurrency: {
     fontSize: 16,
     fontWeight: "600",
-    color: Colors.primary,
-    marginRight: Spacing.xs,
+    color: AdminTheme.colors.primary,
+    marginRight: AdminTheme.spacing.xs,
   },
   amountInput: {
     flex: 1,
@@ -1311,7 +1263,7 @@ const styles = StyleSheet.create({
     color: "#111827",
     padding: 0,
   },
-  errorText: {
+  validationErrorText: {
     fontSize: 12,
     color: "#DC2626",
     marginTop: 4,
@@ -1321,11 +1273,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     fontSize: 14,
     color: "#111827",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     height: 44,
   },
   textArea: {
@@ -1338,11 +1290,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
     height: 44,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   datePickerText: {
     fontSize: 14,
@@ -1359,17 +1311,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: AdminTheme.colors.primary,
     borderStyle: "dashed",
     borderRadius: 12,
-    paddingVertical: Spacing.md,
-    gap: Spacing.sm,
+    paddingVertical: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
     backgroundColor: "#EFF6FF",
   },
   uploadButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   previewContainer: {
     position: "relative",
@@ -1389,12 +1341,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: Spacing.sm,
+    padding: AdminTheme.spacing.sm,
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   previewName: {
     fontSize: 12,
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     flex: 1,
   },
   previewRemove: {
@@ -1407,11 +1359,11 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: "row",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: "#F3F4F6",
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
   },
   modalCancelButton: {
     flex: 1,
@@ -1421,7 +1373,7 @@ const styles = StyleSheet.create({
     borderColor: "#E5E7EB",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   modalCancelButtonText: {
     fontSize: 14,
@@ -1442,11 +1394,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
   },
   modalSubmitButtonText: {
     fontSize: 14,
     fontWeight: "600",
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
   },
 });

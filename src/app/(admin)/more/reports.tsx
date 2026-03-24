@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,13 +15,15 @@ import {
 } from "react-native";
 import { BarChart, PieChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
+import StitchCard from "../../../components/common/StitchCard";
+import StitchHeader from "../../../components/common/StitchHeader";
+import { AdminTheme } from "../../../components/admin/theme";
 import { ReportsExportService } from "../../../services/reports-export.service";
 import { ReportService } from "../../../services/reports.service";
-import { Colors, Spacing } from "../../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CHART_WIDTH = SCREEN_WIDTH - Spacing.lg * 2 - 20;
-const CHART_HEIGHT = 220;
+const CHART_WIDTH = SCREEN_WIDTH - AdminTheme.spacing.lg * 2;
+const CHART_HEIGHT = 200;
 
 type Period = "all" | "week" | "month" | "year";
 type ReportType =
@@ -30,15 +33,17 @@ type ReportType =
   | "STAFF_ACCOUNTING";
 
 const formatCurrency = (value: number) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+const formatNumber = (value: number) => Number(value || 0).toLocaleString("en-IN");
 
 const chartConfig = {
-  backgroundGradientFrom: Colors.surface,
-  backgroundGradientTo: Colors.surface,
+  backgroundGradientFrom: AdminTheme.colors.surface,
+  backgroundGradientTo: AdminTheme.colors.surface,
   decimalPlaces: 0,
   color: (opacity = 1) => `rgba(31, 94, 140, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(92, 107, 122, ${opacity})`,
-  barPercentage: 0.55,
-  propsForBackgroundLines: { stroke: Colors.borderLight },
+  barPercentage: 0.65,
+  propsForBackgroundLines: { stroke: AdminTheme.colors.borderSoft },
+  propsForLabels: { fontSize: 10 },
 };
 
 const reportTypeOptions: { id: ReportType; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
@@ -48,11 +53,11 @@ const reportTypeOptions: { id: ReportType; label: string; icon: keyof typeof Mat
   { id: "STAFF_ACCOUNTING", label: "Staff", icon: "groups" },
 ];
 
-const periodOptions: { id: Period; label: string }[] = [
+const periodOptions: { id: Period; label: string; days?: number }[] = [
   { id: "all", label: "All Time" },
-  { id: "week", label: "7 Days" },
-  { id: "month", label: "30 Days" },
-  { id: "year", label: "12 Months" },
+  { id: "week", label: "7 Days", days: 7 },
+  { id: "month", label: "30 Days", days: 30 },
+  { id: "year", label: "12 Months", days: 365 },
 ];
 
 const getDateRange = (period: Period) => {
@@ -68,19 +73,16 @@ const getDateRange = (period: Period) => {
 };
 
 export default function AdminReports() {
+  const router = useRouter();
   const [selectedPeriod, setSelectedPeriod] = useState<Period>("all");
   const [selectedReportType, setSelectedReportType] = useState<ReportType>("SALES");
-  const [lastExport, setLastExport] = useState<{
-    fileName: string;
-    fileUri: string;
-    contentType?: string;
-  } | null>(null);
 
   const { startDate, endDate } = useMemo(() => getDateRange(selectedPeriod), [selectedPeriod]);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["report-analytics", selectedPeriod],
     queryFn: () => ReportService.getOverview({ startDate, endDate }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const exportMutation = useMutation({
@@ -91,33 +93,41 @@ export default function AdminReports() {
         startDate,
         endDate,
       }),
-    onSuccess: (res, format) => {
-      if (res.fileUri && res.fileName) {
-        setLastExport({
-          fileName: res.fileName,
-          fileUri: res.fileUri,
-          contentType: res.contentType,
-        });
+    onSuccess: async (response, format) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      try {
+        if (response?.fileUri) {
+          Alert.alert(
+            "✅ Report Ready",
+            `${format} report has been generated and opened for save/share.`
+          );
+          return;
+        }
+
+        throw new Error("Generated file could not be prepared on this device.");
+      } catch (error: any) {
+        Alert.alert(
+          "⚠️ File Error",
+          error?.message || "Unable to open the generated file. Please try again."
+        );
       }
+    },
+    onError: (error: any) => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert(
-        res.byteLength > 0 ? "Report Downloaded" : "Report Error",
-        res.byteLength > 0
-          ? `${format} report has been prepared and opened in share/save options.`
-          : "Unable to generate report. Please try again."
+        "❌ Report Error",
+        error?.message || "Unable to generate report. Please check your connection and try again."
       );
     },
-    onError: (e: any) => {
-      Alert.alert("Report Error", e?.message || "Unable to generate report. Please try again.");
-    },
   });
-
   const summaryCards = useMemo(() => {
     if (!data) return [];
     return [
-      { label: "Total Sales", value: formatCurrency(data.sales.totalSales), color: Colors.primary },
-      { label: "Total Paid", value: formatCurrency(data.sales.totalPaid), color: Colors.success },
-      { label: "Total Due", value: formatCurrency(data.sales.totalDue), color: Colors.error },
-      { label: "Profit", value: formatCurrency(data.sales.profit), color: Colors.info },
+      { label: "Total Sales", value: formatCurrency(data.sales.totalSales), color: AdminTheme.colors.primary },
+      { label: "Total Paid", value: formatCurrency(data.sales.totalPaid), color: AdminTheme.colors.success },
+      { label: "Total Due", value: formatCurrency(data.sales.totalDue), color: AdminTheme.colors.danger },
+      { label: "Profit", value: formatCurrency(data.sales.profit), color: data.sales.profit >= 0 ? AdminTheme.colors.success : AdminTheme.colors.danger },
     ];
   }, [data]);
 
@@ -126,15 +136,20 @@ export default function AdminReports() {
 
     if (selectedReportType === "SALES") {
       return {
-        title: "Sales Snapshot",
+        title: "Sales Overview",
         bar: {
-          labels: ["Sales", "Paid", "Due", "Refund", "Profit"],
+          labels: ["Sales", "Paid", "Due", "Profit"],
           values: [
             data.sales.totalSales,
             data.sales.totalPaid,
             data.sales.totalDue,
-            data.sales.refundedAmount,
             data.sales.profit,
+          ],
+          colors: [
+            AdminTheme.colors.primary,
+            AdminTheme.colors.success,
+            AdminTheme.colors.danger,
+            data.sales.profit >= 0 ? AdminTheme.colors.success : AdminTheme.colors.danger,
           ],
         },
       };
@@ -142,7 +157,7 @@ export default function AdminReports() {
 
     if (selectedReportType === "INVENTORY") {
       return {
-        title: "Inventory Snapshot",
+        title: "Inventory Overview",
         bar: {
           labels: ["Available", "Sold", "Returned", "Discarded"],
           values: [
@@ -151,27 +166,36 @@ export default function AdminReports() {
             data.inventory.plantsReturned,
             data.inventory.plantsDiscarded,
           ],
+          colors: [
+            AdminTheme.colors.success,
+            AdminTheme.colors.primary,
+            AdminTheme.colors.warning,
+            AdminTheme.colors.danger,
+          ],
         },
       };
     }
 
     if (selectedReportType === "PAYMENT_DUES") {
+      const total = data.sales.totalPaid + data.sales.totalDue;
       return {
         title: "Payment Distribution",
         pie: [
           {
             name: "Paid",
             amount: data.sales.totalPaid,
-            color: Colors.success,
-            legendFontColor: Colors.textSecondary,
+            color: AdminTheme.colors.success,
+            legendFontColor: AdminTheme.colors.textMuted,
             legendFontSize: 12,
+            percentage: total > 0 ? ((data.sales.totalPaid / total) * 100).toFixed(1) : "0",
           },
           {
             name: "Due",
             amount: data.sales.totalDue,
-            color: Colors.error,
-            legendFontColor: Colors.textSecondary,
+            color: AdminTheme.colors.danger,
+            legendFontColor: AdminTheme.colors.textMuted,
             legendFontSize: 12,
+            percentage: total > 0 ? ((data.sales.totalDue / total) * 100).toFixed(1) : "0",
           },
         ],
       };
@@ -179,15 +203,16 @@ export default function AdminReports() {
 
     if (selectedReportType === "STAFF_ACCOUNTING") {
       const topStaff = (data.staff.analytics || [])
-        .slice()
+        .filter(s => Number(s.collections || 0) > 0)
         .sort((a, b) => Number(b.collections || 0) - Number(a.collections || 0))
         .slice(0, 5);
 
       return {
         title: "Top Staff Collections",
         bar: {
-          labels: topStaff.map((row) => (row.staffName || "Staff").slice(0, 8)),
+          labels: topStaff.map((row) => (row.staffName || "Staff").slice(0, 10)),
           values: topStaff.map((row) => Number(row.collections || 0)),
+          colors: [AdminTheme.colors.primary],
         },
       };
     }
@@ -196,15 +221,18 @@ export default function AdminReports() {
   }, [data, selectedReportType]);
 
   const onRefresh = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await refetch();
   };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.centered} edges={["left", "right"]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.helperText}>Loading report analytics...</Text>
+        <StitchHeader title="Reports" subtitle="Loading analytics..." onBackPress={() => router.back()} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
+          <Text style={styles.loadingText}>Loading report data...</Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -212,266 +240,611 @@ export default function AdminReports() {
   if (error || !data) {
     return (
       <SafeAreaView style={styles.centered} edges={["left", "right"]}>
-        <MaterialIcons name="error-outline" size={46} color={Colors.error} />
-        <Text style={styles.errorTitle}>Unable to load reports</Text>
-        <Text style={styles.helperText}>Please retry. If this continues, check report permissions.</Text>
-        <Pressable style={styles.retryBtn} onPress={onRefresh}>
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
+        <StitchHeader title="Reports" subtitle="Unable to load reports" onBackPress={() => router.back()} />
+        <View style={styles.errorContainer}>
+          <MaterialIcons name="error-outline" size={48} color={AdminTheme.colors.danger} />
+          <Text style={styles.errorTitle}>Unable to Load Reports</Text>
+          <Text style={styles.errorMessage}>
+            There was an issue loading the report data. Please check your connection and try again.
+          </Text>
+          <Pressable style={styles.retryButton} onPress={onRefresh}>
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
 
+  const dateRangeText = startDate && endDate
+    ? `${new Date(startDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} - ${new Date(endDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`
+    : "All-time data";
+
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Reports</Text>
-            <Text style={styles.subtitle}>
-              {startDate && endDate
-                ? `${new Date(startDate).toLocaleDateString("en-IN")} - ${new Date(endDate).toLocaleDateString("en-IN")}`
-                : "All-time analytics"}
-            </Text>
-          </View>
-          <Pressable onPress={onRefresh} style={styles.iconBtn}>
-            <MaterialIcons name={isRefetching ? "hourglass-top" : "refresh"} size={18} color={Colors.white} />
+      <StitchHeader title="Reports" subtitle="Analytics and exports" onBackPress={() => router.back()} actions={
+        <Pressable onPress={onRefresh} style={styles.refreshButton}>
+            <MaterialIcons name={isRefetching ? "hourglass-top" : "refresh"} size={20} color={AdminTheme.colors.surface} />
           </Pressable>
-        </View>
+      }/>
 
-        <View style={styles.cardRow}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        
+
+        {/* Summary Cards */}
+        <View style={styles.summaryGrid}>
           {summaryCards.map((item) => (
-            <View key={item.label} style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{item.label}</Text>
-              <Text style={[styles.summaryValue, { color: item.color }]}>{item.value}</Text>
-            </View>
+            <StitchCard key={item.label} style={styles.summaryCard}>
+              <Text style={styles.summaryCardLabel}>{item.label}</Text>
+              <Text style={[styles.summaryCardValue, { color: item.color }]}>{item.value}</Text>
+            </StitchCard>
           ))}
         </View>
 
-        <View style={styles.selectorWrap}>
-          <View style={styles.periodRow}>
-            {periodOptions.map((period) => (
-              <Pressable
-                key={period.id}
-                onPress={() => setSelectedPeriod(period.id)}
-                style={[styles.chip, selectedPeriod === period.id && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, selectedPeriod === period.id && styles.chipTextActive]}>
-                  {period.label}
-                </Text>
-              </Pressable>
-            ))}
+        {/* Controls Card */}
+        <StitchCard style={styles.controlsCard}>
+          {/* Period Selector */}
+          <View style={styles.periodSection}>
+            <Text style={styles.sectionLabel}>Time Period</Text>
+            <View style={styles.periodGrid}>
+              {periodOptions.map((period) => (
+                <Pressable
+                  key={period.id}
+                  onPress={() => setSelectedPeriod(period.id)}
+                  style={[
+                    styles.periodChip,
+                    selectedPeriod === period.id && styles.periodChipActive,
+                  ]}
+                >
+                  <Text style={[
+                    styles.periodChipText,
+                    selectedPeriod === period.id && styles.periodChipTextActive,
+                  ]}>
+                    {period.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
-            {reportTypeOptions.map((opt) => (
-              <Pressable
-                key={opt.id}
-                onPress={() => setSelectedReportType(opt.id)}
-                style={[styles.typeChip, selectedReportType === opt.id && styles.typeChipActive]}
-              >
-                <MaterialIcons
-                  name={opt.icon}
-                  size={14}
-                  color={selectedReportType === opt.id ? Colors.white : Colors.textSecondary}
-                />
-                <Text
-                  style={[styles.typeChipText, selectedReportType === opt.id && styles.typeChipTextActive]}
+          {/* Report Type Selector */}
+          <View style={styles.typeSection}>
+            <Text style={styles.sectionLabel}>Report Type</Text>
+            <View style={styles.typeGrid}>
+              {reportTypeOptions.map((opt) => (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => setSelectedReportType(opt.id)}
+                  style={[
+                    styles.typeChip,
+                    selectedReportType === opt.id && styles.typeChipActive,
+                  ]}
                 >
-                  {opt.label}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
+                  <MaterialIcons
+                    name={opt.icon}
+                    size={16}
+                    color={selectedReportType === opt.id ? AdminTheme.colors.surface : AdminTheme.colors.textMuted}
+                  />
+                  <Text style={[
+                    styles.typeChipText,
+                    selectedReportType === opt.id && styles.typeChipTextActive,
+                  ]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
 
-          <View style={styles.exportRow}>
+          {/* Export Buttons */}
+          <View style={styles.exportSection}>
             <Pressable
-              style={[styles.exportBtn, { backgroundColor: Colors.error }]}
+              style={[styles.exportButton, styles.pdfButton]}
               onPress={() => exportMutation.mutate("PDF")}
               disabled={exportMutation.isPending}
             >
-              <MaterialIcons name="picture-as-pdf" size={16} color={Colors.white} />
-              <Text style={styles.exportText}>PDF</Text>
+              {exportMutation.isPending ? (
+                <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
+              ) : (
+                <>
+                  <MaterialIcons name="picture-as-pdf" size={16} color={AdminTheme.colors.surface} />
+                  <Text style={styles.exportButtonText}>Export PDF</Text>
+                </>
+              )}
             </Pressable>
             <Pressable
-              style={[styles.exportBtn, { backgroundColor: Colors.success }]}
+              style={[styles.exportButton, styles.excelButton]}
               onPress={() => exportMutation.mutate("XLSX")}
               disabled={exportMutation.isPending}
             >
-              <MaterialIcons name="grid-on" size={16} color={Colors.white} />
-              <Text style={styles.exportText}>Excel</Text>
+              {exportMutation.isPending ? (
+                <ActivityIndicator size="small" color={AdminTheme.colors.surface} />
+              ) : (
+                <>
+                  <MaterialIcons name="grid-on" size={16} color={AdminTheme.colors.surface} />
+                  <Text style={styles.exportButtonText}>Export Excel</Text>
+                </>
+              )}
             </Pressable>
           </View>
-        </View>
+        </StitchCard>
 
-        {lastExport ? (
-          <View style={styles.lastExportCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.lastExportTitle}>Last Export</Text>
-              <Text style={styles.lastExportName}>{lastExport.fileName}</Text>
-              <Text style={styles.lastExportPath} numberOfLines={1}>
-                {lastExport.fileUri}
+        {/* Chart Section */}
+        {chartPayload && (
+          <StitchCard style={styles.chartCard}>
+            <Text style={styles.chartTitle}>{chartPayload.title}</Text>
+            {chartPayload.bar && chartPayload.bar.values.some(v => Number(v) > 0) ? (
+              <View style={styles.chartContainer}>
+                <BarChart
+                  data={{
+                    labels: chartPayload.bar.labels,
+                    datasets: [{ data: chartPayload.bar.values }],
+                  }}
+                  width={CHART_WIDTH}
+                  height={CHART_HEIGHT}
+                  chartConfig={chartConfig}
+                  fromZero
+                  yAxisLabel={chartPayload.title.includes("Sales") ? "₹" : ""}
+                  yAxisSuffix=""
+                  showValuesOnTopOfBars
+                  withInnerLines
+                  style={styles.chart}
+                />
+              </View>
+            ) : null}
+            {chartPayload.pie && chartPayload.pie.some(d => Number(d.amount) > 0) ? (
+              <View style={styles.pieContainer}>
+                <PieChart
+                  data={chartPayload.pie}
+                  width={CHART_WIDTH}
+                  height={180}
+                  chartConfig={chartConfig}
+                  accessor="amount"
+                  backgroundColor="transparent"
+                  paddingLeft="0"
+                  absolute
+                />
+                <View style={styles.legendContainer}>
+                  {chartPayload.pie.map((item, idx) => (
+                    <View key={idx} style={styles.legendItem}>
+                      <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                      <Text style={styles.legendText}>{item.name}</Text>
+                      <Text style={styles.legendPercentage}>{item.percentage}%</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            {(!chartPayload.bar || !chartPayload.bar.values.some(v => Number(v) > 0)) &&
+             (!chartPayload.pie || !chartPayload.pie.some(d => Number(d.amount) > 0)) && (
+              <View style={styles.noDataContainer}>
+                <MaterialIcons name="bar-chart" size={32} color={AdminTheme.colors.textSoft} />
+                <Text style={styles.noDataText}>No data available for selected filters</Text>
+              </View>
+            )}
+          </StitchCard>
+        )}
+
+        {/* Seed Lifecycle Section */}
+        <StitchCard style={styles.metricsCard}>
+          <Text style={styles.metricsTitle}>Seed Lifecycle</Text>
+          <View style={styles.metricsGrid}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Seeds Purchased</Text>
+              <Text style={styles.metricValue}>{formatNumber(data.seedLifecycle.seedsPurchased)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Seeds Sown</Text>
+              <Text style={styles.metricValue}>{formatNumber(data.seedLifecycle.seedsSown)}</Text>
+            </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Germinated</Text>
+              <Text style={[styles.metricValue, { color: AdminTheme.colors.success }]}>
+                {formatNumber(data.seedLifecycle.germinatedPlants)}
               </Text>
             </View>
-            <Pressable
-              style={styles.openAgainBtn}
-              onPress={async () => {
-                try {
-                  await ReportsExportService.reopenSavedFile(
-                    lastExport.fileUri,
-                    lastExport.contentType
-                  );
-                } catch (e: any) {
-                  Alert.alert("Open Failed", e?.message || "Unable to open exported file.");
-                }
-              }}
-            >
-              <MaterialIcons name="open-in-new" size={16} color={Colors.white} />
-              <Text style={styles.openAgainText}>Open Again</Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>{chartPayload?.title || "Overview"}</Text>
-          {!!chartPayload?.bar && chartPayload.bar.values.some((v) => Number(v) > 0) ? (
-            <BarChart
-              data={{
-                labels: chartPayload.bar.labels,
-                datasets: [{ data: chartPayload.bar.values }],
-              }}
-              width={CHART_WIDTH}
-              height={CHART_HEIGHT}
-              chartConfig={chartConfig}
-              fromZero
-              yAxisLabel="₹"
-              yAxisSuffix=""
-              showValuesOnTopOfBars
-              withInnerLines
-              style={{ marginLeft: -12, borderRadius: 12 }}
-            />
-          ) : null}
-          {!!chartPayload?.pie && chartPayload.pie.some((d) => Number(d.amount) > 0) ? (
-            <PieChart
-              data={chartPayload.pie}
-              width={CHART_WIDTH}
-              height={210}
-              chartConfig={chartConfig}
-              accessor="amount"
-              backgroundColor="transparent"
-              paddingLeft="12"
-              absolute
-            />
-          ) : null}
-          {((!chartPayload?.bar || !chartPayload.bar.values.some((v) => Number(v) > 0)) &&
-            (!chartPayload?.pie || !chartPayload.pie.some((d) => Number(d.amount) > 0))) ? (
-            <Text style={styles.helperText}>No chart data available for selected filters.</Text>
-          ) : null}
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Seed Lifecycle</Text>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Seeds Purchased</Text><Text style={styles.metricValue}>{data.seedLifecycle.seedsPurchased}</Text></View>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Seeds Sown</Text><Text style={styles.metricValue}>{data.seedLifecycle.seedsSown}</Text></View>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Germinated</Text><Text style={styles.metricValue}>{data.seedLifecycle.germinatedPlants}</Text></View>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Discarded</Text><Text style={styles.metricValue}>{data.seedLifecycle.discardedSeeds}</Text></View>
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Customer Metrics</Text>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Total Customers</Text><Text style={styles.metricValue}>{data.customers.totalCustomers}</Text></View>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Customers with Due</Text><Text style={styles.metricValue}>{data.customers.customersWithDues}</Text></View>
-          <View style={styles.metricRow}><Text style={styles.metricLabel}>Completed Payments</Text><Text style={styles.metricValue}>{data.customers.customersWithCompletedPayments}</Text></View>
-        </View>
-
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Staff Performance</Text>
-          {(data.staff.analytics || []).slice(0, 6).map((row, index) => (
-            <View key={`${row.staffUserId}-${index}`} style={styles.staffRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.staffName}>{row.staffName || "Unknown Staff"}</Text>
-                <Text style={styles.staffMeta}>Sales: {row.salesMade || 0}</Text>
-              </View>
-              <View style={{ alignItems: "flex-end" }}>
-                <Text style={styles.staffMeta}>Collections: {formatCurrency(Number(row.collections || 0))}</Text>
-                <Text style={styles.staffMeta}>Expenses: {formatCurrency(Number(row.expensesRecorded || 0))}</Text>
-              </View>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>Discarded</Text>
+              <Text style={[styles.metricValue, { color: AdminTheme.colors.danger }]}>
+                {formatNumber(data.seedLifecycle.discardedSeeds)}
+              </Text>
             </View>
-          ))}
-          {(data.staff.analytics || []).length === 0 ? (
-            <Text style={styles.helperText}>No staff accounting rows for selected period.</Text>
-          ) : null}
-        </View>
+          </View>
+        </StitchCard>
+
+        {/* Customer Metrics Section */}
+        <StitchCard style={styles.metricsCard}>
+          <Text style={styles.metricsTitle}>Customer Metrics</Text>
+          <View style={styles.customerMetrics}>
+            <View style={styles.customerMetric}>
+              <Text style={styles.metricLabel}>Total Customers</Text>
+              <Text style={styles.metricValue}>{formatNumber(data.customers.totalCustomers)}</Text>
+            </View>
+            <View style={styles.customerMetric}>
+              <Text style={styles.metricLabel}>With Due Balance</Text>
+              <Text style={[styles.metricValue, { color: AdminTheme.colors.danger }]}>
+                {formatNumber(data.customers.customersWithDues)}
+              </Text>
+            </View>
+            <View style={styles.customerMetric}>
+              <Text style={styles.metricLabel}>Completed Payments</Text>
+              <Text style={[styles.metricValue, { color: AdminTheme.colors.success }]}>
+                {formatNumber(data.customers.customersWithCompletedPayments)}
+              </Text>
+            </View>
+          </View>
+        </StitchCard>
+
+        {/* Staff Performance Section */}
+        <StitchCard style={styles.metricsCard}>
+          <Text style={styles.metricsTitle}>Staff Performance</Text>
+          {(data.staff.analytics || []).length > 0 ? (
+            <View style={styles.staffList}>
+              {(data.staff.analytics || []).slice(0, 5).map((row, index) => (
+                <View key={`${row.staffUserId}-${index}`} style={styles.staffItem}>
+                  <View style={styles.staffInfo}>
+                    <Text style={styles.staffName}>{row.staffName || "Unknown Staff"}</Text>
+                    <Text style={styles.staffSales}>Sales: {formatNumber(row.salesMade || 0)}</Text>
+                  </View>
+                  <View style={styles.staffStats}>
+                    <Text style={styles.staffCollections}>
+                      Collections: {formatCurrency(Number(row.collections || 0))}
+                    </Text>
+                    <Text style={styles.staffExpenses}>
+                      Expenses: {formatCurrency(Number(row.expensesRecorded || 0))}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.noDataContainer}>
+              <MaterialIcons name="people" size={32} color={AdminTheme.colors.textSoft} />
+              <Text style={styles.noDataText}>No staff data available for this period</Text>
+            </View>
+          )}
+        </StitchCard>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F6FAFF" },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, padding: 20, backgroundColor: "#F6FAFF" },
-  content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 24, fontWeight: "700", color: Colors.text },
-  subtitle: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  iconBtn: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: Colors.primary },
+  container: {
+    flex: 1,
+    backgroundColor: "#F6FAFF",
+  },
+  centered: {
+    flex: 1,
+    backgroundColor: "#F6FAFF",
+  },
+  scrollContent: {
+    padding: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.md,
+    paddingBottom: 100,
+  },
 
-  cardRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  summaryCard: { width: "48%", backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 },
-  summaryLabel: { fontSize: 12, color: Colors.textSecondary },
-  summaryValue: { fontSize: 16, fontWeight: "700", marginTop: 4 },
-
-  selectorWrap: { backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, padding: 12, gap: 10 },
-  periodRow: { flexDirection: "row", gap: 8 },
-  chip: { flex: 1, borderRadius: 18, borderWidth: 1, borderColor: Colors.border, paddingVertical: 8, alignItems: "center" },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 12, color: Colors.textSecondary, fontWeight: "600" },
-  chipTextActive: { color: Colors.white },
-  typeRow: { gap: 8, paddingVertical: 2, paddingRight: 12 },
-  typeChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, borderRadius: 18, backgroundColor: Colors.surface },
-  typeChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  typeChipText: { color: Colors.textSecondary, fontSize: 12, fontWeight: "600" },
-  typeChipTextActive: { color: Colors.white },
-
-  exportRow: { flexDirection: "row", gap: 10 },
-  exportBtn: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
-  exportText: { color: Colors.white, fontWeight: "700" },
-  lastExportCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    borderRadius: 12,
-    padding: 12,
+  // Header Section
+  headerSection: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: AdminTheme.spacing.xs,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+  },
+  dateRange: {
+    fontSize: 12,
+    color: AdminTheme.colors.textMuted,
+    marginTop: 2,
+  },
+  refreshButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderWidth:1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+
+  // Summary Cards
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
   },
-  lastExportTitle: { fontSize: 11, color: Colors.textSecondary, fontWeight: "600" },
-  lastExportName: { fontSize: 14, color: Colors.text, fontWeight: "700", marginTop: 2 },
-  lastExportPath: { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
-  openAgainBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
+  summaryCard: {
+    width: "48%",
+    padding: 12,
+  },
+  summaryCardLabel: {
+    fontSize: 12,
+    color: AdminTheme.colors.textMuted,
+  },
+  summaryCardValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+
+  // Controls Card
+  controlsCard: {
+    padding: 16,
+    gap: 16,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: AdminTheme.colors.textMuted,
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  periodSection: {
+    gap: 8,
+  },
+  periodGrid: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  periodChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.border,
+    alignItems: "center",
+  },
+  periodChipActive: {
+    backgroundColor: AdminTheme.colors.primary,
+    borderColor: AdminTheme.colors.primary,
+  },
+  periodChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: AdminTheme.colors.textMuted,
+  },
+  periodChipTextActive: {
+    color: AdminTheme.colors.surface,
+  },
+  typeSection: {
+    gap: 8,
+  },
+  typeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  typeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: AdminTheme.colors.border,
+    backgroundColor: AdminTheme.colors.surface,
+  },
+  typeChipActive: {
+    backgroundColor: AdminTheme.colors.primary,
+    borderColor: AdminTheme.colors.primary,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: AdminTheme.colors.textMuted,
+  },
+  typeChipTextActive: {
+    color: AdminTheme.colors.surface,
+  },
+  exportSection: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
+  exportButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  pdfButton: {
+    backgroundColor: AdminTheme.colors.danger,
+  },
+  excelButton: {
+    backgroundColor: AdminTheme.colors.success,
+  },
+  exportButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: AdminTheme.colors.surface,
+  },
+
+  // Chart Card
+  chartCard: {
+    padding: 16,
+  },
+  chartTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+    marginBottom: 12,
+  },
+  chartContainer: {
+    alignItems: "center",
+  },
+  chart: {
+    marginLeft: -12,
+    borderRadius: 12,
+  },
+  pieContainer: {
+    alignItems: "center",
+  },
+  legendContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 12,
+  },
+  legendItem: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  openAgainText: { color: Colors.white, fontWeight: "700", fontSize: 12 },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 11,
+    color: AdminTheme.colors.textMuted,
+  },
+  legendPercentage: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: AdminTheme.colors.text,
+  },
 
-  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 },
-  panelTitle: { fontSize: 15, fontWeight: "700", color: Colors.text, marginBottom: 8 },
-  metricRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 },
-  metricLabel: { color: Colors.textSecondary, fontSize: 13 },
-  metricValue: { color: Colors.text, fontWeight: "700", fontSize: 13 },
+  // Metrics Cards
+  metricsCard: {
+    padding: 16,
+  },
+  metricsTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+    marginBottom: 12,
+  },
+  metricsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  metricItem: {
+    width: "48%",
+    padding: 10,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
+    borderRadius: 10,
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: AdminTheme.colors.textMuted,
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+  },
+  customerMetrics: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  customerMetric: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: AdminTheme.colors.surfaceMuted,
+    borderRadius: 10,
+  },
 
-  staffRow: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 10, marginTop: 10 },
-  staffName: { color: Colors.text, fontWeight: "700", fontSize: 13 },
-  staffMeta: { color: Colors.textSecondary, fontSize: 12 },
+  // Staff List
+  staffList: {
+    gap: 12,
+  },
+  staffItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: AdminTheme.colors.borderSoft,
+  },
+  staffInfo: {
+    flex: 1,
+  },
+  staffName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+  },
+  staffSales: {
+    fontSize: 11,
+    color: AdminTheme.colors.textMuted,
+    marginTop: 2,
+  },
+  staffStats: {
+    alignItems: "flex-end",
+  },
+  staffCollections: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: AdminTheme.colors.success,
+  },
+  staffExpenses: {
+    fontSize: 11,
+    color: AdminTheme.colors.textMuted,
+    marginTop: 2,
+  },
 
-  helperText: { color: Colors.textSecondary, fontSize: 12, textAlign: "center" },
-  errorTitle: { fontSize: 16, fontWeight: "700", color: Colors.text },
-  retryBtn: { marginTop: 8, backgroundColor: Colors.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
-  retryText: { color: Colors.white, fontWeight: "700" },
+  // Loading & Error States
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: AdminTheme.colors.textMuted,
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    gap: 12,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: AdminTheme.colors.text,
+  },
+  errorMessage: {
+    fontSize: 13,
+    color: AdminTheme.colors.textMuted,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  retryButton: {
+    backgroundColor: AdminTheme.colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: AdminTheme.colors.surface,
+    fontWeight: "700",
+  },
+  noDataContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 32,
+    gap: 8,
+  },
+  noDataText: {
+    fontSize: 13,
+    color: AdminTheme.colors.textSoft,
+  },
 });

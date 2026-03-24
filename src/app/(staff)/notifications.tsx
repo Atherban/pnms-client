@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, {
   FadeInDown,
@@ -9,7 +10,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FixedHeader from "../../components/common/FixedHeader";
+import StitchHeader from "../../components/common/StitchHeader";
 import { NotificationService } from "../../services/notification.service";
 import { useAuthStore } from "../../stores/auth.store";
 import { Colors, Spacing } from "../../theme";
@@ -268,6 +269,7 @@ const LoadingState = () => (
 // ==================== MAIN COMPONENT ====================
 
 export default function StaffNotificationsScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const notificationsQueryKey = ["notifications", "staff", user?.id] as const;
@@ -353,9 +355,11 @@ export default function StaffNotificationsScreen() {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container} edges={["left", "right"]}>
-        <FixedHeader
+        <StitchHeader
           title="Notifications"
           subtitle="Important updates and reminders"
+          showBackButton
+          onBackPress={() => router.back()}
           titleStyle={styles.headerTitle}
         />
         <LoadingState />
@@ -365,9 +369,11 @@ export default function StaffNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <FixedHeader
+      <StitchHeader
         title="Notifications"
         subtitle="Important updates and reminders"
+        showBackButton
+        onBackPress={() => router.back()}
         titleStyle={styles.headerTitle}
         actions={
           <View style={styles.headerActions}>

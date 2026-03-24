@@ -1,7 +1,6 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -11,19 +10,24 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ModuleScreenFrame from "../common/ModuleScreenFrame";
+import { SHARED_BOTTOM_NAV_HEIGHT } from "../navigation/SharedBottomNav";
 import { InventoryService } from "../../services/inventory.service";
 import { useAuthStore } from "../../stores/auth.store";
-import { Colors, Spacing } from "../../theme";
 import { resolveEntityImage } from "../../utils/image";
 import { resolveInventoryPricing } from "../../utils/inventory-pricing";
 import { canViewSensitivePricing } from "../../utils/rbac";
 import BannerCardImage from "../ui/BannerCardImage";
+import { AdminTheme } from "../admin/theme";
+import ModuleScreenIntro from "../common/ModuleScreenIntro";
+import StitchHeader from "../common/StitchHeader";
+import { ModuleStatItem } from "../common/ModuleStatGrid";
+import { moduleBadge } from "../common/moduleStyles";
+import { Colors } from "@/src/theme";
 
-const BOTTOM_NAV_HEIGHT = 80;
 type RoleGroup = "staff" | "admin" | "customer";
 
 interface InventoryListScreenProps {
@@ -60,7 +64,7 @@ const getStockStatus = (quantity: number) => {
   if (quantity <= STOCK_THRESHOLDS.CRITICAL) {
     return {
       label: "Out of Stock",
-      color: Colors.error,
+      color: AdminTheme.colors.danger,
       icon: "block",
       severity: "critical",
       filter: FILTER_TYPES.OUT_OF_STOCK,
@@ -69,7 +73,7 @@ const getStockStatus = (quantity: number) => {
   if (quantity <= STOCK_THRESHOLDS.LOW) {
     return {
       label: "Low Stock",
-      color: Colors.warning,
+      color: AdminTheme.colors.warning,
       icon: "warning",
       severity: "low",
       filter: FILTER_TYPES.LOW_STOCK,
@@ -77,7 +81,7 @@ const getStockStatus = (quantity: number) => {
   }
   return {
     label: "In Stock",
-    color: Colors.success,
+    color: AdminTheme.colors.success,
     icon: "check-circle",
     severity: "good",
     filter: FILTER_TYPES.IN_STOCK,
@@ -128,7 +132,7 @@ const FilterChip = ({
     style={({ pressed }) => [
       styles.filterChip,
       isSelected && styles.filterChipSelected,
-      { borderColor: isSelected ? color : Colors.borderLight },
+      { borderColor: isSelected ? color : AdminTheme.colors.borderSoft },
       pressed && styles.filterChipPressed,
     ]}
   >
@@ -136,7 +140,7 @@ const FilterChip = ({
       <MaterialIcons
         name={icon as any}
         size={18}
-        color={isSelected ? color : Colors.textSecondary}
+        color={isSelected ? color : AdminTheme.colors.textMuted}
       />
       <Text
         style={[
@@ -158,153 +162,16 @@ const FilterChip = ({
   </Pressable>
 );
 
-// Compact Stats Row for Header
-const StatsRow = ({ stats }: { stats: any }) => (
-  <View style={styles.statsRow}>
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="inventory" size={16} color={Colors.primary} />
-      <Text style={styles.statCompactValue}>{stats.totalItems}</Text>
-      <Text style={styles.statCompactLabel}>Items</Text>
-    </View>
-
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="storage" size={16} color={Colors.success} />
-      <Text style={styles.statCompactValue}>{stats.totalStock}</Text>
-      <Text style={styles.statCompactLabel}>Stock</Text>
-    </View>
-
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="warning" size={16} color={Colors.warning} />
-      <Text style={styles.statCompactValue}>{stats.lowStockItems}</Text>
-      <Text style={styles.statCompactLabel}>Low</Text>
-    </View>
-
-    <View style={styles.statDivider} />
-
-    <View style={styles.statCompactItem}>
-      <MaterialIcons name="block" size={16} color={Colors.error} />
-      <Text style={styles.statCompactValue}>{stats.outOfStockItems}</Text>
-      <Text style={styles.statCompactLabel}>Out</Text>
-    </View>
-  </View>
-);
-
-// Header Component with Stats and Search
-const Header = ({
-  title,
-  subtitle,
-  onAdd,
-  searchQuery,
-  onSearchChange,
-  onSearchClear,
-  stats,
-  showStats,
-}: {
-  title: string;
-  subtitle: string;
-  onAdd?: () => void;
-  searchQuery: string;
-  onSearchChange: (text: string) => void;
-  onSearchClear: () => void;
-  stats?: any;
-  showStats?: boolean;
-}) => (
-  <LinearGradient
-    colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-    style={styles.headerGradient}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 0 }}
-  >
-    <View style={styles.headerTopRow}>
-      <View style={styles.headerContent}>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <Text style={styles.headerSubtitle}>{subtitle}</Text>
-      </View>
-      {onAdd && (
-        <Pressable
-          onPress={onAdd}
-          style={({ pressed }) => [
-            styles.addButton,
-            pressed && styles.addButtonPressed,
-          ]}
-        >
-          <LinearGradient
-            colors={[Colors.success, "#34D399"]}
-            style={styles.addGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <MaterialIcons name="add" size={20} color={Colors.white} />
-            <Text style={styles.addButtonText}>Add</Text>
-          </LinearGradient>
-        </Pressable>
-      )}
-    </View>
-
-    {/* Search Bar in Header */}
-    <View style={styles.headerSearchContainer}>
-      <View style={styles.headerSearchInputContainer}>
-        <MaterialIcons name="search" size={18} color="rgba(255,255,255,0.8)" />
-        <TextInput
-          style={styles.headerSearchInput}
-          placeholder="Search inventory..."
-          placeholderTextColor="rgba(255,255,255,0.6)"
-          value={searchQuery}
-          onChangeText={onSearchChange}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <Pressable
-            onPress={onSearchClear}
-            style={styles.headerSearchClearButton}
-          >
-            <MaterialIcons
-              name="close"
-              size={16}
-              color="rgba(255,255,255,0.8)"
-            />
-          </Pressable>
-        )}
-      </View>
-    </View>
-
-    {/* Stats in Header */}
-    {showStats && stats && (
-      <View style={styles.headerStatsContainer}>
-        <StatsRow stats={stats} />
-      </View>
-    )}
-  </LinearGradient>
-);
-
 const ErrorHeader = ({ onBack }: { onBack: () => void }) => (
-  <LinearGradient
-    colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-    style={styles.headerGradient}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 0 }}
-  >
-    <View style={styles.headerTopRow}>
-      <Pressable
-        onPress={onBack}
-        style={({ pressed }) => [
-          styles.backButton,
-          pressed && styles.backButtonPressed,
-        ]}
-      >
-        <MaterialIcons name="arrow-back" size={20} color={Colors.white} />
-      </Pressable>
-      <View style={styles.headerContent}>
-        <Text style={styles.headerTitle}>Inventory</Text>
-        <Text style={styles.headerSubtitle}>Unable to load data</Text>
-      </View>
-      <View style={styles.headerSpacer} />
-    </View>
-  </LinearGradient>
+  <View>
+    <StitchHeader
+    title="Inventory"
+    subtitle="Unable to load data"
+    variant="gradient"
+    showBackButton
+    onBackPress={onBack}
+  />
+  </View>
 );
 
 const InventoryCard = ({
@@ -331,12 +198,7 @@ const InventoryCard = ({
         pressed && styles.inventoryCardPressed,
       ]}
     >
-      <LinearGradient
-        colors={[Colors.white, Colors.surface]}
-        style={styles.cardGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
+      <View style={styles.cardGradient}>
         <BannerCardImage
           uri={thumbnailUri}
           label={plantName}
@@ -369,7 +231,7 @@ const InventoryCard = ({
                 <MaterialIcons
                   name="category"
                   size={14}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.detailText}>{category}</Text>
               </View>
@@ -378,7 +240,7 @@ const InventoryCard = ({
                 <MaterialIcons
                   name={sourceInfo.icon as any}
                   size={14}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.detailText}>
                   {formatSourceType(item.sourceType)}
@@ -389,7 +251,7 @@ const InventoryCard = ({
                 <MaterialIcons
                   name="sell"
                   size={14}
-                  color={Colors.textSecondary}
+                  color={AdminTheme.colors.textMuted}
                 />
                 <Text style={styles.detailText}>
                   Sell:{" "}
@@ -447,7 +309,7 @@ const InventoryCard = ({
 
           {item.quantity <= STOCK_THRESHOLDS.LOW && item.quantity > 0 && (
             <View style={styles.lowStockAlert}>
-              <MaterialIcons name="warning" size={16} color={Colors.warning} />
+              <MaterialIcons name="warning" size={16} color={AdminTheme.colors.warning} />
               <Text style={styles.lowStockText}>
                 Only {item.quantity} units left - Reorder soon
               </Text>
@@ -456,14 +318,14 @@ const InventoryCard = ({
 
           {item.quantity <= STOCK_THRESHOLDS.CRITICAL && (
             <View style={styles.outOfStockAlert}>
-              <MaterialIcons name="block" size={16} color={Colors.error} />
+              <MaterialIcons name="block" size={16} color={AdminTheme.colors.danger} />
               <Text style={styles.outOfStockText}>
                 Out of stock - Please restock
               </Text>
             </View>
           )}
         </View>
-      </LinearGradient>
+      </View>
     </Pressable>
   );
 };
@@ -482,7 +344,7 @@ const EmptyState = ({
       <MaterialIcons
         name={hasFilters ? "search-off" : "inventory"}
         size={64}
-        color={Colors.textTertiary}
+        color={AdminTheme.colors.textSoft}
       />
     </View>
     <Text style={styles.emptyTitle}>
@@ -501,15 +363,15 @@ const EmptyState = ({
           pressed && styles.emptyButtonPressed,
         ]}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="clear-all" size={20} color={Colors.white} />
+          <MaterialIcons name="clear-all" size={20} color={AdminTheme.colors.surface} />
           <Text style={styles.emptyButtonText}>Clear Filters</Text>
-        </LinearGradient>
+        </View>
       </Pressable>
     ) : onAdd ? (
       <Pressable
@@ -519,15 +381,15 @@ const EmptyState = ({
           pressed && styles.emptyButtonPressed,
         ]}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.emptyButtonGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.emptyButtonGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="add-circle" size={20} color={Colors.white} />
+          <MaterialIcons name="add-circle" size={20} color={AdminTheme.colors.surface} />
           <Text style={styles.emptyButtonText}>Add Purchased Inventory</Text>
-        </LinearGradient>
+        </View>
       </Pressable>
     ) : null}
   </View>
@@ -535,7 +397,7 @@ const EmptyState = ({
 
 const LoadingState = () => (
   <View style={styles.loadingContainer}>
-    <ActivityIndicator size="large" color={Colors.primary} />
+    <ActivityIndicator size="large" color={AdminTheme.colors.primary} />
     <Text style={styles.loadingText}>Loading inventory...</Text>
   </View>
 );
@@ -553,7 +415,7 @@ const ErrorState = ({
     <ErrorHeader onBack={onBack} />
     <View style={styles.errorContainer}>
       <View style={styles.errorIconContainer}>
-        <MaterialIcons name="inventory" size={64} color={Colors.error} />
+        <MaterialIcons name="inventory" size={64} color={AdminTheme.colors.danger} />
       </View>
       <Text style={styles.errorTitle}>Failed to Load Inventory</Text>
       <Text style={styles.errorMessage}>
@@ -566,15 +428,15 @@ const ErrorState = ({
           pressed && styles.retryButtonPressed,
         ]}
       >
-        <LinearGradient
-          colors={[Colors.primary, Colors.primaryLight || Colors.primary]}
-          style={styles.retryGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+        <View
+          style={[
+            styles.retryGradient,
+            { backgroundColor: AdminTheme.colors.primary },
+          ]}
         >
-          <MaterialIcons name="refresh" size={20} color={Colors.white} />
+          <MaterialIcons name="refresh" size={20} color={AdminTheme.colors.surface} />
           <Text style={styles.retryButtonText}>Try Again</Text>
-        </LinearGradient>
+        </View>
       </Pressable>
     </View>
   </View>
@@ -636,7 +498,7 @@ export function InventoryListScreen({
     }
 
     return filtered;
-  }, [inventory, selectedFilter, searchQuery]);
+  }, [inventory, selectedFilter, searchQuery, showPricing]);
 
   // Memoized calculations
   const stats = useMemo(() => {
@@ -729,6 +591,32 @@ export function InventoryListScreen({
 
   const hasActiveFilters =
     selectedFilter !== FILTER_TYPES.ALL || searchQuery.length > 0;
+  const statItems: ModuleStatItem[] = [
+    {
+      label: "Items",
+      value: stats.totalItems,
+      icon: "inventory-2",
+      tone: "info",
+    },
+    {
+      label: "Stock",
+      value: stats.totalStock,
+      icon: "storage",
+      tone: "success",
+    },
+    {
+      label: "Low Stock",
+      value: stats.lowStockItems,
+      icon: "warning",
+      tone: "warning",
+    },
+    {
+      label: "Out of Stock",
+      value: stats.outOfStockItems,
+      icon: "block",
+      tone: "danger",
+    },
+  ];
 
   if (isLoading) {
     return (
@@ -747,101 +635,129 @@ export function InventoryListScreen({
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <Header
-        title={title}
-        subtitle={`${filteredInventory.length} ${
-          filteredInventory.length === 1 ? "item" : "items"
-        }`}
-        onAdd={canCreate ? handleAddInventory : undefined}
-        searchQuery={searchQuery}
-        onSearchChange={handleSearchChange}
-        onSearchClear={handleSearchClear}
-        stats={stats}
-        showStats={inventory.length > 0}
-      />
-
-      {/* Filter Chips - Fixed dimensions */}
-      {inventory.length > 0 && (
-        <View style={styles.filterSection}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScroll}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            <FilterChip
-              label="All"
-              icon="apps"
-              isSelected={selectedFilter === FILTER_TYPES.ALL}
-              onPress={() => handleFilterSelect(FILTER_TYPES.ALL)}
-              count={inventory.length}
-              color={Colors.primary}
-            />
-
-            <FilterChip
-              label="In Stock"
-              icon="check-circle"
-              isSelected={selectedFilter === FILTER_TYPES.IN_STOCK}
-              onPress={() => handleFilterSelect(FILTER_TYPES.IN_STOCK)}
-              count={filterCounts.inStock}
-              color={Colors.success}
-            />
-
-            <FilterChip
-              label="Low Stock"
-              icon="warning"
-              isSelected={selectedFilter === FILTER_TYPES.LOW_STOCK}
-              onPress={() => handleFilterSelect(FILTER_TYPES.LOW_STOCK)}
-              count={filterCounts.lowStock}
-              color={Colors.warning}
-            />
-
-            <FilterChip
-              label="Out of Stock"
-              icon="block"
-              isSelected={selectedFilter === FILTER_TYPES.OUT_OF_STOCK}
-              onPress={() => handleFilterSelect(FILTER_TYPES.OUT_OF_STOCK)}
-              count={filterCounts.outOfStock}
-              color={Colors.error}
-            />
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Active Filters Indicator */}
-      {hasActiveFilters && (
-        <View style={styles.activeFiltersContainer}>
-          <Text style={styles.activeFiltersText} numberOfLines={1}>
-            {searchQuery && `Search: "${searchQuery}"`}
-            {searchQuery && selectedFilter !== FILTER_TYPES.ALL && " • "}
-            {selectedFilter !== FILTER_TYPES.ALL &&
-              `Filter: ${selectedFilter
-                .split("-")
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(" ")}`}
-          </Text>
+    <ModuleScreenFrame
+      title={title}
+      subtitle={`${filteredInventory.length} ${
+        filteredInventory.length === 1 ? "item" : "items"
+      }`}
+      onBackPress={handleBack}
+      actions={
+        canCreate ? (
           <Pressable
-            onPress={handleClearFilters}
-            style={styles.clearFiltersButton}
+            onPress={handleAddInventory}
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.addButtonPressed,
+            ]}
           >
-            <Text style={styles.clearFiltersText}>Clear all</Text>
+            <View
+              style={[
+                styles.addGradient,
+              ]}
+            >
+              <MaterialIcons
+                name="add"
+                size={20}
+                color={Colors.white}
+              />
+            </View>
           </Pressable>
-        </View>
-      )}
-
-      {/* Inventory List */}
+        ) : null
+      }
+    >
       <FlatList
         data={filteredInventory}
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <ModuleScreenIntro
+            stats={inventory.length > 0 ? statItems : undefined}
+            search={{
+              value: searchQuery,
+              onChangeText: handleSearchChange,
+              onClear: handleSearchClear,
+              placeholder: "Search inventory",
+            }}
+            helperRow={
+              <>
+                {inventory.length > 0 && (
+                  <View style={styles.filterSection}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.filterScroll}
+                      contentContainerStyle={styles.filterScrollContent}
+                    >
+                      <FilterChip
+                        label="All"
+                        icon="apps"
+                        isSelected={selectedFilter === FILTER_TYPES.ALL}
+                        onPress={() => handleFilterSelect(FILTER_TYPES.ALL)}
+                        count={inventory.length}
+                        color={AdminTheme.colors.primary}
+                      />
+                      <FilterChip
+                        label="In Stock"
+                        icon="check-circle"
+                        isSelected={selectedFilter === FILTER_TYPES.IN_STOCK}
+                        onPress={() => handleFilterSelect(FILTER_TYPES.IN_STOCK)}
+                        count={filterCounts.inStock}
+                        color={AdminTheme.colors.success}
+                      />
+                      <FilterChip
+                        label="Low Stock"
+                        icon="warning"
+                        isSelected={selectedFilter === FILTER_TYPES.LOW_STOCK}
+                        onPress={() => handleFilterSelect(FILTER_TYPES.LOW_STOCK)}
+                        count={filterCounts.lowStock}
+                        color={AdminTheme.colors.warning}
+                      />
+                      <FilterChip
+                        label="Out of Stock"
+                        icon="block"
+                        isSelected={selectedFilter === FILTER_TYPES.OUT_OF_STOCK}
+                        onPress={() => handleFilterSelect(FILTER_TYPES.OUT_OF_STOCK)}
+                        count={filterCounts.outOfStock}
+                        color={AdminTheme.colors.danger}
+                      />
+                    </ScrollView>
+                  </View>
+                )}
+                {hasActiveFilters && (
+                  <View style={styles.activeFiltersContainer}>
+                    <Text style={styles.activeFiltersText} numberOfLines={1}>
+                      {searchQuery && `Search: "${searchQuery}"`}
+                      {searchQuery &&
+                        selectedFilter !== FILTER_TYPES.ALL &&
+                        " • "}
+                      {selectedFilter !== FILTER_TYPES.ALL &&
+                        `Filter: ${selectedFilter
+                          .split("-")
+                          .map(
+                            (word) =>
+                              word.charAt(0).toUpperCase() + word.slice(1),
+                          )
+                          .join(" ")}`}
+                    </Text>
+                    <Pressable
+                      onPress={handleClearFilters}
+                      style={styles.clearFiltersButton}
+                    >
+                      <Text style={styles.clearFiltersText}>Clear all</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </>
+            }
+          />
+        }
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            colors={[Colors.primary]}
-            tintColor={Colors.primary}
+            colors={[AdminTheme.colors.primary]}
+            tintColor={AdminTheme.colors.primary}
           />
         }
         ListEmptyComponent={
@@ -857,98 +773,22 @@ export function InventoryListScreen({
         windowSize={5}
         removeClippedSubviews={true}
       />
-    </SafeAreaView>
+    </ModuleScreenFrame>
   );
 }
+
+const cardSurface = {
+  borderWidth: 1,
+  borderColor: AdminTheme.colors.borderSoft,
+  borderRadius: AdminTheme.radius.lg,
+  backgroundColor: AdminTheme.colors.surface,
+  ...AdminTheme.shadow.card,
+};
 
 const styles = {
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-  },
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.lg,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerTopRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    marginBottom: Spacing.md,
-  },
-  headerContent: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255, 255, 255, 0.9)",
-    fontWeight: "500" as const,
-  },
-  headerSearchContainer: {
-    marginBottom: Spacing.md,
-  },
-  headerSearchInputContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  headerSearchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.white,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    marginLeft: Spacing.xs,
-  },
-  headerSearchClearButton: {
-    padding: Spacing.xs,
-  },
-  headerStatsContainer: {
-    marginTop: Spacing.sm,
-  },
-  statsRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-around" as const,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderRadius: 16,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-  },
-  statCompactItem: {
-    alignItems: "center" as const,
-    flex: 1,
-  },
-  statCompactValue: {
-    fontSize: 16,
-    fontWeight: "700" as const,
-    color: Colors.white,
-    marginTop: 2,
-  },
-  statCompactLabel: {
-    fontSize: 11,
-    color: "rgba(255, 255, 255, 0.8)",
-    fontWeight: "500" as const,
-  },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: Spacing.sm,
+    backgroundColor: AdminTheme.colors.background,
   },
   backButton: {
     width: 44,
@@ -957,7 +797,7 @@ const styles = {
     backgroundColor: "rgba(255, 255, 255, 0.2)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginRight: Spacing.md,
+    marginRight: AdminTheme.spacing.md,
   },
   backButtonPressed: {
     backgroundColor: "rgba(255, 255, 255, 0.3)",
@@ -967,13 +807,10 @@ const styles = {
     width: 44,
   },
   addButton: {
-    borderRadius: 30,
-    overflow: "hidden" as const,
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   addButtonPressed: {
     transform: [{ scale: 0.95 }],
@@ -982,53 +819,20 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  addButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: "600" as const,
-  },
-  searchContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  searchInputContainer: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.text,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    marginLeft: Spacing.xs,
-  },
-  searchClearButton: {
-    padding: Spacing.xs,
+    width: "100%",
+    height: "100%",
   },
   statsCard: {
+    ...cardSurface,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.white,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    backgroundColor: AdminTheme.colors.surface,
+    paddingHorizontal: AdminTheme.spacing.md,
+    paddingVertical: AdminTheme.spacing.sm,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -1041,7 +845,7 @@ const styles = {
     borderRadius: 12,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginRight: Spacing.sm,
+    marginRight: AdminTheme.spacing.sm,
   },
   statInfo: {
     flex: 1,
@@ -1049,11 +853,11 @@ const styles = {
   statValue: {
     fontSize: 22,
     fontWeight: "700" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   statLabel: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   statTrend: {
@@ -1067,26 +871,22 @@ const styles = {
     fontWeight: "600" as const,
   },
   filterSection: {
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 8,
   },
   filterScroll: {
     maxHeight: 48,
   },
   filterScrollContent: {
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
+    gap: AdminTheme.spacing.sm,
     alignItems: "center" as const,
   },
   filterChip: {
     height: 40,
     minWidth: 100,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: AdminTheme.colors.borderSoft,
     overflow: "hidden" as const,
   },
   filterChipContent: {
@@ -1094,12 +894,12 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.xs,
   },
   filterChipSelected: {
     borderWidth: 2,
-    backgroundColor: Colors.white,
+    backgroundColor: AdminTheme.colors.surface,
   },
   filterChipPressed: {
     transform: [{ scale: 0.96 }],
@@ -1107,11 +907,12 @@ const styles = {
   },
   filterChipText: {
     fontSize: 13,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     fontWeight: "500" as const,
     includeFontPadding: false,
   },
   filterChipBadge: {
+    ...moduleBadge,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 12,
@@ -1128,77 +929,77 @@ const styles = {
     flexDirection: "row" as const,
     justifyContent: "space-between" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.primary + "05",
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingVertical: AdminTheme.spacing.sm,
+    backgroundColor: AdminTheme.colors.primary + "05",
+    marginHorizontal: AdminTheme.spacing.lg,
+    marginTop: 6,
+    marginBottom: AdminTheme.spacing.xs,
     borderRadius: 8,
   },
   activeFiltersText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     flex: 1,
   },
   clearFiltersButton: {
-    padding: Spacing.xs,
+    padding: AdminTheme.spacing.xs,
   },
   clearFiltersText: {
     fontSize: 13,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
     fontWeight: "600" as const,
   },
   listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: BOTTOM_NAV_HEIGHT + Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.lg,
+    paddingTop: AdminTheme.spacing.sm,
+    paddingBottom: SHARED_BOTTOM_NAV_HEIGHT + AdminTheme.spacing.xl,
   },
   loadingContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   loadingText: {
-    marginTop: Spacing.md,
+    marginTop: AdminTheme.spacing.md,
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     fontWeight: "500" as const,
   },
   errorContainer: {
     flex: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    padding: Spacing.xl,
+    padding: AdminTheme.spacing.xl,
   },
   errorIconContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: Colors.error + "10",
+    backgroundColor: AdminTheme.colors.danger + "10",
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.error,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.danger,
+    marginBottom: AdminTheme.spacing.sm,
   },
   errorMessage: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 22,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   retryButton: {
     borderRadius: 16,
     overflow: "hidden" as const,
-    shadowColor: Colors.primary,
+    shadowColor: AdminTheme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1211,48 +1012,48 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.sm,
   },
   retryButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "700" as const,
   },
   emptyContainer: {
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+    paddingVertical: AdminTheme.spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyIconContainer: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: Colors.surface,
+    backgroundColor: AdminTheme.colors.surface,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginBottom: Spacing.lg,
+    marginBottom: AdminTheme.spacing.lg,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: "700" as const,
-    color: Colors.text,
-    marginBottom: Spacing.sm,
+    color: AdminTheme.colors.text,
+    marginBottom: AdminTheme.spacing.sm,
   },
   emptyMessage: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
     textAlign: "center" as const,
-    marginBottom: Spacing.xl,
+    marginBottom: AdminTheme.spacing.xl,
     lineHeight: 22,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: AdminTheme.spacing.xl,
   },
   emptyButton: {
     borderRadius: 16,
     overflow: "hidden" as const,
-    shadowColor: Colors.primary,
+    shadowColor: AdminTheme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1265,23 +1066,24 @@ const styles = {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
-    gap: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.xl,
+    paddingVertical: AdminTheme.spacing.lg,
+    gap: AdminTheme.spacing.sm,
   },
   emptyButtonText: {
-    color: Colors.white,
+    color: AdminTheme.colors.surface,
     fontSize: 16,
     fontWeight: "700" as const,
   },
   inventoryCard: {
+    ...cardSurface,
     borderRadius: 20,
-    marginBottom: Spacing.md,
+    marginBottom: AdminTheme.spacing.md,
     overflow: "hidden" as const,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.white,
-    shadowColor: Colors.shadow,
+    borderColor: AdminTheme.colors.borderSoft,
+    backgroundColor: AdminTheme.colors.surface,
+    shadowColor: AdminTheme.colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -1289,7 +1091,7 @@ const styles = {
   },
   inventoryCardPressed: {
     transform: [{ scale: 0.98 }],
-    borderColor: Colors.primary,
+    borderColor: AdminTheme.colors.primary,
   },
   cardGradient: {
     padding: 0,
@@ -1301,31 +1103,32 @@ const styles = {
     marginBottom: 0,
   },
   cardContent: {
-    padding: Spacing.lg,
+    padding: AdminTheme.spacing.lg,
   },
   cardBody: {
-    gap: Spacing.xs,
+    gap: AdminTheme.spacing.xs,
   },
   titleRow: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "flex-start" as const,
-    marginBottom: Spacing.xs,
+    marginBottom: AdminTheme.spacing.xs,
   },
   plantName: {
     fontSize: 16,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
     flex: 1,
-    marginRight: Spacing.sm,
+    marginRight: AdminTheme.spacing.sm,
   },
   stockBadge: {
+    ...moduleBadge,
     position: "absolute" as const,
-    top: Spacing.sm,
-    right: Spacing.sm,
+    top: AdminTheme.spacing.sm,
+    right: AdminTheme.spacing.sm,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: AdminTheme.spacing.sm,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
@@ -1337,7 +1140,7 @@ const styles = {
   detailsGrid: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: Spacing.md,
+    gap: AdminTheme.spacing.md,
     marginTop: 4,
   },
   detailItem: {
@@ -1347,12 +1150,12 @@ const styles = {
   },
   detailText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   cardDivider: {
     height: 1,
-    backgroundColor: Colors.borderLight,
-    marginVertical: Spacing.md,
+    backgroundColor: AdminTheme.colors.borderSoft,
+    marginVertical: AdminTheme.spacing.md,
   },
   cardFooter: {
     flexDirection: "row" as const,
@@ -1364,7 +1167,7 @@ const styles = {
   },
   quantityLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     marginBottom: 2,
   },
   quantityValueContainer: {
@@ -1375,17 +1178,17 @@ const styles = {
   quantityValue: {
     fontSize: 18,
     fontWeight: "700" as const,
-    color: Colors.primary,
+    color: AdminTheme.colors.primary,
   },
   quantityZero: {
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
   },
   quantityLow: {
-    color: Colors.warning,
+    color: AdminTheme.colors.warning,
   },
   quantityUnit: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: AdminTheme.colors.textMuted,
   },
   priceContainer: {
     flex: 1,
@@ -1393,13 +1196,13 @@ const styles = {
   },
   priceLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     marginBottom: 2,
   },
   priceValue: {
     fontSize: 14,
     fontWeight: "600" as const,
-    color: Colors.text,
+    color: AdminTheme.colors.text,
   },
   totalValueContainer: {
     flex: 1,
@@ -1407,41 +1210,41 @@ const styles = {
   },
   totalValueLabel: {
     fontSize: 11,
-    color: Colors.textTertiary,
+    color: AdminTheme.colors.textSoft,
     marginBottom: 2,
   },
   totalValue: {
     fontSize: 14,
     fontWeight: "700" as const,
-    color: Colors.success,
+    color: AdminTheme.colors.success,
   },
   lowStockAlert: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.warning + "10",
-    padding: Spacing.sm,
+    backgroundColor: AdminTheme.colors.warning + "10",
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   lowStockText: {
     fontSize: 12,
-    color: Colors.warning,
+    color: AdminTheme.colors.warning,
     fontWeight: "600" as const,
     flex: 1,
   },
   outOfStockAlert: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    backgroundColor: Colors.error + "10",
-    padding: Spacing.sm,
+    backgroundColor: AdminTheme.colors.danger + "10",
+    padding: AdminTheme.spacing.sm,
     borderRadius: 8,
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
+    marginTop: AdminTheme.spacing.md,
+    gap: AdminTheme.spacing.sm,
   },
   outOfStockText: {
     fontSize: 12,
-    color: Colors.error,
+    color: AdminTheme.colors.danger,
     fontWeight: "600" as const,
     flex: 1,
   },
